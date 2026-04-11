@@ -511,7 +511,7 @@ function buildFridgeHTML(showZero) {
 }
 
 function renderFridgeStock() {
-    document.getElementById("fridgeContent").innerHTML = buildFridgeHTML(false);
+    document.getElementById("fridgeStockContent").innerHTML = buildFridgeHTML(false);
     if (currentFullList === "fridge_stock") {
         document.getElementById("fullListContent").innerHTML =
             buildFridgeHTML(true);
