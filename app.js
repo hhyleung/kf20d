@@ -1,435 +1,28 @@
-// Supabase connection
+// SUPABASE
 const SUPABASE_URL = "https://ilfrtrfohdhoquemptmj.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_s8LcKiFr_XOf_fg9O2ubBQ_8mElMJ6L";
 let sbClient = null;
+let isAuthenticated = false;
 let subscriptions = [];
 
-let fridgeItems = [];
+// LISTS
+const fridgeCategoryOrder = [
+    "Carbs",
+    "Veggies",
+    "Proteins",
+    "Fruits",
+    "Others",
+    "Raw Food",
+];
+let fridgeStock = [];
 let chores = [];
-let changeLogs = [];
+let changeLog = [];
 let bills = [];
 let plants = [];
 let plantHistory = [];
 let notes = [];
 
-async function loadFridgeStock() {
-    try {
-        const { data, error } = await sb
-            .from("fridge_stock")
-            .select("*")
-            .order("last_updated", { ascending: false });
-        if (error) throw error;
-        fridgeItems = data || [];
-    } catch (err) {
-        console.error("Load fridge_stock error:", err);
-        fridgeItems = [];
-    }
-}
-
-async function loadChores() {
-    try {
-        const { data, error } = await sb
-            .from("chores")
-            .select("*")
-            .order("next_due_date");
-        if (error) throw error;
-        chores = data || [];
-    } catch (err) {
-        console.error("Load chores error:", err);
-        chores = [];
-    }
-}
-
-async function loadChangeLogs() {
-    try {
-        const { data, error } = await sb
-            .from("change_log")
-            .select("*")
-            .order("next_change_due");
-        if (error) throw error;
-        changeLogs = data || [];
-    } catch (err) {
-        console.error("Load change_log error:", err);
-        changeLogs = [];
-    }
-}
-
-async function loadBills() {
-    try {
-        const { data, error } = await sb
-            .from("bills")
-            .select("*")
-            .order("next_bill_date");
-        if (error) throw error;
-        bills = data || [];
-    } catch (err) {
-        console.error("Load bills error:", err);
-        bills = [];
-    }
-}
-
-async function loadPlants() {
-    try {
-        const { data, error } = await sb
-            .from("plants")
-            .select("*")
-            .order("plant_name");
-        if (error) throw error;
-        plants = data || [];
-    } catch (err) {
-        console.error("Load plants error:", err);
-        plants = [];
-    }
-}
-
-async function loadPlantHistory() {
-    try {
-        const { data, error } = await sb
-            .from("plant_history")
-            .select("*")
-            .order("event_date", { ascending: false });
-        if (error) throw error;
-        plantHistory = data || [];
-    } catch (err) {
-        console.error("Load plant_history error:", err);
-        plantHistory = [];
-    }
-}
-
-async function loadNotes() {
-    try {
-        const { data, error } = await sb
-            .from("notes")
-            .select("*")
-            .order("created_at", { ascending: false });
-        if (error) throw error;
-        notes = data || [];
-    } catch (err) {
-        console.error("Load notes error:", err);
-        notes = [];
-    }
-}
-
-async function loadAllData() {
-    await Promise.all([
-        loadFridgeStock(),
-        loadChores(),
-        loadChangeLogs(),
-        loadBills(),
-        loadPlants(),
-        loadPlantHistory(),
-        loadNotes(),
-    ]);
-}
-
-function subscribeToTable(tableName, renderFunc) {
-    ensureSupabaseReady()
-        .then((sb) => {
-            if (!sb) return;
-
-            const channel = sb.channel(`realtime:${tableName}`);
-            channel
-                .on(
-                    "postgres_changes",
-                    {
-                        event: "*",
-                        schema: "public",
-                        table: tableName,
-                    },
-                    () => renderFunc(),
-                )
-                .subscribe();
-
-            subscriptions.push(channel);
-        })
-        .catch(console.error);
-}
-
-async function setupRealtime() {
-    const sb = await ensureSupabaseReady();
-    if (!sb || !sb.auth.getSession()) {
-        console.log("Skipping realtime: not ready");
-        return;
-    }
-
-    const userId = (await sb.auth.getUser()).data.user?.id;
-    if (!userId) return;
-
-    subscribeToTable("fridgestock", renderFridgeStock);
-    subscribeToTable("chores", renderChores);
-    subscribeToTable("changelog", renderChangeLogs);
-    subscribeToTable("bills", renderBills);
-    subscribeToTable("plants", renderPlants);
-    subscribeToTable("planthistory", () =>
-        loadPlantHistory().then(renderPlants),
-    );
-    subscribeToTable("notes", renderNotes);
-}
-
-function cleanupSubscriptions() {
-    subscriptions.forEach((sub) => sb.removeChannel(sub));
-    subscriptions = [];
-}
-
-async function initSupabase() {
-    if (sbClient) return sbClient;
-
-    try {
-        sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log("Supabase initialised");
-        return sbClient;
-    } catch (error) {
-        console.error("Supabase init failed:", error);
-        return null;
-    }
-}
-
-async function ensureSupabaseReady() {
-    while (!sbClient) {
-        await initSupabase();
-        if (!sbClient) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-    }
-    return sbClient;
-}
-
-let isAuthenticated = false;
-
-async function checkSession() {
-    try {
-        await initSupabase();
-        const {
-            data: { session },
-        } = await sbClient.auth.getSession();
-
-        console.log("Session:", session ? "logged in" : "not logged in");
-
-        if (session) {
-            isAuthenticated = true;
-            showDashboard();
-        } else {
-            showLogin();
-        }
-    } catch (err) {
-        console.error("Session check error:", err);
-        showLogin();
-    }
-}
-
-async function login(email, password) {
-    try {
-        const sb = await initSupabase();
-        if (!sb) throw new Error("Supabase not initialised");
-        const { data, error } = await sb.auth.signInWithPassword({
-            email,
-            password,
-        });
-        if (error) throw error;
-        console.log("Login successful:", data.user.email);
-        isAuthenticated = true;
-        showDashboard();
-    } catch (error) {
-        console.error("Login failed:", error.message);
-        alert("Login failed: " + error.message);
-    }
-}
-
-function showLogin() {
-    document.getElementById("loginContainer").style.display = "flex";
-    document.querySelector(".dashboard").style.display = "none";
-}
-
-function showDashboard() {
-    document.getElementById("loginContainer").style.display = "none";
-    const dash = document.querySelector(".dashboard");
-    dash.style.removeProperty("display");
-    dash.style.display = "grid";
-    renderFridgeStock();
-    renderChores();
-    renderChangeLogs();
-    renderBills();
-    renderPlants();
-    renderNotes();
-    setupPanelClicks();
-    setTimeout(setupRealtime, 500);
-}
-
-async function saveFridgeItem(item, isUpdate = false) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) return;
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        const data = { ...item, userid: user.id };
-        const { error } = isUpdate
-            ? await sb.from("fridgestock").update(data).eq("id", item.id)
-            : await sb.from("fridgestock").insert([data]);
-        if (error) throw error;
-        await loadFridgeStock();
-    } catch (error) {
-        alert("Save failed: " + error.message);
-    }
-}
-
-async function deleteFridgeItem(id) {
-    if (confirm("Delete this item permanently?")) {
-        try {
-            await sb.from("fridgestock").delete().eq("id", id);
-            await loadFridgeStock();
-        } catch (err) {
-            alert("Delete failed: " + err.message);
-        }
-    }
-}
-
-async function saveChore(chore, isUpdate = false) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) return;
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        const data = { ...chore, userid: user.id };
-        const { error } = isUpdate
-            ? await sb.from("chores").update(data).eq("id", chore.id)
-            : await sb.from("chores").insert([data]);
-        if (error) throw error;
-        await loadChores();
-    } catch (error) {
-        alert("Save failed: " + error.message);
-    }
-}
-
-async function deleteChore(id) {
-    const sb = await initSupabase();
-    const { error } = await sb.from("chores").delete().eq("id", id);
-    if (error) throw error;
-    await loadChores();
-}
-
-async function saveBill(bill, isUpdate = false) {
-    const sb = await initSupabase();
-    const data = { ...bill, userid: sb.auth.getUser().data.user.id };
-    delete data.id;
-    const { error } = isUpdate
-        ? await sb.from("bills").update(data).eq("id", bill.id)
-        : await sb.from("bills").insert([data]);
-    if (error) throw error;
-    await loadBills();
-}
-
-async function deleteBill(id) {
-    const sb = await initSupabase();
-    const { error } = await sb.from("bills").delete().eq("id", id);
-    if (error) throw error;
-    await loadBills();
-}
-
-async function saveChangeLog(cl, isUpdate = false) {
-    const sb = await initSupabase();
-    const data = { ...cl, userid: sb.auth.getUser().data.user.id };
-    delete data.id;
-    const { error } = isUpdate
-        ? await sb.from("changelog").update(data).eq("id", cl.id)
-        : await sb.from("changelog").insert([data]);
-    if (error) throw error;
-    await loadChangeLogs();
-}
-
-async function deleteChangeLog(id) {
-    const sb = await initSupabase();
-    const { error } = await sb.from("changelog").delete().eq("id", id);
-    if (error) throw error;
-    await loadChangeLogs();
-}
-
-async function savePlant(plant) {
-    const sb = await initSupabase();
-    const data = { ...plant, userid: sb.auth.getUser().data.user.id };
-    const { error } = await sb.from("plants").insert([data]);
-    if (error) throw error;
-    await loadPlants();
-    await loadPlantHistory();
-}
-
-async function updatePlant(plantId, updates) {
-    const sb = await initSupabase();
-    const { error } = await sb.from("plants").update(updates).eq("id", plantId);
-    if (error) throw error;
-    await loadPlants();
-    await loadPlantHistory();
-}
-
-async function deletePlant(plantId) {
-    const sb = await initSupabase();
-    const { error: error1 } = await sb
-        .from("planthistory")
-        .delete()
-        .eq("plantid", plantId);
-    const { error: error2 } = await sb
-        .from("plants")
-        .delete()
-        .eq("id", plantId);
-    if (error1 || error2) throw error1 || error2;
-    await loadPlants();
-    await loadPlantHistory();
-}
-
-async function savePlantHistory(historyItem) {
-    const sb = await initSupabase();
-    const data = { ...historyItem, plantid: historyItem.plantid };
-    const { error } = await sb.from("planthistory").insert([data]);
-    if (error) throw error;
-    await loadPlantHistory();
-}
-
-async function deletePlantHistory(id) {
-    const sb = await initSupabase();
-    const { error } = await sb.from("planthistory").delete().eq("id", id);
-    if (error) throw error;
-    await loadPlantHistory();
-}
-
-async function saveNote(content) {
-    const sb = await initSupabase();
-    const { error } = await sb.from("notes").insert([
-        {
-            content,
-            userid: sb.auth.getUser().data.user.id,
-            createdat: new Date().toISOString().slice(0, 10),
-        },
-    ]);
-    if (error) throw error;
-    await loadNotes();
-}
-
-const fridgeCategoryOrder = [
-    "Carbs",
-    "Veg",
-    "Protein",
-    "Fruits",
-    "Others",
-    "Raw",
-];
-
-// State flags
-let expiryManuallySet = false;
-let addExpiryManuallySet = false;
-let currentFullSection = null;
-let editingChoreId = null;
-let choreNextDueManuallySet = false;
-let editingChangeLogId = null;
-let changelogNextDueManuallySet = false;
-let editingBillId = null;
-let billNextDateManuallySet = false;
-
-// ============================================================
-// List Metadata (last activity timestamp per list)
-// ============================================================
+// LIST METADATA
 const LIST_META_KEYS = [
     "fridge_stock",
     "chores",
@@ -439,74 +32,1107 @@ const LIST_META_KEYS = [
     "notes",
 ];
 let listMetadata = {};
-LIST_META_KEYS.forEach((k) => {
-    listMetadata[k] = null;
-});
+LIST_META_KEYS.forEach((key) => (listMetadata[key] = null));
 
-async function touchMetadata(listName) {
-    const ts = new Date().toISOString();
-    listMetadata[listName] = ts;
+// STATE FLAGS
+let editingFridgeStockId = null;
+let fridgeStockExpiryManuallySet = false;
+let editingChoreId = null;
+let choreNextDueManuallySet = false;
+let editingChangeLogId = null;
+let changeLogNextDueManuallySet = false;
+let editingBillId = null;
+let billNextDateManuallySet = false;
+let currentFullList = null;
+
+// SUPABASE CONNECTION
+async function initSupabase() {
+    if (sbClient) return sbClient;
     try {
-        const sb = await initSupabase();
-        await sb
-            .from("listmetadata")
-            .upsert({
-                listname: listName,
-                lastupdated: ts,
-                userid: sb.auth.getUser().data.user.id,
-            });
-    } catch (err) {
-        console.error("Metadata update failed", err);
+        sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: false,
+            },
+        });
+        console.log("Supabase initialised");
+        return sbClient;
+    } catch (error) {
+        console.error("Supabase init failed:", error);
+        sbClient = null;
+        return null;
     }
 }
 
-function refreshSectionLastUpdated() {
-    if (!currentFullSection) return;
+async function ensureSupabaseReady() {
+    while (!sbClient) {
+        await initSupabase();
+        if (!sbClient) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return sbClient;
+}
 
-    const metaToSection = {
-        fridgestock: "fridgestock",
+function subscribeToTable(tableName, renderFunc) {
+    const sb = ensureSupabaseReady()
+        .then((sb) => {
+            if (!sb) return;
+            const channel = sb.channel(`realtime:${tableName}`);
+            channel
+                .on(
+                    "postgres_changes",
+                    {
+                        event: "*",
+                        schema: "public",
+                        table: tableName,
+                    },
+                    renderFunc,
+                )
+                .subscribe((status) => {
+                    console.log(`Realtime ${tableName} subscribed: ${status}`);
+                })
+                .catch(console.error);
+            subscriptions.push(channel);
+        })
+        .catch(console.error);
+}
+
+async function setupRealtime() {
+    const sb = await ensureSupabaseReady();
+    if (!sb || !sb.auth.getSession()) {
+        console.log("Skipping realtime - not ready");
+        return;
+    }
+
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user?.id) {
+        console.log("Skipping realtime - no user");
+        return;
+    }
+
+    subscribeToTable("fridge_stock", renderFridgeStock);
+    subscribeToTable("chores", renderChores);
+    subscribeToTable("change_log", renderChangeLog);
+    subscribeToTable("bills", renderBills);
+    subscribeToTable("plants", renderPlants);
+    subscribeToTable("plant_history", () => {
+        loadPlantHistory().then(renderPlants);
+    });
+    subscribeToTable("notes", renderNotes);
+}
+
+function cleanupSubscriptions() {
+    subscriptions.forEach((sub) => {
+        const sb = sbClient;
+        if (sb) {
+            sb.removeChannel(sub);
+        }
+    });
+    subscriptions = [];
+    console.log("Realtime subscriptions cleaned up");
+}
+
+async function checkSession() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for session check");
+            showLogin();
+            return;
+        }
+
+        const {
+            data: { session },
+        } = await sb.auth.getSession();
+        console.log("Session check:", session ? "logged in" : "not logged in");
+
+        if (session) {
+            isAuthenticated = true;
+            showDashboard();
+        } else {
+            isAuthenticated = false;
+            showLogin();
+        }
+    } catch (err) {
+        console.error("Session check error:", err);
+        isAuthenticated = false;
+        showLogin();
+    }
+}
+
+async function login(email, password) {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) throw new Error("Supabase not initialised");
+
+        const { data, error } = await sb.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) throw error;
+
+        console.log("Login successful:", data.user.email);
+        isAuthenticated = true;
+        showDashboard();
+    } catch (error) {
+        console.error("Login failed:", error.message);
+        alert(`Login failed：${error.message}`);
+    }
+}
+
+// PAGE INIT
+function showLogin() {
+    document.getElementById("loginContainer").style.display = "flex";
+    document.querySelector(".dashboard").style.display = "none";
+    cleanupSubscriptions();
+}
+
+function showDashboard() {
+    document.getElementById("loginContainer").style.display = "none";
+    const dash = document.querySelector(".dashboard");
+    dash.style.removeProperty("display");
+    dash.style.display = "grid";
+
+    renderFridgeStock();
+    renderChores();
+    renderChangeLog();
+    renderBills();
+    renderPlants();
+    renderNotes();
+
+    setupPanelClicks();
+    setTimeout(setupRealtime, 500);
+}
+
+// DATA LOADERS
+async function loadFridgeStock() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadFridgeStock");
+            return;
+        }
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) {
+            console.error("No user for loadFridgeStock");
+            fridgeStock = [];
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("fridge_stock")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("item_name", { ascending: true, nullsFirst: true })
+            .order("last_updated", { ascending: false, nullsLast: true });
+
+        if (error) throw error;
+        fridgeStock = data || [];
+        console.log("Fridge stock loaded:", fridgeStock.length, "items");
+    } catch (err) {
+        console.error("Load fridge_stock error:", err);
+        fridgeStock = [];
+    }
+}
+
+async function loadChores() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadChores");
+            return;
+        }
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) {
+            console.error("No user for loadChores");
+            chores = [];
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("chores")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("task_name", { ascending: true, nullsFirst: true });
+
+        if (error) throw error;
+        chores = data || [];
+        console.log("Chores loaded:", chores.length);
+    } catch (err) {
+        console.error("Load chores error:", err);
+        chores = [];
+    }
+}
+
+async function loadChangeLog() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadChangeLog");
+            return;
+        }
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) {
+            console.error("No user for loadChangeLog");
+            changeLog = [];
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("change_log")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("item_name", { ascending: true, nullsFirst: true });
+
+        if (error) throw error;
+        changeLog = data || [];
+        console.log("Change Log loaded:", changeLog.length);
+    } catch (err) {
+        console.error("Load change_log error:", err);
+        changeLog = [];
+    }
+}
+
+async function loadBills() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadBills");
+            return;
+        }
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) {
+            console.error("No user for loadBills");
+            bills = [];
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("bills")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("bill_name", { ascending: true, nullsFirst: true });
+
+        if (error) throw error;
+        bills = data || [];
+        console.log("Bills loaded:", bills.length);
+    } catch (err) {
+        console.error("Load bills error:", err);
+        bills = [];
+    }
+}
+
+async function loadPlants() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadPlants");
+            return;
+        }
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) {
+            console.error("No user for loadPlants");
+            plants = [];
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("plants")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("plant_name", { ascending: true, nullsFirst: true });
+
+        if (error) throw error;
+        plants = data || [];
+        console.log("Plants loaded:", plants.length);
+    } catch (err) {
+        console.error("Load plants error:", err);
+        plants = [];
+    }
+}
+
+async function loadPlantHistory() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadPlantHistory");
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("plant_history")
+            .select("*")
+            .order("event_date", { ascending: false, nullsLast: true });
+
+        if (error) throw error;
+        plantHistory = data || [];
+        console.log("Plant history loaded:", plantHistory.length);
+    } catch (err) {
+        console.error("Load plant_history error:", err);
+        plantHistory = [];
+    }
+}
+
+async function loadNotes() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadNotes");
+            return;
+        }
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) {
+            console.error("No user for loadNotes");
+            notes = [];
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("notes")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: true, nullsFirst: true });
+
+        if (error) throw error;
+        notes = data || [];
+        console.log("Notes loaded:", notes.length);
+    } catch (err) {
+        console.error("Load notes error:", err);
+        notes = [];
+    }
+}
+
+async function loadAllData() {
+    try {
+        await Promise.all([
+            loadFridgeStock(),
+            loadChores(),
+            loadChangeLog(),
+            loadBills(),
+            loadPlants(),
+            loadPlantHistory(),
+            loadNotes(),
+        ]);
+        console.log("All data loaded");
+    } catch (err) {
+        console.error("loadAllData failed:", err);
+    }
+}
+
+// PANEL BUILDERS
+// FRIDGE STOCK
+function getVisibleItems(showZero = false) {
+    return fridgeStock.filter((item) => showZero || item.portions > 0);
+}
+
+function groupByCategory(items) {
+    const grouped = {};
+    fridgeCategoryOrder.forEach((cat) => (grouped[cat] = []));
+    items.forEach((item) => {
+        const cat = fridgeCategoryOrder.includes(item.category)
+            ? item.category
+            : "Others";
+        grouped[cat].push(item);
+    });
+    return grouped;
+}
+
+function getExpiryClass(expiryDate) {
+    if (!expiryDate) return "";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate + "T00:00:00Z");
+    const diffDays = Math.floor((expiry - today) / 86400000);
+    if (diffDays < 0) return "expiry-danger";
+    if (diffDays <= 7) return "expiry-warning";
+    return "";
+}
+
+function fridgeItemRow(item, showZero = false) {
+    const expiryClass = getExpiryClass(item.expiry_date);
+    const isRaw = item.category === "Raw Food";
+    const dateVal = isRaw ? item.expiry_date : item.created_at;
+    const dateStr = dateVal
+        ? `<span class="item-seps"></span><span class="fridge-date">${formatShortDate(dateVal)}</span>`
+        : "";
+
+    const portionsDisplay =
+        item.portions === 0 && showZero
+            ? `<span class="portion-zero">${item.portions}</span>`
+            : `<span class="portion-number">${item.portions}</span>`;
+
+    return `<li class="item-row${item.portions === 0 && !showZero ? " zero-portions" : ""}" 
+          data-open-detail="${item.id}">
+    <span class="item-key ${expiryClass}">${item.item_name}</span>
+    <span class="item-value">
+      ${dateStr}
+      <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="1" title="Add portion">+</button>
+      ${portionsDisplay}
+      <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="-1" title="Remove portion">-</button>
+    </span>
+  </li>`;
+}
+
+function buildFridgeHTML(showZero) {
+    const items = getVisibleItems(showZero);
+    const grouped = groupByCategory(items);
+    const forceFullWidth = ["Proteins", "Raw Food"];
+
+    let html = '<div class="fridge-inner-grid">';
+    fridgeCategoryOrder.forEach((cat) => {
+        const catItems = grouped[cat];
+        const alwaysHalfWidth = ["Carbs", "Veggies", "Fruits", "Others"];
+        const wide =
+            !alwaysHalfWidth.includes(cat) ||
+            catItems.length >= 3 ||
+            forceFullWidth.includes(cat);
+        const cls = wide ? "col-full" : "col-half";
+
+        if (catItems.length === 0) {
+            html += `<div class="fridge-group ${cls}">
+        <div class="fridge-group-title">${cat}</div>
+        <div class="fridge-empty">No items</div>
+      </div>`;
+        } else {
+            html += `<div class="fridge-group ${cls}">
+        <div class="fridge-group-title">${cat}</div>
+        <ul class="item-list ${wide ? "two-col-list" : ""}">`;
+            catItems.forEach((item) => {
+                html += fridgeItemRow(item, showZero);
+            });
+            html += "</ul></div>";
+        }
+    });
+    html += "</div>";
+    return html;
+}
+
+function renderFridgeStock() {
+    document.getElementById("fridgeContent").innerHTML = buildFridgeHTML(false);
+    if (currentFullList === "fridge_stock") {
+        document.getElementById("fullListContent").innerHTML =
+            buildFridgeHTML(true);
+    }
+}
+
+// CHORES
+function getDueClass(nextDueDate) {
+    if (!nextDueDate) return "";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(nextDueDate + "T00:00:00Z");
+    const diffDays = Math.floor((due - today) / 86400000);
+    if (diffDays < 0) return "due-danger";
+    if (diffDays <= 3) return "due-warning";
+    return "";
+}
+
+function buildChoresHTML() {
+    let html = '<ul class="item-list">';
+    chores.forEach((chore) => {
+        const dueClass = getDueClass(chore.next_due_date);
+        const lastDoneText = chore.last_done_date
+            ? formatShortDate(chore.last_done_date)
+            : "Never";
+        const nextDueText = chore.next_due_date
+            ? formatShortDate(chore.next_due_date)
+            : "";
+        const intervalText = chore.interval_days
+            ? `${chore.interval_days}d`
+            : "";
+
+        html += `<li class="item-row" data-open-chore="${chore.id}">
+      <span class="item-key ${dueClass}">${chore.task_name}</span>
+      <span class="item-value">
+        <span class="item-meta">
+          ${lastDoneText} → ${nextDueText} ${intervalText}
+        </span>
+        <button class="action-btn" data-action="done" data-id="${chore.id}" title="Mark done">✓</button>
+      </span>
+    </li>`;
+    });
+    html += "</ul>";
+    return html;
+}
+
+function renderChores() {
+    document.getElementById("choresContent").innerHTML = buildChoresHTML();
+    if (currentFullList === "chores") {
+        document.getElementById("fullListContent").innerHTML =
+            buildChoresHTML();
+    }
+}
+
+// CHANGE LOG
+function buildChangeLogHTML() {
+    let html = '<ul class="item-list">';
+    changeLog.forEach((cl) => {
+        const dueClass = getDueClass(cl.next_change_due);
+        const lastChangedText = cl.last_changed_date
+            ? formatShortDate(cl.last_changed_date)
+            : "Never";
+        const nextDueText = cl.next_change_due
+            ? formatShortDate(cl.next_change_due)
+            : "";
+        const intervalText = cl.interval_months
+            ? `${cl.interval_months}mo`
+            : "";
+
+        html += `<li class="item-row" data-open-changelog="${cl.id}">
+      <span class="item-key ${dueClass}">${cl.item_name}</span>
+      <span class="item-value">
+        <span class="item-meta">
+          ${lastChangedText} → ${nextDueText} ${intervalText}
+        </span>
+        <button class="action-btn" data-action="changed" data-id="${cl.id}" title="Mark changed">✓</button>
+      </span>
+    </li>`;
+    });
+    html += "</ul>";
+    return html;
+}
+
+function renderChangeLog() {
+    document.getElementById("changelogContent").innerHTML =
+        buildChangeLogHTML();
+    if (currentFullList === "change_log") {
+        document.getElementById("fullListContent").innerHTML =
+            buildChangeLogHTML();
+    }
+}
+
+// BILLS
+function buildBillsHTML() {
+    let html = '<ul class="item-list">';
+    bills.forEach((bill) => {
+        const dueClass = getDueClass(bill.next_bill_date);
+        const nextDueText = bill.next_bill_date
+            ? formatShortDate(bill.next_bill_date)
+            : "";
+        const intervalText = bill.interval_months
+            ? `${bill.interval_months}mo`
+            : "";
+
+        html += `<li class="item-row" data-open-bill="${bill.id}">
+      <span class="item-key ${dueClass}">${bill.bill_name}</span> 
+      <span class="item-value">
+        <span class="item-meta">
+          ${nextDueText} ${intervalText}
+        </span>
+        <button class="action-btn" data-action="paid" data-id="${bill.id}" title="Mark paid">✓</button>
+      </span>
+    </li>`;
+    });
+    html += "</ul>";
+    return html;
+}
+
+function renderBills() {
+    document.getElementById("billsContent").innerHTML = buildBillsHTML();
+    if (currentFullList === "bills") {
+        document.getElementById("fullListContent").innerHTML = buildBillsHTML();
+    }
+}
+
+// PLANTS
+function buildPlantsHTML(showArchived = false) {
+    const visible = showArchived ? plants : plants.filter((p) => !p.archived);
+
+    if (!visible.length) {
+        return '<p style="color: var(--text-secondary); font-style: italic; font-size: var(--item-font); padding: 0.5rem 0;">No plants</p>';
+    }
+
+    let html = '<ul class="item-list">';
+    visible.forEach((p) => {
+        html += `<li class="item-row" data-open-plant="${p.id}">
+      <span class="item-key">
+        ${p.plant_name} ${p.archived ? '<span class="plant-archived-tag">archived</span>' : ""}
+      </span>
+      <span class="item-value">
+        <span class="item-meta">
+          ${p.pot_size ? `${p.pot_size}cm` : ""}
+        </span>
+        <button class="action-btn" data-action="plant-log" data-id="${p.id}" title="Log event">📝</button>
+      </span>
+    </li>`;
+    });
+    html += "</ul>";
+    return html;
+}
+
+function renderPlants() {
+    document.getElementById("plantsContent").innerHTML = buildPlantsHTML(false);
+    if (currentFullList === "plants") {
+        document.getElementById("fullListContent").innerHTML =
+            buildPlantsHTML(true);
+    }
+}
+
+// NOTES
+function buildNotesHTML() {
+    let html = '<ul class="item-list">';
+    notes.forEach((note) => {
+        html += `<li class="item-row">
+      <span class="item-key">${note.content}</span>
+      <span class="item-value">
+        <button class="action-btn" data-action="note-delete" data-id="${note.id}" title="Delete note">×</button>
+      </span>
+    </li>`;
+    });
+    html += "</ul>";
+    return html;
+}
+
+function renderNotes() {
+    document.getElementById("notesContent").innerHTML = buildNotesHTML();
+    if (currentFullList === "notes") {
+        document.getElementById("fullListContent").innerHTML = buildNotesHTML();
+    }
+}
+
+// FULL LIST
+function buildFullListHTML(list) {
+    switch (list) {
+        case "fridge_stock":
+            return buildFridgeHTML(true);
+        case "chores":
+            return buildChoresHTML();
+        case "change_log":
+            return buildChangeLogHTML();
+        case "bills":
+            return buildBillsHTML();
+        case "plants":
+            return buildPlantsHTML(true);
+        case "notes":
+            return buildNotesHTML();
+        default:
+            return "<p>List not found</p>";
+    }
+}
+
+// MODAL BUILDERS
+function openModal(id) {
+    document.getElementById(id).style.display = "flex";
+}
+
+function closeModal(id) {
+    document.getElementById(id).style.display = "none";
+    if (id === "fullListModal") {
+        currentFullList = null;
+    }
+}
+
+function openFridgeStockDetail(itemId = null) {
+    const isEditing = !!itemId;
+    editingFridgeStockId = itemId;
+
+    document.getElementById("fridgeStockEditId").value = itemId || "";
+    document.getElementById("fridgeStockItemName").value = "";
+    document.getElementById("fridgeStockCategory").value = "Carbs";
+    document.getElementById("fridgeStockPortions").value = "1";
+    document.getElementById("fridgeStockShelfLife").value = "";
+    document.getElementById("fridgeStockCreatedAt").value = new Date()
+        .toISOString()
+        .slice(0, 10);
+    document.getElementById("fridgeStockExpiryDate").value = "";
+
+    document.getElementById("fridgeStockModalTitle").textContent = isEditing
+        ? "EDIT FRIDGE ITEM"
+        : "ADD FRIDGE ITEM";
+
+    if (isEditing) {
+        const item = fridgeStock.find((i) => i.id === itemId);
+        if (!item) return;
+
+        document.getElementById("fridgeStockItemName").value = item.item_name;
+        document.getElementById("fridgeStockCategory").value =
+            item.category || "Carbs";
+        document.getElementById("fridgeStockPortions").value =
+            item.portions || 0;
+        document.getElementById("fridgeStockShelfLife").value =
+            item.shelf_life_days || "";
+        document.getElementById("fridgeStockCreatedAt").value = formatDateInput(
+            item.created_at,
+        );
+        document.getElementById("fridgeStockExpiryDate").value =
+            formatDateInput(item.expiry_date);
+
+        const expectedExpiry =
+            item.created_at && item.shelf_life_days
+                ? addDays(item.created_at, item.shelf_life_days)
+                : null;
+        fridgeStockExpiryManuallySet = !!(
+            item.expiry_date && item.expiry_date !== expectedExpiry
+        );
+
+        document.getElementById("fridgeStockLastUpdated").textContent =
+            item.last_updated ? formatShortDate(item.last_updated) : "";
+    } else {
+        fridgeStockExpiryManuallySet = false;
+    }
+
+    document.getElementById("fridgeStockDeleteBtn").style.display = isEditing
+        ? "block"
+        : "none";
+    calcFridgeStockExpiry();
+    openModal("fridgeStockDetailModal");
+}
+
+function openChoreDetail(choreId = null) {
+    const isEditing = !!choreId;
+    editingChoreId = choreId;
+
+    document.getElementById("choreEditId").value = choreId || "";
+    document.getElementById("choreTaskName").value = "";
+    document.getElementById("choreLastDoneDate").value = "";
+    document.getElementById("choreIntervalDays").value = "7";
+    document.getElementById("choreNextDueDate").value = "";
+
+    document.getElementById("choreDetailTitle").textContent = isEditing
+        ? "EDIT CHORE"
+        : "ADD CHORE";
+
+    if (isEditing) {
+        const chore = chores.find((c) => c.id === choreId);
+        if (!chore) return;
+
+        document.getElementById("choreTaskName").value = chore.task_name;
+        document.getElementById("choreLastDoneDate").value = formatDateInput(
+            chore.last_done_date,
+        );
+        document.getElementById("choreIntervalDays").value =
+            chore.interval_days || "7";
+        document.getElementById("choreNextDue").value = formatDateInput(
+            chore.next_due_date,
+        );
+
+        const expectedNextDue =
+            chore.last_done_date && chore.interval_days
+                ? calcChoreNextDue(chore.last_done_date, chore.interval_days)
+                : null;
+        choreNextDueManuallySet = !!(
+            chore.next_due_date && chore.next_due_date !== expectedNextDue
+        );
+    } else {
+        choreNextDueManuallySet = false;
+    }
+
+    document.getElementById("choreDeleteBtn").style.display = isEditing
+        ? "block"
+        : "none";
+
+    if (!choreNextDueManuallySet) {
+        refreshChoreNextDue();
+    }
+
+    openModal("choreDetailModal");
+}
+
+function refreshChoreNextDue() {
+    if (choreNextDueManuallySet) return;
+
+    const lastDoneEl = document.getElementById("choreLastDoneDate");
+    const intervalEl = document.getElementById("choreIntervalDays");
+    const nextDueEl = document.getElementById("choreNextDueDate");
+    const autoLabelEl = document.getElementById("choreNextDueDateAutoLabel");
+
+    const lastDone = lastDoneEl?.value;
+    const interval = parseInt(intervalEl?.value || "0", 10);
+
+    if (lastDone && interval > 0) {
+        nextDueEl.value = calcNextDueByDays(lastDone, interval);
+        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
+    } else {
+        nextDueEl.value = "";
+        if (autoLabelEl) autoLabelEl.style.display = "none";
+    }
+}
+
+function openChangeLogDetail(clId = null) {
+    const isEditing = !!clId;
+    editingChangeLogId = clId;
+
+    document.getElementById("changeLogEditId").value = clId || "";
+    document.getElementById("changeLogItemName").value = "";
+    document.getElementById("changeLogLastChanged").value = "";
+    document.getElementById("changeLogIntervalMonths").value = "3";
+    document.getElementById("changeLogNextDue").value = "";
+
+    document.getElementById("changeLogDetailTitle").textContent = isEditing
+        ? "EDIT CHANGE LOG"
+        : "ADD CHANGE LOG";
+
+    if (isEditing) {
+        const cl = changeLog.find((c) => c.id === clId);
+        if (!cl) return;
+
+        document.getElementById("changeLogItemName").value = cl.item_name;
+        document.getElementById("changeLogLastChanged").value = formatDateInput(
+            cl.last_changed_date,
+        );
+        document.getElementById("changeLogIntervalMonths").value =
+            cl.interval_months || "6";
+        document.getElementById("changeLogNextDueDate").value = formatDateInput(
+            cl.next_change_due,
+        );
+
+        const expectedNextDue =
+            cl.last_changed_date && cl.interval_months
+                ? calcChangeLogNextDue(cl.last_changed_date, cl.interval_months)
+                : null;
+        changelogNextDueManuallySet = !!(
+            cl.next_change_due && cl.next_change_due !== expectedNextDue
+        );
+    } else {
+        changelogNextDueManuallySet = false;
+    }
+
+    document.getElementById("changeLogDeleteBtn").style.display = isEditing
+        ? "block"
+        : "none";
+
+    if (!changelogNextDueManuallySet) {
+        refreshChangeLogNextDue();
+    }
+
+    openModal("changeLogDetailModal");
+}
+
+function refreshChangeLogNextDue() {
+    if (changelogNextDueManuallySet) return;
+
+    const lastChangedEl = document.getElementById("changeLogLastChanged");
+    const intervalEl = document.getElementById("changeLogIntervalMonths");
+    const nextDueEl = document.getElementById("changeLogNextDueDate");
+    const autoLabelEl = document.getElementById(
+        "changeLogNextDueDateAutoLabel",
+    );
+
+    const lastChanged = lastChangedEl?.value;
+    const intervalMonths = parseInt(intervalEl?.value || "0", 10);
+
+    if (lastChanged && intervalMonths > 0) {
+        nextDueEl.value = calcNextDueByMonths(lastChanged, intervalMonths);
+        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
+    } else {
+        nextDueEl.value = "";
+        if (autoLabelEl) autoLabelEl.style.display = "none";
+    }
+}
+
+function openBillDetail(billId = null) {
+    const isEditing = !!billId;
+    editingBillId = billId;
+
+    document.getElementById("billEditId").value = billId || "";
+    document.getElementById("billBillName").value = "";
+    document.getElementById("billLastBillDate").value = "";
+    document.getElementById("billIntervalMonths").value = "1";
+    document.getElementById("billNextBillDate").value = "";
+
+    document.getElementById("billDetailTitle").textContent = isEditing
+        ? "EDIT BILL"
+        : "ADD BILL";
+
+    if (isEditing) {
+        const bill = bills.find((b) => b.id === billId);
+        if (!bill) return;
+
+        document.getElementById("billBillName").value = bill.bill_name;
+        document.getElementById("billLastBillDate").value = formatDateInput(
+            bill.last_bill_date,
+        );
+        document.getElementById("billIntervalMonths").value =
+            bill.interval_months || "1";
+        document.getElementById("billNextBillDate").value = formatDateInput(
+            bill.next_bill_date,
+        );
+
+        const expectedNextDate =
+            bill.last_bill_date && bill.interval_months
+                ? calcBillNextDate(bill.last_bill_date, bill.interval_months)
+                : null;
+        billNextDateManuallySet = !!(
+            bill.next_bill_date && bill.next_bill_date !== expectedNextDate
+        );
+    } else {
+        billNextDateManuallySet = false;
+    }
+
+    document.getElementById("billDeleteBtn").style.display = isEditing
+        ? "block"
+        : "none";
+
+    if (!billNextDateManuallySet) {
+        refreshBillNextDate();
+    }
+
+    openModal("billDetailModal");
+}
+
+function refreshBillNextDate() {
+    if (billNextDateManuallySet) return;
+
+    const lastDateEl = document.getElementById("billLastBillDate");
+    const intervalEl = document.getElementById("billIntervalMonths");
+    const nextDateEl = document.getElementById("billNextBillDate");
+    const autoLabelEl = document.getElementById("billNextBillDateAutoLabel");
+
+    const lastDate = lastDateEl?.value;
+    const intervalMonths = parseInt(intervalEl?.value || "0", 10);
+
+    if (lastDate && intervalMonths > 0) {
+        nextDateEl.value = calcNextDueByMonths(lastDate, intervalMonths);
+        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
+    } else {
+        nextDateEl.value = "";
+        if (autoLabelEl) autoLabelEl.style.display = "none";
+    }
+}
+
+function openPlantAddModal() {
+    document.getElementById("addPlantName").value = "";
+    document.getElementById("addPlantStartingDate").value = new Date()
+        .toISOString()
+        .slice(0, 10);
+    openModal("plantAddModal");
+}
+
+function openPlantDetail(plantId) {
+    const plant = plants.find((p) => p.id === plantId);
+    if (!plant) return;
+
+    document.getElementById("plantDetailTitle").textContent =
+        plant.plant_name.toUpperCase();
+    document.getElementById("pdPlantNameInput").value = plant.plant_name;
+    document.getElementById("pdSaveNameBtn").dataset.id = plantId;
+
+    document.getElementById("pdStartingDate").textContent = plant.starting_date
+        ? formatShortDate(plant.starting_date)
+        : "";
+    document.getElementById("pdPotSize").textContent = plant.pot_size
+        ? `${plant.pot_size}cm`
+        : "";
+    document.getElementById("pdLastWatered").textContent =
+        plant.last_watered_date ? formatShortDate(plant.last_watered_date) : "";
+    document.getElementById("pdLastFertilised").textContent =
+        plant.last_fertilised_date
+            ? formatShortDate(plant.last_fertilised_date)
+            : "";
+    document.getElementById("pdFertiliserUsed").textContent =
+        plant.last_fertiliser_used || "";
+
+    const history = plantHistory
+        .filter((h) => h.plant_id === plantId)
+        .sort((a, b) => new Date(b.event_date) - new Date(a.event_date));
+
+    const tbody = document.getElementById("pdHistoryBody");
+    if (!history.length) {
+        tbody.innerHTML =
+            '<tr><td colspan="7" style="color: var(--text-secondary); font-style: italic; text-align: center; padding: 1.4rem;">No history yet</td></tr>';
+    } else {
+        tbody.innerHTML = history
+            .map(
+                (h) => `
+      <tr>
+        <td>${formatShortDate(h.event_date)}</td>
+        <td>${h.pot_size ? `${h.pot_size}cm` : ""}</td>
+        <td class="${h.watered ? "check-yes" : "check-no"}">${h.watered ? "✓" : ""}</td>
+        <td class="${h.fertilised ? "check-yes" : "check-no"}">${h.fertilised ? "✓" : ""}</td>
+        <td>${h.fertiliser_used || ""}</td>
+        <td>${h.notes || ""}</td>
+        <td>
+          <button class="action-btn" data-action="plant-history-delete" 
+                  data-id="${h.id}" data-plantid="${plantId}"
+                  style="font-size: 0.9rem; width: 32px; height: 32px;">×</button>
+        </td>
+      </tr>
+    `,
+            )
+            .join("");
+    }
+
+    const archiveBtn = document.getElementById("pdArchiveBtn");
+    archiveBtn.dataset.id = plantId;
+    archiveBtn.textContent = plant.archived
+        ? "Unarchive Plant"
+        : "Archive Plant";
+    archiveBtn.classList.toggle("is-archived", !!plant.archived);
+
+    document.getElementById("pdDeleteBtn").dataset.id = plantId;
+    openModal("plantDetailModal");
+}
+
+function openPlantEventModal(plantId) {
+    const plant = plants.find((p) => p.id === plantId);
+    if (!plant) return;
+
+    document.getElementById("plantEventTitle").textContent =
+        plant.plant_name.toUpperCase();
+    document.getElementById("plantEventId").value = plantId;
+    document.getElementById("wateredCheck").checked = false;
+    document.getElementById("fertilisedCheck").checked = false;
+    document.getElementById("fertiliserSelectWrap").style.display = "none";
+    document.getElementById("plantEventPotSize").value = plant.pot_size || "";
+    document.getElementById("plantEventNotes").value = "";
+
+    openModal("plantEventModal");
+}
+
+function setupPanelClicks() {
+    const listMetaKeyMap = {
+        fridge_stock: "fridge_stock",
         chores: "chores",
         bills: "bills",
-        changelog: "changelog",
+        change_log: "change_log",
         plants: "plants",
         notes: "notes",
     };
 
-    const listName = metaToSection[currentFullSection];
+    document.querySelectorAll(".panel-header h3").forEach((h3) => {
+        h3.addEventListener("click", (e) => {
+            const panel = e.target.closest(".panel");
+            const section = panel.dataset.section;
+            const metaKey = listMetaKeyMap[section];
+
+            if (section) {
+                document.getElementById("listTitle").textContent =
+                    h3.textContent.toUpperCase();
+                currentFullList = section;
+                document.getElementById("fullListContent").innerHTML =
+                    buildFullListHTML(section);
+                refreshListLastUpdated();
+                openModal("fullListModal");
+            }
+        });
+    });
+}
+
+function refreshListLastUpdated() {
+    if (!currentFullList) return;
+
+    const metaToList = {
+        fridge_stock: "fridge_stock",
+        chores: "chores",
+        bills: "bills",
+        change_log: "change_log",
+        plants: "plants",
+        notes: "notes",
+    };
+
+    const listName = metaToList[currentFullList];
     if (!listName) return;
 
-    const el = document.getElementById("sectionLastUpdated");
-    if (el) el.textContent = formatMetaTimestamp(listMetadata[listName]);
+    const el = document.getElementById("listLastUpdated");
+    if (el) {
+        el.textContent = formatMetaTimestamp(listMetadata[listName]);
+    }
 }
 
-function formatMetaTimestamp(iso) {
-    if (!iso) return "No recent activity";
-    return (
-        "Last updated " +
-        new Date(iso).toLocaleString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        })
-    );
-}
-
-// ============================================================
-// Modal helpers
-// ============================================================
-function openModal(id) {
-    document.getElementById(id).style.display = "flex";
-}
-function closeModal(id) {
-    document.getElementById(id).style.display = "none";
-    if (id === "fullSectionModal") currentFullSection = null;
-}
-
-// ============================================================
-// Date helpers
-// ============================================================
+// DATE HANDLERS
 function formatShortDate(value) {
     if (!value) return "";
     return new Date(value).toLocaleDateString("en-GB", {
@@ -543,847 +1169,801 @@ function addMonths(dateStr, months) {
     return d.toISOString().slice(0, 10);
 }
 
-function calcChoreNextDue(lastdone, interval) {
-    return addDays(lastdone, interval);
-}
-function calcChangeLogNextDue(lastchanged, interval) {
-    return addMonths(lastchanged, interval);
-}
-function calcBillNextDate(lastbilldate, interval) {
-    return addMonths(lastbilldate, interval);
-}
+// DATE CALCULATORS
+function calcFridgeStockExpiry() {
+    if (fridgeStockExpiryManuallySet) return;
 
-function getExpiryClass(expirydate) {
-    if (!expirydate) return "";
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiry = new Date(expirydate + "T00:00:00Z");
-    const diffDays = Math.floor((expiry - today) / 86400000);
-    if (diffDays <= 0) return "expiry-danger";
-    if (diffDays <= 7) return "expiry-warning";
-    return "";
-}
+    const createdAtEl = document.getElementById("fridgeStockCreatedAt");
+    const shelfLifeEl = document.getElementById("fridgeStockShelfLife");
+    const expiryEl = document.getElementById("fridgeStockExpiryDate");
+    const autoLabelEl = document.getElementById(
+        "fridgeStockExpiryDateAutoLabel",
+    );
 
-function getDueClass(nextDueDate) {
-    if (!nextDueDate) return "";
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(nextDueDate + "T00:00:00Z");
-    const diffDays = Math.floor((due - today) / 86400000);
-    if (diffDays <= 0) return "due-danger";
-    if (diffDays <= 3) return "due-warning";
-    return "";
-}
+    const createdAt = createdAtEl?.value;
+    const shelfLifeDays = parseInt(shelfLifeEl?.value || "0", 10);
 
-// ============================================================
-// Fridge Stock
-// ============================================================
-function getVisibleItems(showZero = false) {
-    return fridgeItems.filter((item) => showZero || item.portions > 0);
-}
-
-function groupByCategory(items) {
-    const grouped = {};
-    fridgeCategoryOrder.forEach((c) => {
-        grouped[c] = [];
-    });
-    items.forEach((item) => {
-        grouped[
-            fridgeCategoryOrder.includes(item.category)
-                ? item.category
-                : "Others"
-        ].push(item);
-    });
-    return grouped;
-}
-
-function fridgeItemRow(item, showZero = false) {
-    const expiryClass = getExpiryClass(item.expirydate);
-    const isRaw = item.category === "Raw";
-    const dateVal = isRaw ? item.expirydate : item.createdat;
-    const dateStr = dateVal
-        ? `<span class="item-sep">•</span><span class="fridge-date">${formatShortDate(dateVal)}</span>`
-        : "";
-    const portionsDisplay =
-        item.portions === 0 && showZero
-            ? `<span class="portion-zero">${item.portions}</span>`
-            : `<span class="portion-number">${item.portions}</span>`;
-    return `
-    <li class="item-row ${item.portions === 0 && showZero ? "zero-portions" : ""}" data-open-detail="${item.id}">
-      <span class="item-key ${expiryClass}">${item.itemname}</span>
-      <span class="item-value">
-        ${dateStr}
-        <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="1" title="Add portion">+</button>
-        ${portionsDisplay}
-        <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="-1" title="Remove portion">-</button>
-      </span>
-    </li>`;
-}
-
-function buildFridgeHTML(showZero) {
-    const items = getVisibleItems(showZero);
-    const grouped = groupByCategory(items);
-    const forceFullWidth = ["Protein", "Raw"];
-    let html = '<div class="fridge-inner-grid">';
-    fridgeCategoryOrder.forEach((cat) => {
-        const catItems = grouped[cat];
-        const alwaysHalfWidth = ["Carbs", "Veg", "Fruits", "Others"];
-        const wide =
-            !alwaysHalfWidth.includes(cat) &&
-            (catItems.length >= 3 || forceFullWidth.includes(cat));
-        const cls = wide ? "col-full" : "col-half";
-        html +=
-            catItems.length === 0
-                ? `<div class="fridge-group ${cls}"><div class="fridge-group-title">${cat}</div><div class="fridge-empty">No items</div></div>`
-                : `<div class="fridge-group ${cls}"><div class="fridge-group-title">${cat}</div><ul class="item-list ${wide ? "two-col-list" : ""}">${catItems.map((i) => fridgeItemRow(i, showZero)).join("")}</ul></div>`;
-    });
-    html += "</div>";
-    return html;
-}
-
-function renderFridgeStock() {
-    document.getElementById("fridgeContent").innerHTML = buildFridgeHTML(false);
-    if (currentFullSection === "fridgestock") {
-        document.getElementById("fullSectionContent").innerHTML =
-            buildFridgeHTML(true);
-    }
-}
-
-function recalcExpiry() {
-    if (expiryManuallySet) return;
-    const createdVal = document.getElementById("editCreatedAt")?.value;
-    const shelfVal = document.getElementById("editShelflife")?.value;
-    const expiryInput = document.getElementById("editExpiry");
-    const autoLabel = document.getElementById("expiryAutoLabel");
-    const hint = document.getElementById("expiryHint");
-    if (createdVal && shelfVal && expiryInput) {
-        expiryInput.value = addDays(createdVal, parseInt(shelfVal, 10));
-        if (autoLabel) autoLabel.style.display = "inline-block";
-        if (hint) hint.style.display = "block";
+    if (createdAt && shelfLifeDays > 0) {
+        expiryEl.value = addDays(createdAt, shelfLifeDays);
+        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
+        if (hintEl) hintEl.style.display = "block";
     } else {
-        if (autoLabel) autoLabel.style.display = "none";
-        if (hint) hint.style.display = "none";
+        if (autoLabelEl) autoLabelEl.style.display = "none";
+        if (hintEl) hintEl.style.display = "none";
     }
 }
 
-function recalcAddExpiry() {
-    if (addExpiryManuallySet) return;
-    const createdVal = document.getElementById("addCreatedAt")?.value;
-    const shelfVal = document.getElementById("addShelflife")?.value;
-    const expiryInput = document.getElementById("addExpiry");
-    const autoLabel = document.getElementById("addExpiryAutoLabel");
-    const hint = document.getElementById("addExpiryHint");
-    if (createdVal && shelfVal && expiryInput) {
-        expiryInput.value = addDays(createdVal, parseInt(shelfVal, 10));
-        if (autoLabel) autoLabel.style.display = "inline-block";
-        if (hint) hint.style.display = "block";
-    } else {
-        if (autoLabel) autoLabel.style.display = "none";
-        if (hint) hint.style.display = "none";
+function calcNextDueByDays(lastDate, intervalDays) {
+    return addDays(lastDate, intervalDays);
+}
+
+function calcNextDueByMonths(lastDate, intervalMonths) {
+    return addMonths(lastDate, intervalMonths);
+}
+
+function formatMetaTimestamp(iso) {
+    if (!iso) return "No recent activity";
+    return `Last updated ${new Date(iso).toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    })}`;
+}
+
+// BUTTON ACTIONS
+async function saveFridgeItem(item, isUpdate = false) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
+
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+
+        const data = {
+            ...item,
+            user_id: user.id,
+        };
+
+        let error;
+        if (isUpdate) {
+            ({ error } = await sb
+                .from("fridge_stock")
+                .update(data)
+                .eq("id", item.id)
+                .eq("user_id", user.id));
+        } else {
+            ({ error } = await sb.from("fridge_stock").insert(data));
+        }
+
+        if (error) throw error;
+
+        await loadFridgeStock();
+        touchMetadata("fridge_stock");
+    } catch (error) {
+        console.error("Save fridge_stock failed:", error);
+        alert(`Save failed: ${error.message}`);
     }
 }
 
-function openDetail(itemId) {
-    const item = fridgeItems.find((i) => i.id === itemId);
-    if (!item) return;
+async function deleteFridgeItem(id) {
+    if (!confirm("Delete this fridge item permanently?")) return;
 
-    expiryManuallySet = false;
-    document.getElementById("editId").value = item.id;
-    document.getElementById("editItemname").value = item.itemname;
-    document.getElementById("editCategory").value = item.category;
-    document.getElementById("editPortions").value = item.portions;
-    document.getElementById("editShelflife").value = item.shelflifedays;
-    document.getElementById("editCreatedAt").value = item.createdat;
-    document.getElementById("editExpiry").value = formatDateInput(
-        item.expirydate,
-    );
-    document.getElementById("editLastUpdated").textContent = item.lastupdated
-        ? formatShortDate(item.lastupdated)
-        : "";
-    document.getElementById("detailTitle").textContent =
-        item.itemname.toUpperCase();
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
 
-    const expectedAuto =
-        item.createdat && item.shelflifedays
-            ? addDays(item.createdat, item.shelflifedays)
-            : null;
-    expiryManuallySet = !!item.expirydate && item.expirydate !== expectedAuto;
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
 
-    openModal("detailModal");
+        const { error } = await sb
+            .from("fridge_stock")
+            .delete()
+            .eq("id", id)
+            .eq("user_id", user.id);
 
-    if (!expiryManuallySet) {
-        recalcExpiry();
+        if (error) throw error;
+
+        await loadFridgeStock();
+        touchMetadata("fridge_stock");
+    } catch (err) {
+        console.error("Delete fridge_stock failed:", err);
+        alert(`Delete failed: ${err.message}`);
     }
 }
 
-function openAddModal() {
-    const today = new Date().toISOString().slice(0, 10);
-    document.getElementById("addItemname").value = "";
-    document.getElementById("addCategory").value = "Carbs";
-    document.getElementById("addPortions").value = 1;
-    document.getElementById("addShelflife").value = "";
-    document.getElementById("addCreatedAt").value = today;
-    document.getElementById("addExpiry").value = "";
-    addExpiryManuallySet = false;
-    document.getElementById("addTitle").textContent = "Add New Fridge Item";
-    openModal("addModal");
-    recalcAddExpiry();
-}
+async function saveChore(chore, isUpdate = false) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
 
-function deleteFridgeItem(itemId) {
-    if (confirm("Delete this item permanently?")) {
-        fridgeItems = fridgeItems.filter((item) => item.id !== itemId);
-        touchMetadata("fridgestock");
-        renderFridgeStock();
-        closeModal("detailModal");
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+
+        const data = {
+            ...chore,
+            user_id: user.id,
+        };
+
+        let error;
+        if (isUpdate) {
+            ({ error } = await sb
+                .from("chores")
+                .update(data)
+                .eq("id", chore.id)
+                .eq("user_id", user.id));
+        } else {
+            ({ error } = await sb.from("chores").insert(data));
+        }
+
+        if (error) throw error;
+
+        await loadChores();
+        touchMetadata("chores");
+    } catch (error) {
+        console.error("Save chore failed:", error);
+        alert(`Save failed: ${error.message}`);
     }
 }
 
-// ============================================================
-// Chores
-// ============================================================
-function buildChoresHTML() {
-    return (
-        '<ul class="item-list">' +
-        chores
-            .map((c) => {
-                const dueClass = getDueClass(c.nextdue);
-                return `
-    <li class="item-row" data-open-chore="${c.id}">
-      <span class="item-key ${dueClass}">${c.taskname}</span>
-      <span class="item-value">
-        <span class="item-meta">${c.lastdone ? formatShortDate(c.lastdone) : "Never"} • ${c.nextdue ? formatShortDate(c.nextdue) : ""}${c.interval ? ` (${c.interval}d)` : ""}</span>
-        <button class="action-btn" data-action="done" data-id="${c.id}" title="Mark done">✓</button>
-      </span>
-    </li>`;
-            })
-            .join("") +
-        "</ul>"
-    );
-}
+async function deleteChore(id) {
+    if (!confirm("Delete this chore?")) return;
 
-function renderChores() {
-    document.getElementById("choresContent").innerHTML = buildChoresHTML();
-    if (currentFullSection === "chores") {
-        document.getElementById("fullSectionContent").innerHTML =
-            buildChoresHTML();
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
+
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+
+        const { error } = await sb
+            .from("chores")
+            .delete()
+            .eq("id", id)
+            .eq("user_id", user.id);
+
+        if (error) throw error;
+
+        await loadChores();
+        touchMetadata("chores");
+    } catch (err) {
+        console.error("Delete chore failed:", err);
+        alert(`Delete failed: ${err.message}`);
     }
 }
 
-function openChoreDetail(choreId) {
-    const chore = chores.find((c) => c.id === choreId);
-    if (!chore) return;
+async function saveChangeLog(cl, isUpdate = false) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
 
-    editingChoreId = choreId;
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
 
-    document.getElementById("choreEditId").value = choreId;
-    document.getElementById("choreTaskname").value = chore.taskname;
-    document.getElementById("choreLastdone").value = formatDateInput(
-        chore.lastdone,
-    );
-    document.getElementById("choreInterval").value = chore.interval;
-    document.getElementById("choreNextdue").value = formatDateInput(
-        chore.nextdue,
-    );
+        const data = {
+            ...cl,
+            user_id: user.id,
+        };
 
-    const expectedAuto =
-        chore.lastdone && chore.interval
-            ? calcChoreNextDue(chore.lastdone, chore.interval)
-            : null;
-    choreNextDueManuallySet = !!chore.nextdue && chore.nextdue !== expectedAuto;
+        let error;
+        if (isUpdate) {
+            ({ error } = await sb
+                .from("change_log")
+                .update(data)
+                .eq("id", cl.id)
+                .eq("user_id", user.id));
+        } else {
+            ({ error } = await sb.from("change_log").insert(data));
+        }
 
-    document.getElementById("choreDetailTitle").textContent =
-        chore.taskname.toUpperCase();
-    document.getElementById("choreDeleteBtn").style.display = "block";
+        if (error) throw error;
 
-    openModal("choreDetailModal");
-
-    if (!choreNextDueManuallySet) {
-        refreshChoreNextDueIfNeeded();
+        await loadChangeLog();
+        touchMetadata("change_log");
+    } catch (error) {
+        console.error("Save change_log failed:", error);
+        alert(`Save failed: ${error.message}`);
     }
 }
 
-function refreshChoreNextDueIfNeeded() {
-    if (choreNextDueManuallySet) return;
-    const lastdone = document.getElementById("choreLastdone").value;
-    const interval = document.getElementById("choreInterval").value;
-    const autoLabel = document.getElementById("choreNextdueAutoLabel");
-    if (lastdone && interval) {
-        document.getElementById("choreNextdue").value = calcChoreNextDue(
-            lastdone,
-            interval,
-        );
-        if (autoLabel) autoLabel.style.display = "inline-block";
-    } else {
-        if (autoLabel) autoLabel.style.display = "none";
+async function deleteChangeLog(id) {
+    if (!confirm("Delete this item?")) return;
+
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
+
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+
+        const { error } = await sb
+            .from("change_log")
+            .delete()
+            .eq("id", id)
+            .eq("user_id", user.id);
+
+        if (error) throw error;
+
+        await loadChangeLog();
+        touchMetadata("change_log");
+    } catch (err) {
+        console.error("Delete change_log failed:", err);
+        alert(`Delete failed: ${err.message}`);
     }
 }
 
-// ============================================================
-// Change Log
-// ============================================================
-function buildChangeLogsHTML() {
-    return (
-        '<ul class="item-list">' +
-        changeLogs
-            .map((c) => {
-                const dueClass = getDueClass(c.nextdue);
-                return `
-    <li class="item-row" data-open-changelog="${c.id}">
-      <span class="item-key ${dueClass}">${c.itemname}</span>
-      <span class="item-value">
-        <span class="item-meta">${c.lastchanged ? formatShortDate(c.lastchanged) : "Never"} • ${c.nextdue ? formatShortDate(c.nextdue) : ""}${c.interval ? ` (${c.interval}mo)` : ""}</span>
-        <button class="action-btn" data-action="changelog-done" data-id="${c.id}" title="Mark changed">✓</button>
-      </span>
-    </li>`;
-            })
-            .join("") +
-        "</ul>"
-    );
-}
+async function saveBill(bill, isUpdate = false) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
 
-function renderChangeLogs() {
-    document.getElementById("changelogContent").innerHTML =
-        buildChangeLogsHTML();
-    if (currentFullSection === "changelog") {
-        document.getElementById("fullSectionContent").innerHTML =
-            buildChangeLogsHTML();
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+
+        const data = {
+            ...bill,
+            user_id: user.id,
+        };
+
+        let error;
+        if (isUpdate) {
+            ({ error } = await sb
+                .from("bills")
+                .update(data)
+                .eq("id", bill.id)
+                .eq("user_id", user.id));
+        } else {
+            ({ error } = await sb.from("bills").insert(data));
+        }
+
+        if (error) throw error;
+
+        await loadBills();
+        touchMetadata("bills");
+    } catch (error) {
+        console.error("Save bill failed:", error);
+        alert(`Save failed: ${error.message}`);
     }
 }
 
-function openChangeLogDetail(clId) {
-    const cl = changeLogs.find((c) => c.id === clId);
-    if (!cl) return;
+async function deleteBill(id) {
+    if (!confirm("Delete this bill?")) return;
 
-    editingChangeLogId = clId;
-    changelogNextDueManuallySet = false;
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
 
-    document.getElementById("changelogEditId").value = clId;
-    document.getElementById("changelogItemname").value = cl.itemname;
-    document.getElementById("changelogLastchanged").value = formatDateInput(
-        cl.lastchanged,
-    );
-    document.getElementById("changelogInterval").value = cl.interval;
-    document.getElementById("changelogNextdue").value = formatDateInput(
-        cl.nextdue,
-    );
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
 
-    const expectedAuto =
-        cl.lastchanged && cl.interval
-            ? calcChangeLogNextDue(cl.lastchanged, cl.interval)
-            : null;
-    changelogNextDueManuallySet = !!cl.nextdue && cl.nextdue !== expectedAuto;
+        const { error } = await sb
+            .from("bills")
+            .delete()
+            .eq("id", id)
+            .eq("user_id", user.id);
 
-    document.getElementById("changelogDetailTitle").textContent =
-        cl.itemname.toUpperCase();
-    document.getElementById("changelogDeleteBtn").style.display = "block";
+        if (error) throw error;
 
-    openModal("changelogDetailModal");
-
-    if (!changelogNextDueManuallySet) {
-        refreshChangelogNextDue();
+        await loadBills();
+        touchMetadata("bills");
+    } catch (err) {
+        console.error("Delete bill failed:", err);
+        alert(`Delete failed: ${err.message}`);
     }
 }
 
-function refreshChangelogNextDue() {
-    if (changelogNextDueManuallySet) return;
-    const lastchanged = document.getElementById("changelogLastchanged").value;
-    const interval = document.getElementById("changelogInterval").value;
-    const autoLabel = document.getElementById("changelogNextdueAutoLabel");
-    if (lastchanged && interval) {
-        document.getElementById("changelogNextdue").value =
-            calcChangeLogNextDue(lastchanged, interval);
-        if (autoLabel) autoLabel.style.display = "inline-block";
-    } else {
-        if (autoLabel) autoLabel.style.display = "none";
+async function savePlant(plant) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
+
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+
+        const data = {
+            ...plant,
+            user_id: user.id,
+        };
+
+        const { error } = await sb.from("plants").insert(data);
+        if (error) throw error;
+
+        await loadPlants();
+        await loadPlantHistory();
+        touchMetadata("plants");
+    } catch (err) {
+        console.error("Save plant failed:", err);
+        alert(`Save failed: ${err.message}`);
     }
 }
 
-// ============================================================
-// Bills
-// ============================================================
-function buildBillsHTML() {
-    return (
-        '<ul class="item-list">' +
-        bills
-            .map((b) => {
-                const dueClass = getDueClass(b.nextbilldate);
-                return `
-    <li class="item-row" data-open-bill="${b.id}">
-      <span class="item-key ${dueClass}">${b.billname}</span>
-      <span class="item-value">
-        <span class="item-meta">${b.nextbilldate ? formatShortDate(b.nextbilldate) : ""}${b.interval ? ` (${b.interval}mo)` : ""}</span>
-        <button class="action-btn" data-action="paid" data-id="${b.id}" title="Mark paid">✓</button>
-      </span>
-    </li>`;
-            })
-            .join("") +
-        "</ul>"
-    );
-}
+async function updatePlant(plantId, updates) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
 
-function renderBills() {
-    document.getElementById("billsContent").innerHTML = buildBillsHTML();
-    if (currentFullSection === "bills") {
-        document.getElementById("fullSectionContent").innerHTML =
-            buildBillsHTML();
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+
+        const data = {
+            ...updates,
+            user_id: user.id,
+        };
+
+        const { error } = await sb
+            .from("plants")
+            .update(data)
+            .eq("id", plantId)
+            .eq("user_id", user.id);
+
+        if (error) throw error;
+
+        await loadPlants();
+        await loadPlantHistory();
+        touchMetadata("plants");
+    } catch (err) {
+        console.error("Update plant failed:", err);
+        alert(`Update failed: ${err.message}`);
     }
 }
 
-function openBillDetail(billId) {
-    const bill = bills.find((b) => b.id === billId);
-    if (!bill) return;
+async function deletePlant(plantId) {
+    if (!confirm("Delete this plant and all its history permanently?")) return;
 
-    editingBillId = billId;
-    billNextDateManuallySet = false;
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
 
-    document.getElementById("billEditId").value = billId;
-    document.getElementById("billBillname").value = bill.billname;
-    document.getElementById("billLastbilldate").value = formatDateInput(
-        bill.lastbilldate,
-    );
-    document.getElementById("billInterval").value = bill.interval;
-    document.getElementById("billNextbilldate").value = formatDateInput(
-        bill.nextbilldate,
-    );
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
 
-    const expectedAuto =
-        bill.lastbilldate && bill.interval
-            ? calcBillNextDate(bill.lastbilldate, bill.interval)
-            : null;
-    billNextDateManuallySet =
-        !!bill.nextbilldate && bill.nextbilldate !== expectedAuto;
+        const { error: error1 } = await sb
+            .from("plant_history")
+            .delete()
+            .eq("plant_id", plantId);
 
-    document.getElementById("billDetailTitle").textContent =
-        bill.billname.toUpperCase();
-    document.getElementById("billDeleteBtn").style.display = "block";
+        const { error: error2 } = await sb
+            .from("plants")
+            .delete()
+            .eq("id", plantId)
+            .eq("user_id", user.id);
 
-    openModal("billDetailModal");
+        if (error1 || error2) throw error1 || error2;
 
-    if (!billNextDateManuallySet) {
-        refreshBillNextDate();
+        await loadPlants();
+        await loadPlantHistory();
+        touchMetadata("plants");
+    } catch (err) {
+        console.error("Delete plant failed:", err);
+        alert(`Delete failed: ${err.message}`);
     }
 }
 
-function refreshBillNextDate() {
-    if (billNextDateManuallySet) return;
-    const lastdate = document.getElementById("billLastbilldate").value;
-    const interval = document.getElementById("billInterval").value;
-    const autoLabel = document.getElementById("billNextbilldateAutoLabel");
-    if (lastdate && interval) {
-        document.getElementById("billNextbilldate").value = calcBillNextDate(
-            lastdate,
-            interval,
-        );
-        if (autoLabel) autoLabel.style.display = "inline-block";
-    } else {
-        if (autoLabel) autoLabel.style.display = "none";
+async function savePlantHistory(historyItem) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
+
+    try {
+        const data = {
+            ...historyItem,
+            plant_id: historyItem.plant_id,
+        };
+
+        const { error } = await sb.from("plant_history").insert(data);
+        if (error) throw error;
+
+        await loadPlantHistory();
+        touchMetadata("plants");
+    } catch (err) {
+        console.error("Save plant_history failed:", err);
+        alert(`Save failed: ${err.message}`);
     }
 }
 
-// ============================================================
-// Plants
-// ============================================================
-function buildPlantsHTML(showArchived = false) {
-    const visible = showArchived ? plants : plants.filter((p) => !p.archived);
-    if (!visible.length) {
-        return '<p style="color:var(--text-secondary);font-style:italic;font-size:var(--item-font);padding:0.5rem 0;">No plants</p>';
-    }
-    return (
-        '<ul class="item-list">' +
-        visible
-            .map(
-                (p) => `
-    <li class="item-row" data-open-plant="${p.id}">
-      <span class="item-key">
-        ${p.plantname}
-        ${p.archived ? '<span class="plant-archived-tag">(archived)</span>' : ""}
-      </span>
-      <span class="item-value">
-        <span class="item-meta">${p.potsize ? p.potsize + "cm" : ""}</span>
-        <button class="action-btn" data-action="plant-log" data-id="${p.id}" title="Log event">📝</button>
-      </span>
-    </li>`,
-            )
-            .join("") +
-        "</ul>"
-    );
-}
+async function deletePlantHistory(id, plantId) {
+    if (!confirm("Delete this history entry?")) return;
 
-function renderPlants() {
-    document.getElementById("plantsContent").innerHTML = buildPlantsHTML(false);
-    if (currentFullSection === "plants") {
-        document.getElementById("fullSectionContent").innerHTML =
-            buildPlantsHTML(true);
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
+    }
+
+    try {
+        const { error } = await sb.from("plant_history").delete().eq("id", id);
+
+        if (error) throw error;
+
+        await loadPlantHistory();
+        touchMetadata("plants");
+        openPlantDetail(plantId);
+    } catch (err) {
+        console.error("Delete plant_history failed:", err);
+        alert(`Delete failed: ${err.message}`);
     }
 }
 
-function openPlantDetail(plantId) {
-    const plant = plants.find((p) => p.id === plantId);
-    if (!plant) return;
-
-    document.getElementById("plantDetailTitle").textContent =
-        plant.plantname.toUpperCase();
-    document.getElementById("pdPlantNameInput").value = plant.plantname;
-    document.getElementById("pdSaveNameBtn").dataset.id = plantId;
-    document.getElementById("pdStartDate").textContent = plant.startingdate
-        ? formatShortDate(plant.startingdate)
-        : "—";
-    document.getElementById("pdPotSize").textContent = plant.potsize
-        ? plant.potsize + " cm"
-        : "—";
-    document.getElementById("pdLastWatered").textContent = plant.lastwatered
-        ? formatShortDate(plant.lastwatered)
-        : "—";
-    document.getElementById("pdLastFertilised").textContent =
-        plant.lastfertilised ? formatShortDate(plant.lastfertilised) : "—";
-    document.getElementById("pdFertiliserUsed").textContent =
-        plant.lastfertiliser || "—";
-
-    const history = plantHistory
-        .filter((h) => h.plantid === plantId)
-        .sort((a, b) => new Date(b.eventdate) - new Date(a.eventdate));
-
-    const noteText = plant.notes || history.find((h) => h.notes)?.notes || "";
-    document.getElementById("pdLatestNote").textContent =
-        noteText || "No notes";
-
-    const archiveBtn = document.getElementById("pdArchiveBtn");
-    archiveBtn.dataset.id = plantId;
-    archiveBtn.textContent = plant.archived
-        ? "Unarchive Plant"
-        : "Archive Plant";
-    archiveBtn.classList.toggle("is-archived", !!plant.archived);
-
-    document.getElementById("pdDeleteBtn").dataset.id = plantId;
-
-    const tbody = document.getElementById("pdHistoryBody");
-    if (!history.length) {
-        tbody.innerHTML =
-            '<tr><td colspan="7" style="color:var(--text-secondary);font-style:italic;text-align:center;padding:1.4rem;">No history yet</td></tr>';
-    } else {
-        tbody.innerHTML = history
-            .map(
-                (h) => `
-      <tr>
-        <td>${formatShortDate(h.eventdate)}</td>
-        <td>${h.potsize ? h.potsize + " cm" : "—"}</td>
-        <td class="${h.watered ? "check-yes" : "check-no"}">${h.watered ? "✓" : "—"}</td>
-        <td class="${h.fertilised ? "check-yes" : "check-no"}">${h.fertilised ? "✓" : "—"}</td>
-        <td>${h.fertiliserused || "—"}</td>
-        <td>${h.notes || "—"}</td>
-        <td>
-          <button class="action-btn" data-action="plant-history-delete" data-id="${h.id}" data-plantid="${plantId}" style="font-size:0.9rem;width:32px;height:32px;">✕</button>
-        </td>
-      </tr>`,
-            )
-            .join("");
+async function saveNote(content) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        alert("Supabase not ready");
+        return;
     }
 
-    openModal("plantDetailModal");
-}
+    try {
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id || !content.trim()) return;
 
-function openAddPlantModal() {
-    document.getElementById("addPlantName").value = "";
-    document.getElementById("addPlantStartDate").value = new Date()
-        .toISOString()
-        .slice(0, 10);
-    openModal("addPlantModal");
-}
-
-function openPlantEventModal(plantId) {
-    const plant = plants.find((p) => p.id === plantId);
-    if (!plant) return;
-    document.getElementById("plantEventTitle").textContent =
-        plant.plantname.toUpperCase();
-    document.getElementById("plantEventId").value = plantId;
-    document.getElementById("wateredCheck").checked = false;
-    document.getElementById("fertilisedCheck").checked = false;
-    document.getElementById("fertiliserSelectWrap").style.display = "none";
-    document.getElementById("plantEventPotsize").value = plant.potsize || "";
-    openModal("plantEventModal");
-}
-
-// ============================================================
-// Notes
-// ============================================================
-function buildNotesHTML() {
-    return (
-        '<ul class="item-list">' +
-        notes
-            .map(
-                (n) => `
-    <li class="item-row">
-      <span class="item-key">${n.content}</span>
-      <span class="item-value">
-        <button class="action-btn" data-action="note-delete" data-id="${n.id}" title="Delete note">×</button>
-      </span>
-    </li>`,
-            )
-            .join("") +
-        "</ul>"
-    );
-}
-
-function renderNotes() {
-    document.getElementById("notesContent").innerHTML = buildNotesHTML();
-    if (currentFullSection === "notes") {
-        document.getElementById("fullSectionContent").innerHTML =
-            buildNotesHTML();
-    }
-}
-
-// ============================================================
-// Full Section Modal
-// ============================================================
-function buildFullSectionHTML(section) {
-    switch (section) {
-        case "fridgestock":
-            return buildFridgeHTML(true);
-        case "chores":
-            return buildChoresHTML();
-        case "changelog":
-            return buildChangeLogsHTML();
-        case "bills":
-            return buildBillsHTML();
-        case "plants":
-            return buildPlantsHTML(true);
-        case "notes":
-            return buildNotesHTML();
-        default:
-            return "";
-    }
-}
-
-function setupPanelClicks() {
-    const sectionMetaKeyMap = {
-        fridgestock: "fridge_stock",
-        chores: "chores",
-        bills: "bills",
-        changelog: "change_log",
-        plants: "plants",
-        notes: "notes",
-    };
-    document.querySelectorAll(".panel-header h3").forEach((h3) => {
-        h3.addEventListener("click", (e) => {
-            const section = e.target.closest(".panel").dataset.section;
-            const metaKey = sectionMetaKeyMap[section] || section;
-            document.getElementById("sectionTitle").textContent =
-                h3.textContent.toUpperCase();
-            currentFullSection = section;
-            document.getElementById("fullSectionContent").innerHTML =
-                buildFullSectionHTML(section);
-            refreshSectionLastUpdated();
-            openModal("fullSectionModal");
+        const { error } = await sb.from("notes").insert({
+            content: content.trim(),
+            user_id: user.id,
+            created_at: new Date().toISOString().slice(0, 10),
         });
-    });
+
+        if (error) throw error;
+
+        await loadNotes();
+        touchMetadata("notes");
+        document.getElementById("addNoteContent").value = "";
+    } catch (err) {
+        console.error("Save note failed:", err);
+        alert(`Save failed: ${err.message}`);
+    }
 }
 
-// ============================================================
-// Global click delegation
-// ============================================================
+async function touchMetadata(listName) {
+    const ts = new Date().toISOString();
+    listMetadata[listName] = ts;
+
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) return;
+
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) return;
+
+        await sb.from("list_metadata").upsert(
+            {
+                list_name: listName,
+                last_updated: ts,
+                user_id: user.id,
+            },
+            { onConflict: "user_id,list_name" },
+        );
+    } catch (err) {
+        console.error("Metadata update failed:", err);
+    }
+}
+
+function bindAllForms() {
+    document
+        .getElementById("fridgeForm")
+        ?.addEventListener("submit", fridgeFormHandler);
+    document
+        .getElementById("fridgeDeleteBtn")
+        ?.addEventListener("click", fridgeDeleteHandler);
+
+    document
+        .getElementById("choreForm")
+        ?.addEventListener("submit", choreFormHandler);
+    document
+        .getElementById("choreDeleteBtn")
+        ?.addEventListener("click", choreDeleteHandler);
+
+    document
+        .getElementById("changelogForm")
+        ?.addEventListener("submit", changelogFormHandler);
+    document
+        .getElementById("changelogDeleteBtn")
+        ?.addEventListener("click", changelogDeleteHandler);
+
+    document
+        .getElementById("billForm")
+        ?.addEventListener("submit", billFormHandler);
+    document
+        .getElementById("billDeleteBtn")
+        ?.addEventListener("click", billDeleteHandler);
+
+    document
+        .getElementById("addPlantForm")
+        ?.addEventListener("submit", addPlantFormHandler);
+    document
+        .getElementById("plantEventForm")
+        ?.addEventListener("submit", plantEventFormHandler);
+
+    document
+        .getElementById("addNoteForm")
+        ?.addEventListener("submit", addNoteFormHandler);
+
+    bindAutoCalculations();
+}
+
+function bindAutoCalculations() {
+    ["fridgeStockCreatedAt", "fridgeStockShelfLife"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                fridgeStockExpiryManuallySet = false;
+                calcFridgeStockExpiry();
+            });
+        }
+    });
+    const fridgeExpiryEl = document.getElementById("fridgeStockExpiryDate");
+    if (fridgeExpiryEl) {
+        fridgeExpiryEl.addEventListener("input", () => {
+            fridgeStockExpiryManuallySet = true;
+            const autoLabel = document.getElementById("fridgeStockExpiryDateAutoLabel");
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    ["choreLastDoneDate", "choreIntervalDays"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                choreNextDueManuallySet = false;
+                refreshChoreNextDue();
+            });
+        }
+    });
+    const choreNextDueEl = document.getElementById("choreNextDueDate");
+    if (choreNextDueEl) {
+        choreNextDueEl.addEventListener("input", () => {
+            choreNextDueManuallySet = true;
+            const autoLabel = document.getElementById("choreNextDueDateAutoLabel");
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    ["changeLogLastChanged", "changeLogIntervalMonths"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                changeLogNextDueManuallySet = false;
+                refreshChangeLogNextDue();
+            });
+        }
+    });
+    const changelogNextDueEl = document.getElementById("changeLogNextDueDate");
+    if (changelogNextDueEl) {
+        changelogNextDueEl.addEventListener("input", () => {
+            changelogNextDueManuallySet = true;
+            const autoLabel = document.getElementById(
+                "changeLogNextDueDateAutoLabel",
+            );
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    ["billLastBillDate", "billIntervalMonths"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                billNextDateManuallySet = false;
+                refreshBillNextDate();
+            });
+        }
+    });
+    const billNextDateEl = document.getElementById("billNextBillDate");
+    if (billNextDateEl) {
+        billNextDateEl.addEventListener("input", () => {
+            billNextDateManuallySet = true;
+            const autoLabel = document.getElementById(
+                "billNextBillDateAutoLabel",
+            );
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    const fertilisedCheck = document.getElementById("fertilisedCheck");
+    if (fertilisedCheck) {
+        fertilisedCheck.addEventListener("change", (e) => {
+            document.getElementById("fertiliserSelectWrap").style.display = e
+                .target.checked
+                ? "block"
+                : "none";
+        });
+    }
+}
+
+// GLOBAL CLICK DELEGATION
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
-    if (!btn) return;
-    e.stopPropagation();
-    const action = btn.dataset.action;
-    const id = btn.dataset.id;
-    const sb = await initSupabase();
-
-    if (action === "fridge-portions") {
+    if (btn) {
+        e.stopPropagation();
+        const action = btn.dataset.action;
         const id = btn.dataset.id;
-        const delta = parseInt(btn.dataset.delta, 10);
-        const item = fridgeItems.find((item) => item.id === id);
-        if (!item) return;
 
-        const newPortions = Math.max(0, item.portions + delta);
+        const sb = await ensureSupabaseReady();
+        if (!sb) return;
+
+        const { data: user } = await sb.auth.getUser();
+        if (!user?.id) {
+            alert("Not authenticated");
+            return;
+        }
+
         const today = new Date().toISOString().slice(0, 10);
-        fridgeItems = fridgeItems.map((it) =>
-            it.id === id
-                ? { ...it, portions: newPortions, lastupdated: today }
-                : it,
-        );
-        touchMetadata("fridgestock");
-        renderFridgeStock();
 
         try {
-            await sb
-                .from("fridgestock")
-                .update({ portions: newPortions, lastupdated: today })
-                .eq("id", id);
-            await loadFridgeStock();
-        } catch (err) {
-            console.error("Update failed:", err);
-        }
-        return;
-    }
+            if (action === "fridge-portions") {
+                const delta = parseInt(btn.dataset.delta, 10);
+                const item = fridgeItems.find((item) => item.id === id);
+                if (!item) return;
 
-    if (action === "done") {
-        const today = new Date().toISOString().slice(0, 10);
-        const chore = chores.find((c) => c.id === id);
-        if (!chore) return;
-        const nextdue = calcChoreNextDue(today, chore.interval);
+                const newPortions = Math.max(0, item.portions + delta);
+                fridgeItems = fridgeItems.map((it) =>
+                    it.id === id
+                        ? { ...it, portions: newPortions, last_updated: today }
+                        : it,
+                );
 
-        chores = chores.map((c) =>
-            c.id !== id ? c : { ...c, lastdone: today, nextdue },
-        );
-        touchMetadata("chores");
-        renderChores();
+                await sb
+                    .from("fridge_stock")
+                    .update({ portions: newPortions, last_updated: today })
+                    .eq("id", id)
+                    .eq("user_id", user.id);
 
-        try {
-            await sb
-                .from("chores")
-                .update({ lastdone: today, nextdue })
-                .eq("id", id);
-        } catch (err) {
-            console.error(err);
-            loadChores();
-        }
-        return;
-    }
+                renderFridgeStock();
+                touchMetadata("fridge_stock");
+            } else if (action === "done") {
+                const chore = chores.find((c) => c.id === id);
+                if (!chore) return;
+                const nextDue = calcNextDueByDays(today, chore.interval_days);
 
-    if (action === "changelog-done") {
-        const today = new Date().toISOString().slice(0, 10);
-        const cl = changeLogs.find((c) => c.id === id);
-        if (!cl) return;
-        const nextdue = calcChangeLogNextDue(today, cl.interval);
+                await sb
+                    .from("chores")
+                    .update({ last_done_date: today, next_due_date: nextDue })
+                    .eq("id", id)
+                    .eq("user_id", user.id);
 
-        changeLogs = changeLogs.map((c) =>
-            c.id !== id ? c : { ...c, lastchanged: today, nextdue },
-        );
-        touchMetadata("changelog");
-        renderChangeLogs();
+                chores = chores.map((c) =>
+                    c.id === id
+                        ? {
+                              ...c,
+                              last_done_date: today,
+                              next_due_date: nextDue,
+                          }
+                        : c,
+                );
+                renderChores();
+                touchMetadata("chores");
+            } else if (action === "changed") {
+                const cl = changeLog.find((c) => c.id === id);
+                if (!cl) return;
+                const nextDue = calcNextDueByMonths(today, cl.interval_months);
 
-        try {
-            await sb
-                .from("changelog")
-                .update({ lastchanged: today, nextdue })
-                .eq("id", id);
-        } catch (err) {
-            console.error(err);
-            loadChangeLogs();
-        }
-        return;
-    }
+                await sb
+                    .from("change_log")
+                    .update({
+                        last_changed_date: today,
+                        next_change_due: nextDue,
+                    })
+                    .eq("id", id)
+                    .eq("user_id", user.id);
 
-    if (action === "paid") {
-        const bill = bills.find((b) => b.id === id);
-        if (!bill) return;
-        const newLast = bill.nextbilldate;
-        const newNext = calcBillNextDate(bill.nextbilldate, bill.interval);
+                changeLog = changeLog.map((c) =>
+                    c.id === id
+                        ? {
+                              ...c,
+                              last_changed_date: today,
+                              next_change_due: nextDue,
+                          }
+                        : c,
+                );
+                renderChangeLog();
+                touchMetadata("change_log");
+            } else if (action === "paid") {
+                const bill = bills.find((b) => b.id === id);
+                if (!bill) return;
+                const newLast = bill.next_bill_date;
+                const newNext = calcNextDueByMonths(
+                    newLast,
+                    bill.interval_months,
+                );
 
-        bills = bills.map((b) =>
-            b.id !== id
-                ? b
-                : { ...b, lastbilldate: newLast, nextbilldate: newNext },
-        );
-        touchMetadata("bills");
-        renderBills();
+                await sb
+                    .from("bills")
+                    .update({
+                        last_bill_date: newLast,
+                        next_bill_date: newNext,
+                    })
+                    .eq("id", id)
+                    .eq("user_id", user.id);
 
-        try {
-            await sb
-                .from("bills")
-                .update({ lastbilldate: newLast, nextbilldate: newNext })
-                .eq("id", id);
-        } catch (err) {
-            console.error(err);
-            loadBills();
-        }
-        return;
-    }
-
-    if (action === "plant-log") {
-        openPlantEventModal(id);
-        return;
-    }
-
-    if (action === "plant-save-name") {
-        const newName = document
-            .getElementById("pdPlantNameInput")
-            .value.trim();
-        if (!newName) return;
-        try {
-            await sb.from("plants").update({ plantname: newName }).eq("id", id);
-            document.getElementById("plantDetailTitle").textContent =
-                newName.toUpperCase();
-            touchMetadata("plants");
-            renderPlants();
-        } catch (err) {
-            console.error(err);
-            loadPlants();
-        }
-        return;
-    }
-
-    if (action === "plant-archive") {
-        const plant = plants.find((p) => p.id === id);
-        const archived = !plant.archived;
-        try {
-            await sb.from("plants").update({ archived }).eq("id", id);
-            touchMetadata("plants");
-            renderPlants();
-            closeModal("plantDetailModal");
-        } catch (err) {
-            console.error(err);
-            loadPlants();
-        }
-        return;
-    }
-
-    if (action === "plant-delete") {
-        const plantId = id;
-        if (
-            confirm(
-                "Delete this plant and all its history permanently? This cannot be undone.",
-            )
-        ) {
-            try {
-                await sb.from("planthistory").delete().eq("plantid", plantId);
-                await sb.from("plants").delete().eq("id", plantId);
+                bills = bills.map((b) =>
+                    b.id === id
+                        ? {
+                              ...b,
+                              last_bill_date: newLast,
+                              next_bill_date: newNext,
+                          }
+                        : b,
+                );
+                renderBills();
+                touchMetadata("bills");
+            } else if (action === "plant-log") {
+                openPlantEventModal(id);
+                return;
+            } else if (action === "plant-save-name") {
+                const newName = document
+                    .getElementById("pdPlantNameInput")
+                    .value.trim();
+                if (!newName) return;
+                await updatePlant(id, { plant_name: newName });
+            } else if (action === "plant-archive") {
+                const plant = plants.find((p) => p.id === id);
+                const archived = !plant.archived;
+                await sb
+                    .from("plants")
+                    .update({ archived })
+                    .eq("id", id)
+                    .eq("user_id", user.id);
+                await loadPlants();
                 touchMetadata("plants");
-                renderPlants();
                 closeModal("plantDetailModal");
-            } catch (err) {
-                console.error("Plant delete failed:", err);
-                loadPlants();
-                loadPlantHistory();
+            } else if (action === "plant-delete") {
+                await deletePlant(id);
+                closeModal("plantDetailModal");
+            } else if (action === "plant-history-delete") {
+                const plantId = btn.dataset.plantid;
+                await deletePlantHistory(id, plantId);
+            } else if (action === "note-delete") {
+                await sb
+                    .from("notes")
+                    .delete()
+                    .eq("id", id)
+                    .eq("user_id", user.id);
+                await loadNotes();
+                touchMetadata("notes");
             }
-        }
-        return;
-    }
-
-    if (action === "plant-history-delete") {
-        const plantId = btn.dataset.plantid;
-        if (confirm("Delete this history entry?")) {
-            try {
-                await sb.from("planthistory").delete().eq("id", id);
-                touchMetadata("plants");
-                openPlantDetail(plantId);
-            } catch (err) {
-                console.error(err);
-                loadPlantHistory();
-            }
-        }
-        return;
-    }
-
-    if (action === "note-delete") {
-        try {
-            await sb.from("notes").delete().eq("id", id);
-            touchMetadata("notes");
-            renderNotes();
         } catch (err) {
-            console.error(err);
-            loadNotes();
+            console.error(`${action} failed:`, err);
+            alert(`${action} failed: ${err.message}`);
         }
         return;
     }
-
-    if (e.target.closest("[data-action]")) return;
 
     const detailRow = e.target.closest("[data-open-detail]");
     if (detailRow) {
-        openDetail(detailRow.dataset.openDetail);
+        openFridgeStockModal(detailRow.dataset.openDetail);
         return;
     }
 
@@ -1405,16 +1985,14 @@ document.addEventListener("click", async (e) => {
         return;
     }
 
-    const openPlantEl = e.target.closest("[data-open-plant]");
-    if (openPlantEl) {
-        openPlantDetail(openPlantEl.dataset.openPlant);
+    const plantRow = e.target.closest("[data-open-plant]");
+    if (plantRow) {
+        openPlantDetail(plantRow.dataset.openPlant);
         return;
     }
 });
 
-// ============================================================
-// DOMContentLoaded — wire up all forms and add buttons
-// ============================================================
+// DOMContentLoaded
 document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector(".dashboard").style.display = "none";
     document.getElementById("loginContainer").style.display = "flex";
@@ -1432,16 +2010,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     [
-        "fullSectionModal",
-        "detailModal",
-        "addModal",
-        "plantEventModal",
-        "plantDetailModal",
-        "addPlantModal",
+        "fullListModal",
+        "fridgeStockDetailModal",
         "choreDetailModal",
-        "changelogDetailModal",
+        "changeLogDetailModal",
         "billDetailModal",
-        "addNoteModal",
+        "plantDetailModal",
+        "plantAddModal",
+        "plantEventModal",
+        "notesModal",
     ].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.style.display = "none";
@@ -1449,526 +2026,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderFridgeStock();
     renderChores();
-    renderChangeLogs();
+    renderChangeLog();
     renderBills();
     renderPlants();
     renderNotes();
+
     setupPanelClicks();
 
-    // --- Fridge: add button ---
-    document
-        .querySelectorAll('.panel[data-section="fridgestock"] .add-btn')
-        .forEach((btn) =>
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                openAddModal();
-            }),
-        );
+    bindAllForms();
 
-    document
-        .getElementById("deleteItemBtn")
-        ?.addEventListener("click", () =>
-            deleteFridgeItem(document.getElementById("editId").value),
-        );
-
-    ["editCreatedAt", "editShelflife"].forEach((id) =>
-        document.getElementById(id)?.addEventListener("change", () => {
-            expiryManuallySet = false;
-            recalcExpiry();
-        }),
-    );
-    document.getElementById("editExpiry")?.addEventListener("input", () => {
-        expiryManuallySet = true;
-        document.getElementById("expiryAutoLabel").style.display = "none";
-        document.getElementById("expiryHint").style.display = "none";
-    });
-
-    ["addCreatedAt", "addShelflife"].forEach((id) =>
-        document.getElementById(id)?.addEventListener("change", () => {
-            addExpiryManuallySet = false;
-            recalcAddExpiry();
-        }),
-    );
-    document.getElementById("addExpiry")?.addEventListener("input", () => {
-        addExpiryManuallySet = true;
-        document.getElementById("addExpiryAutoLabel").style.display = "none";
-        document.getElementById("addExpiryHint").style.display = "none";
-    });
-
-    // Fridge edit form
-    document
-        .getElementById("editForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            const today = new Date().toISOString().slice(0, 10);
-            const createdVal = fd.get("createdat");
-            const shelfVal = fd.get("shelflifedays")
-                ? parseInt(fd.get("shelflifedays"), 10)
-                : null;
-            const expirydate = expiryManuallySet
-                ? fd.get("expirydate")
-                : createdVal && shelfVal
-                  ? addDays(createdVal, shelfVal)
-                  : null;
-
-            const item = {
-                id: fd.get("id"),
-                itemname: fd.get("itemname"),
-                category: fd.get("category"),
-                portions: parseInt(fd.get("portions"), 10) || 0,
-                shelflifedays: shelfVal,
-                createdat: createdVal,
-                expirydate,
-                lastupdated: today,
-            };
-            try {
-                await saveFridgeItem(item, true);
-                closeModal("detailModal");
-                expiryManuallySet = false;
-            } catch (err) {
-                alert("Save failed: " + err.message);
-            }
-        });
-
-    // Fridge add form
-    document
-        .getElementById("addForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            const today = new Date().toISOString().slice(0, 10);
-            const createdVal = fd.get("createdat");
-            const shelfVal = fd.get("shelflifedays")
-                ? parseInt(fd.get("shelflifedays"), 10)
-                : null;
-            const expirydate = addExpiryManuallySet
-                ? fd.get("expirydate")
-                : createdVal && shelfVal
-                  ? addDays(createdVal, shelfVal)
-                  : null;
-
-            const item = {
-                itemname: fd.get("itemname"),
-                category: fd.get("category"),
-                portions: parseInt(fd.get("portions"), 10) || 1,
-                shelflifedays: shelfVal,
-                createdat: createdVal || today,
-                expirydate,
-                lastupdated: today,
-            };
-            try {
-                await saveFridgeItem(item, false);
-                closeModal("addModal");
-                addExpiryManuallySet = false;
-            } catch (err) {
-                alert("Add failed: " + err.message);
-            }
-        });
-
-    // Fridge delete
-    document
-        .getElementById("deleteItemBtn")
-        ?.addEventListener("click", async () => {
-            const id = document.getElementById("editId").value;
-            if (confirm("Delete this item permanently?")) {
-                try {
-                    await deleteFridgeItem(id);
-                    closeModal("detailModal");
-                } catch (err) {
-                    alert("Delete failed: " + err.message);
-                }
-            }
-        });
-
-    // --- Chores: add button ---
-    document
-        .querySelectorAll('.panel[data-section="chores"] .add-btn')
-        .forEach((btn) =>
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                editingChoreId = null;
-                choreNextDueManuallySet = false;
-                document.getElementById("choreEditId").value = "";
-                document.getElementById("choreTaskname").value = "";
-                document.getElementById("choreLastdone").value = "";
-                document.getElementById("choreInterval").value = "7";
-                document.getElementById("choreNextdue").value = "";
-                document.getElementById("choreDetailTitle").textContent =
-                    "ADD CHORE";
-                document.getElementById("choreDeleteBtn").style.display =
-                    "none";
-                openModal("choreDetailModal");
-            }),
-        );
-
-    ["choreLastdone", "choreInterval"].forEach((id) =>
-        document.getElementById(id)?.addEventListener("change", () => {
-            choreNextDueManuallySet = false;
-            refreshChoreNextDueIfNeeded();
-        }),
-    );
-    document.getElementById("choreNextdue")?.addEventListener("input", () => {
-        choreNextDueManuallySet = true;
-        document.getElementById("choreNextdueAutoLabel").style.display = "none";
-    });
-
-    // Chores form (add/edit shared)
-    document
-        .getElementById("choreForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const taskname = document
-                .getElementById("choreTaskname")
-                .value.trim();
-            const lastdone =
-                document.getElementById("choreLastdone").value || null;
-            const interval =
-                parseInt(document.getElementById("choreInterval").value, 10) ||
-                null;
-            const nextdue = choreNextDueManuallySet
-                ? document.getElementById("choreNextdue").value
-                : lastdone && interval
-                  ? calcChoreNextDue(lastdone, interval)
-                  : null;
-
-            const chore = {
-                id: editingChoreId || undefined,
-                taskname,
-                lastdone,
-                interval,
-                nextdue,
-            };
-            try {
-                await saveChore(chore, !!editingChoreId);
-                closeModal("choreDetailModal");
-                editingChoreId = null;
-                choreNextDueManuallySet = false;
-            } catch (err) {
-                alert("Save failed: " + err.message);
-            }
-        });
-
-    // Chore delete
-    document
-        .getElementById("choreDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (confirm("Delete this chore?")) {
-                try {
-                    await deleteChore(editingChoreId);
-                    closeModal("choreDetailModal");
-                    editingChoreId = null;
-                } catch (err) {
-                    alert("Delete failed: " + err.message);
-                }
-            }
-        });
-
-    // --- Change Log: add button ---
-    document
-        .querySelectorAll('.panel[data-section="changelog"] .add-btn')
-        .forEach((btn) =>
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                editingChangeLogId = null;
-                changelogNextDueManuallySet = false;
-                document.getElementById("changelogEditId").value = "";
-                document.getElementById("changelogItemname").value = "";
-                document.getElementById("changelogLastchanged").value = "";
-                document.getElementById("changelogInterval").value = "3";
-                document.getElementById("changelogNextdue").value = "";
-                document.getElementById(
-                    "changelogNextdueAutoLabel",
-                ).style.display = "none";
-                document.getElementById("changelogDetailTitle").textContent =
-                    "ADD CHANGE LOG";
-                document.getElementById("changelogDeleteBtn").style.display =
-                    "none";
-                openModal("changelogDetailModal");
-            }),
-        );
-
-    ["changelogLastchanged", "changelogInterval"].forEach((id) =>
-        document.getElementById(id)?.addEventListener("change", () => {
-            changelogNextDueManuallySet = false;
-            refreshChangelogNextDue();
-        }),
-    );
-    document
-        .getElementById("changelogNextdue")
-        ?.addEventListener("input", () => {
-            changelogNextDueManuallySet = true;
-            document.getElementById("changelogNextdueAutoLabel").style.display =
-                "none";
-        });
-
-    // Change Log form shared add/edit
-    document
-        .getElementById("changelogForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const itemname = document
-                .getElementById("changelogItemname")
-                .value.trim();
-            const lastchanged =
-                document.getElementById("changelogLastchanged").value || null;
-            const interval =
-                parseInt(
-                    document.getElementById("changelogInterval").value,
-                    10,
-                ) || null;
-            const nextdue = changelogNextDueManuallySet
-                ? document.getElementById("changelogNextdue").value
-                : lastchanged && interval
-                  ? calcChangeLogNextDue(lastchanged, interval)
-                  : null;
-
-            const cl = {
-                id: editingChangeLogId || undefined,
-                itemname,
-                lastchanged,
-                interval,
-                nextdue,
-            };
-            try {
-                await saveChangeLog(cl, !!editingChangeLogId);
-                closeModal("changelogDetailModal");
-                editingChangeLogId = null;
-                changelogNextDueManuallySet = false;
-            } catch (err) {
-                alert("Save failed: " + err.message);
-            }
-        });
-
-    // Change Log delete
-    document
-        .getElementById("changelogDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (confirm("Delete this item?")) {
-                try {
-                    await deleteChangeLog(editingChangeLogId);
-                    closeModal("changelogDetailModal");
-                    editingChangeLogId = null;
-                } catch (err) {
-                    alert("Delete failed: " + err.message);
-                }
-            }
-        });
-
-    // --- Bills: add button ---
-    document
-        .querySelectorAll('.panel[data-section="bills"] .add-btn')
-        .forEach((btn) =>
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                editingBillId = null;
-                billNextDateManuallySet = false;
-                document.getElementById("billEditId").value = "";
-                document.getElementById("billBillname").value = "";
-                document.getElementById("billLastbilldate").value = "";
-                document.getElementById("billInterval").value = "1";
-                document.getElementById("billNextbilldate").value = "";
-                document.getElementById(
-                    "billNextbilldateAutoLabel",
-                ).style.display = "none";
-                document.getElementById("billDetailTitle").textContent =
-                    "ADD BILL";
-                document.getElementById("billDeleteBtn").style.display = "none";
-                openModal("billDetailModal");
-            }),
-        );
-
-    ["billLastbilldate", "billInterval"].forEach((id) =>
-        document.getElementById(id)?.addEventListener("change", () => {
-            billNextDateManuallySet = false;
-            refreshBillNextDate();
-        }),
-    );
-    document
-        .getElementById("billNextbilldate")
-        ?.addEventListener("input", () => {
-            billNextDateManuallySet = true;
-            document.getElementById("billNextbilldateAutoLabel").style.display =
-                "none";
-        });
-
-    // Bills form shared add/edit
-    document
-        .getElementById("billForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const billname = document
-                .getElementById("billBillname")
-                .value.trim();
-            const lastbilldate =
-                document.getElementById("billLastbilldate").value || null;
-            const interval =
-                parseInt(document.getElementById("billInterval").value, 10) ||
-                null;
-            const nextbilldate = billNextDateManuallySet
-                ? document.getElementById("billNextbilldate").value
-                : lastbilldate && interval
-                  ? calcBillNextDate(lastbilldate, interval)
-                  : null;
-
-            const bill = {
-                id: editingBillId || undefined,
-                billname,
-                lastbilldate,
-                interval,
-                nextbilldate,
-            };
-            try {
-                await saveBill(bill, !!editingBillId);
-                closeModal("billDetailModal");
-                editingBillId = null;
-                billNextDateManuallySet = false;
-            } catch (err) {
-                alert("Save failed: " + err.message);
-            }
-        });
-
-    // Bill delete
-    document
-        .getElementById("billDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (confirm("Delete this bill?")) {
-                try {
-                    await deleteBill(editingBillId);
-                    closeModal("billDetailModal");
-                    editingBillId = null;
-                } catch (err) {
-                    alert("Delete failed: " + err.message);
-                }
-            }
-        });
-
-    // --- Plants: add button ---
-    document
-        .querySelectorAll('.panel[data-section="plants"] .add-btn')
-        .forEach((btn) =>
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                openAddPlantModal();
-            }),
-        );
-
-    // Plants add
-    document
-        .getElementById("addPlantForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const name = document.getElementById("addPlantName").value.trim();
-            const startDate =
-                document.getElementById("addPlantStartDate").value;
-            if (!name) return;
-            const plant = {
-                plantname: name,
-                startingdate: startDate,
-                archived: false,
-            };
-            try {
-                const sb = await initSupabase();
-                await sb
-                    .from("plants")
-                    .insert([
-                        { ...plant, userid: sb.auth.getUser().data.user.id },
-                    ]);
-                await loadPlants();
-                loadPlantHistory();
-                closeModal("addPlantModal");
-            } catch (err) {
-                alert("Add failed: " + err.message);
-            }
-        });
-
-    // --- Plants: fertilised checkbox toggle ---
-    document
-        .getElementById("fertilisedCheck")
-        ?.addEventListener("change", (e) => {
-            document.getElementById("fertiliserSelectWrap").style.display = e
-                .target.checked
-                ? "block"
-                : "none";
-        });
-
-    // Plants event form
-    document
-        .getElementById("plantEventForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            const plantId = fd.get("plantId");
-            const watered = document.getElementById("wateredCheck").checked;
-            const fertilised =
-                document.getElementById("fertilisedCheck").checked;
-            const fertiliserUsed = fertilised ? fd.get("fertiliser") : null;
-            const potsizeVal = parseInt(fd.get("potsize"), 10);
-            const notesVal = fd.get("notes").trim();
-
-            const now = new Date();
-            const today = now.toISOString().slice(0, 10);
-            const resolvedPotsize =
-                !isNaN(potsizeVal) && potsizeVal > 0 ? potsizeVal : null;
-
-            try {
-                await savePlantHistory({
-                    plantid: plantId,
-                    eventdate: now.toISOString(),
-                    potsize: resolvedPotsize,
-                    watered,
-                    fertilised,
-                    fertiliserused: fertiliserUsed,
-                    notes: notesVal,
-                });
-
-                await updatePlant(plantId, {
-                    potsize: resolvedPotsize,
-                    ...(watered && { lastwatered: today }),
-                    ...(fertilised && {
-                        lastfertilised: today,
-                        lastfertiliser: fertiliserUsed,
-                    }),
-                    ...(notesVal && { notes: notesVal }),
-                });
-
-                closeModal("plantEventModal");
-            } catch (err) {
-                alert("Record failed: " + err.message);
-            }
-        });
-
-    // --- Notes: add button ---
-    document
-        .querySelectorAll('.panel[data-section="notes"] .add-btn')
-        .forEach((btn) =>
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                document.getElementById("addNoteContent").value = "";
-                openModal("addNoteModal");
-            }),
-        );
-
-    // Notes add
-    document
-        .getElementById("addNoteForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const content = document
-                .getElementById("addNoteContent")
-                .value.trim();
-            if (!content) return;
-            try {
-                const sb = await initSupabase();
-                await sb
-                    .from("notes")
-                    .insert([
-                        { content, userid: sb.auth.getUser().data.user.id },
-                    ]);
-                await loadNotes();
-                closeModal("addNoteModal");
-            } catch (err) {
-                alert("Add failed: " + err.message);
-            }
-        });
+    setTimeout(setupRealtime, 500);
 });
