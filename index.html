@@ -1,451 +1,728 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=1920, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Home Management Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <div id="loginContainer" class="login-container">
-    <div class="login-modal">
-      <h2>Login Page</h2>
-      <form id="loginForm">
-        <label>Email</label>
-        <input type="email" id="loginEmail" required>
-        <label>Password</label>
-        <input type="password" id="loginPassword" required>
-        <button type="submit">Login</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="dashboard">
-    <div class="grid">
-
-      <!-- Fridge Stock: col 1-2, row 1-3 -->
-      <div class="panel" data-section="fridgestock">
-        <div class="panel-header">
-          <h3>Fridge Stock</h3>
-          <button class="add-btn" title="Add item">+</button>
-        </div>
-        <div class="panel-content" id="fridgeContent"></div>
-      </div>
-
-      <!-- Chores: col 3, row 1-2 -->
-      <div class="panel" data-section="chores">
-        <div class="panel-header">
-          <h3>Chores</h3>
-          <button class="add-btn" title="Add chore">+</button>
-        </div>
-        <div class="panel-content" id="choresContent"></div>
-      </div>
-
-      <!-- Change Log: col 3, row 3 -->
-      <div class="panel" data-section="changelog">
-        <div class="panel-header">
-          <h3>Change Log</h3>
-          <button class="add-btn" title="Add item">+</button>
-        </div>
-        <div class="panel-content" id="changelogContent"></div>
-      </div>
-
-      <!-- Bills: col 4, row 1 -->
-      <div class="panel" data-section="bills">
-        <div class="panel-header">
-          <h3>Bills</h3>
-          <button class="add-btn" title="Add bill">+</button>
-        </div>
-        <div class="panel-content" id="billsContent"></div>
-      </div>
-
-      <!-- Plants: col 4, row 2 -->
-      <div class="panel" data-section="plants">
-        <div class="panel-header">
-          <h3>Plants</h3>
-          <button class="add-btn" title="Add plant">+</button>
-        </div>
-        <div class="panel-content" id="plantsContent"></div>
-      </div>
-
-      <!-- Notes: col 4, row 3 -->
-      <div class="panel" data-section="notes">
-        <div class="panel-header">
-          <h3>Notes</h3>
-          <button class="add-btn" title="Add note">+</button>
-        </div>
-        <div class="panel-content" id="notesContent"></div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Full Section Modal                                           -->
-  <!-- ============================================================ -->
-  <div class="modal" id="fullSectionModal">
-    <div class="modal-content modal-full">
-      <header style="align-items: flex-start;">
-        <div>
-          <h2 id="sectionTitle">FRIDGE STOCK</h2>
-          <span id="sectionLastUpdated" class="section-last-updated"></span>
-        </div>
-        <button onclick="closeModal('fullSectionModal')" style="flex-shrink:0; margin-top:0.2rem;">&times;</button>
-      </header>
-      <div id="fullSectionContent"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Fridge: Edit Modal                                           -->
-  <!-- ============================================================ -->
-  <div class="modal" id="detailModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2 id="detailTitle">EDIT ITEM</h2>
-        <button onclick="closeModal('detailModal')">&times;</button>
-      </header>
-      <form id="editForm">
-        <input type="hidden" name="id" id="editId">
-        <label class="form-label">Item Name</label>
-        <input type="text" name="itemname" id="editItemname" required>
-        <label class="form-label">Category</label>
-        <select name="category" id="editCategory">
-          <option value="Carbs">Carbs</option>
-          <option value="Veg">Veg</option>
-          <option value="Protein">Protein</option>
-          <option value="Fruits">Fruits</option>
-          <option value="Others">Others</option>
-          <option value="Raw">Raw</option>
-        </select>
-        <label class="form-label">Portions</label>
-        <input type="number" name="portions" id="editPortions" min="0" value="1">
-        <label class="form-label">Shelf Life (days)</label>
-        <input type="number" name="shelflifedays" id="editShelflife" min="0" placeholder="e.g. 14">
-        <label class="form-label">Created At</label>
-        <input type="date" name="createdat" id="editCreatedAt">
-        <label class="form-label">
-          Expiry Date
-          <span id="expiryAutoLabel" class="field-auto-tag" style="display: none;">auto</span>
-        </label>
-        <input type="date" name="expirydate" id="editExpiry">
-        <p class="field-hint" id="expiryHint" style="display: none;">
-          Auto-calculated from Created At + Shelf Life. Edit to override.
-        </p>
-        <div class="detail-readonly-row">
-          <span class="detail-readonly-label">Last Updated</span>
-          <span id="editLastUpdated"></span>
-        </div>
-        <div style="display: flex; gap: 1rem; margin-top: 1.8rem;">
-          <button type="button" id="deleteItemBtn" class="delete-btn" style="flex: 1;">Delete Item</button>
-          <div style="flex: 1;"></div>
-        </div>
-        <div style="display: flex; gap: 1rem;">
-          <button type="submit" style="flex: 1;">Save Changes</button>
-          <button type="button" onclick="closeModal('detailModal')" style="flex: 1;">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Fridge: Add Modal                                            -->
-  <!-- ============================================================ -->
-  <div class="modal" id="addModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2 id="addTitle">ADD NEW ITEM</h2>
-        <button onclick="closeModal('addModal')">&times;</button>
-      </header>
-      <form id="addForm">
-        <label class="form-label">Item Name</label>
-        <input type="text" name="itemname" id="addItemname" placeholder="e.g. Chicken Breast" required>
-        <label class="form-label">Category</label>
-        <select name="category" id="addCategory">
-          <option value="Carbs">Carbs</option>
-          <option value="Veg">Veg</option>
-          <option value="Protein">Protein</option>
-          <option value="Fruits">Fruits</option>
-          <option value="Others">Others</option>
-          <option value="Raw">Raw</option>
-        </select>
-        <label class="form-label">Portions</label>
-        <input type="number" name="portions" id="addPortions" min="0" value="1">
-        <label class="form-label">Shelf Life (days)</label>
-        <input type="number" name="shelflifedays" id="addShelflife" min="0" placeholder="e.g. 14">
-        <label class="form-label">Created At</label>
-        <input type="date" name="createdat" id="addCreatedAt">
-        <label class="form-label">
-          Expiry Date
-          <span id="addExpiryAutoLabel" class="field-auto-tag" style="display: none;">auto</span>
-        </label>
-        <input type="date" name="expirydate" id="addExpiry">
-        <p class="field-hint" id="addExpiryHint" style="display: none;">
-          Auto-calculated from Created At + Shelf Life.
-        </p>
-        <div style="display: flex; gap: 1rem;">
-          <button type="submit" style="flex: 1;">Add to Fridge</button>
-          <button type="button" onclick="closeModal('addModal')" style="flex: 1;">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Chores: Add / Edit Modal (shared)                            -->
-  <!-- ============================================================ -->
-  <div class="modal" id="choreDetailModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2 id="choreDetailTitle">EDIT CHORE</h2>
-        <button onclick="closeModal('choreDetailModal')">&times;</button>
-      </header>
-      <form id="choreForm">
-        <input type="hidden" id="choreEditId">
-        <label class="form-label">Task Name</label>
-        <input type="text" id="choreTaskname" required>
-        <label class="form-label">Last Done</label>
-        <input type="date" id="choreLastdone">
-        <label class="form-label">Interval (days)</label>
-        <input type="number" id="choreInterval" min="1" placeholder="7">
-        <label class="form-label">
-          Next Due
-          <span id="choreNextdueAutoLabel" class="field-auto-tag" style="display: none;">auto</span>
-        </label>
-        <input type="date" id="choreNextdue">
-        <p class="field-hint">Auto-calculated from Last Done + Interval. Edit to override.</p>
-        <div style="display: flex; gap: 1rem; margin-top: 1.8rem;">
-          <button type="button" id="choreDeleteBtn" class="delete-btn" style="flex: 1;">Delete</button>
-          <div style="flex: 1;"></div>
-        </div>
-        <div style="display: flex; gap: 1rem;">
-          <button type="submit" style="flex: 1;">Save</button>
-          <button type="button" onclick="closeModal('choreDetailModal')" style="flex: 1;">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Change Log: Add / Edit Modal (shared)                        -->
-  <!-- ============================================================ -->
-  <div class="modal" id="changelogDetailModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2 id="changelogDetailTitle">EDIT CHANGE LOG</h2>
-        <button onclick="closeModal('changelogDetailModal')">&times;</button>
-      </header>
-      <form id="changelogForm">
-        <input type="hidden" id="changelogEditId">
-        <label class="form-label">Item Name</label>
-        <input type="text" id="changelogItemname" placeholder="e.g. Water Filter" required>
-        <label class="form-label">Last Changed</label>
-        <input type="date" id="changelogLastchanged">
-        <label class="form-label">Interval (months)</label>
-        <input type="number" id="changelogInterval" min="1" value="3" placeholder="3">
-        <label class="form-label">
-          Next Due
-          <span id="changelogNextdueAutoLabel" class="field-auto-tag" style="display: none;">auto</span>
-        </label>
-        <input type="date" id="changelogNextdue">
-        <p class="field-hint">Auto-calculated from Last Changed + Interval. Edit to override.</p>
-        <div style="display: flex; gap: 1rem; margin-top: 1.8rem;">
-          <button type="button" id="changelogDeleteBtn" class="delete-btn" style="flex: 1;">Delete</button>
-          <div style="flex: 1;"></div>
-        </div>
-        <div style="display: flex; gap: 1rem;">
-          <button type="submit" style="flex: 1;">Save</button>
-          <button type="button" onclick="closeModal('changelogDetailModal')" style="flex: 1;">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Bills: Add / Edit Modal (shared)                             -->
-  <!-- ============================================================ -->
-  <div class="modal" id="billDetailModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2 id="billDetailTitle">EDIT BILL</h2>
-        <button onclick="closeModal('billDetailModal')">&times;</button>
-      </header>
-      <form id="billForm">
-        <input type="hidden" id="billEditId">
-        <label class="form-label">Bill Name</label>
-        <input type="text" id="billBillname" placeholder="e.g. Electricity" required>
-        <label class="form-label">Last Bill Date</label>
-        <input type="date" id="billLastbilldate">
-        <p class="field-hint">When marked paid, this advances to the current Next Bill Date.</p>
-        <label class="form-label">Interval (months)</label>
-        <input type="number" id="billInterval" min="1" value="1" placeholder="1">
-        <label class="form-label">
-          Next Bill Date
-          <span id="billNextbilldateAutoLabel" class="field-auto-tag" style="display: none;">auto</span>
-        </label>
-        <input type="date" id="billNextbilldate">
-        <p class="field-hint">Auto-calculated from Last Bill Date + Interval. Edit to override.</p>
-        <div style="display: flex; gap: 1rem; margin-top: 1.8rem;">
-          <button type="button" id="billDeleteBtn" class="delete-btn" style="flex: 1;">Delete</button>
-          <div style="flex: 1;"></div>
-        </div>
-        <div style="display: flex; gap: 1rem;">
-          <button type="submit" style="flex: 1;">Save</button>
-          <button type="button" onclick="closeModal('billDetailModal')" style="flex: 1;">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Plant: Log Event Modal                                       -->
-  <!-- ============================================================ -->
-  <div class="modal" id="plantEventModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2 id="plantEventTitle">LOG EVENT</h2>
-        <button onclick="closeModal('plantEventModal')">&times;</button>
-      </header>
-      <form id="plantEventForm">
-        <input type="hidden" name="plantId" id="plantEventId">
-        <div class="form-check-row">
-          <label class="form-check-label">
-            <input type="checkbox" name="watered" id="wateredCheck">
-            <span>Watered today</span>
-          </label>
-        </div>
-        <div class="form-check-row">
-          <label class="form-check-label">
-            <input type="checkbox" name="fertilised" id="fertilisedCheck">
-            <span>Fertilised today</span>
-          </label>
-        </div>
-        <div id="fertiliserSelectWrap" style="display: none;">
-          <label class="form-label">Fertiliser Used</label>
-          <select name="fertiliser">
-            <option value="">Select...</option>
-            <option value="20-20-20">20-20-20</option>
-            <option value="30-10-10">30-10-10</option>
-            <option value="10-30-20">10-30-20</option>
-          </select>
-        </div>
-        <label class="form-label">Pot Size (cm)</label>
-        <input type="number" name="potsize" id="plantEventPotsize" min="1" placeholder="e.g. 15">
-        <label class="form-label">Notes</label>
-        <textarea name="notes" placeholder="Any notes..." rows="3"></textarea>
-        <button type="submit" style="width: 100%; margin-top: 1.8rem;">Save Event</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Plant: Detail Modal                                          -->
-  <!-- ============================================================ -->
-  <div class="modal" id="plantDetailModal">
-    <div class="modal-content modal-plant-detail">
-      <header>
-        <h2 id="plantDetailTitle">PLANT</h2>
-        <button onclick="closeModal('plantDetailModal')">&times;</button>
-      </header>
-      <div class="plant-detail-body">
-
-        <!-- Left: Info + Actions -->
-        <div class="plant-detail-info">
-          <div class="plant-name-row">
-            <input type="text" id="pdPlantNameInput" class="plant-name-input" placeholder="Plant name">
-            <button type="button" data-action="plant-save-name" data-id="" id="pdSaveNameBtn" class="plant-name-save-btn">Save</button>
-          </div>
-          <div class="plant-info-grid">
-            <span class="plant-info-label">Start Date</span>
-            <span class="plant-info-value" id="pdStartDate"></span>
-            <span class="plant-info-label">Pot Size</span>
-            <span class="plant-info-value" id="pdPotSize"></span>
-            <span class="plant-info-label">Last Watered</span>
-            <span class="plant-info-value" id="pdLastWatered"></span>
-            <span class="plant-info-label">Last Fertilised</span>
-            <span class="plant-info-value" id="pdLastFertilised"></span>
-            <span class="plant-info-label">Fertiliser Used</span>
-            <span class="plant-info-value" id="pdFertiliserUsed"></span>
-          </div>
-          <div class="plant-latest-note">
-            <span class="plant-info-label">Latest Note</span>
-            <p id="pdLatestNote"></p>
-          </div>
-          <div class="plant-detail-actions">
-            <button type="button" data-action="plant-archive" data-id="" id="pdArchiveBtn" class="action-wide-btn archive-btn">Archive Plant</button>
-            <button type="button" data-action="plant-delete" data-id="" id="pdDeleteBtn" class="action-wide-btn delete-btn">Delete Plant</button>
-          </div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=1920, initial-scale=1.0" />
+        <meta name="robots" content="noindex, nofollow" />
+        <title>Home Management Dashboard</title>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <div id="loginContainer" class="login-container">
+            <div class="login-modal">
+                <h2>Login Page</h2>
+                <form id="loginForm">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" required />
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" required />
+                    <button type="submit">Login</button>
+                </form>
+            </div>
         </div>
 
-        <!-- Right: History Table -->
-        <div class="plant-detail-history">
-          <h4 class="plant-history-title">History</h4>
-          <div class="plant-history-table-wrap">
-            <table class="plant-history-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Pot</th>
-                  <th>💧</th>
-                  <th>🌿</th>
-                  <th>Fertiliser</th>
-                  <th>Notes</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="pdHistoryBody"></tbody>
-            </table>
-          </div>
+        <div class="dashboard">
+            <div class="grid">
+                <!-- Fridge Stock: col 1-2, row 1-3 -->
+                <div class="panel" data-section="fridgestock">
+                    <div class="panel-header">
+                        <h3>Fridge Stock</h3>
+                        <button class="add-btn" title="Add item">+</button>
+                    </div>
+                    <div class="panel-content" id="fridgeContent"></div>
+                </div>
+
+                <!-- Chores: col 3, row 1-2 -->
+                <div class="panel" data-section="chores">
+                    <div class="panel-header">
+                        <h3>Chores</h3>
+                        <button class="add-btn" title="Add chore">+</button>
+                    </div>
+                    <div class="panel-content" id="choresContent"></div>
+                </div>
+
+                <!-- Change Log: col 3, row 3 -->
+                <div class="panel" data-section="changelog">
+                    <div class="panel-header">
+                        <h3>Change Log</h3>
+                        <button class="add-btn" title="Add item">+</button>
+                    </div>
+                    <div class="panel-content" id="changelogContent"></div>
+                </div>
+
+                <!-- Bills: col 4, row 1 -->
+                <div class="panel" data-section="bills">
+                    <div class="panel-header">
+                        <h3>Bills</h3>
+                        <button class="add-btn" title="Add bill">+</button>
+                    </div>
+                    <div class="panel-content" id="billsContent"></div>
+                </div>
+
+                <!-- Plants: col 4, row 2 -->
+                <div class="panel" data-section="plants">
+                    <div class="panel-header">
+                        <h3>Plants</h3>
+                        <button class="add-btn" title="Add plant">+</button>
+                    </div>
+                    <div class="panel-content" id="plantsContent"></div>
+                </div>
+
+                <!-- Notes: col 4, row 3 -->
+                <div class="panel" data-section="notes">
+                    <div class="panel-header">
+                        <h3>Notes</h3>
+                        <button class="add-btn" title="Add note">+</button>
+                    </div>
+                    <div class="panel-content" id="notesContent"></div>
+                </div>
+            </div>
         </div>
 
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Plant: Add Modal                                             -->
-  <!-- ============================================================ -->
-  <div class="modal" id="addPlantModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2>ADD PLANT</h2>
-        <button onclick="closeModal('addPlantModal')">&times;</button>
-      </header>
-      <form id="addPlantForm">
-        <label class="form-label">Plant Name</label>
-        <input type="text" id="addPlantName" placeholder="e.g. Monstera" required>
-        <label class="form-label">Start Date</label>
-        <input type="date" id="addPlantStartDate">
-        <div style="display: flex; gap: 1rem; margin-top: 1.8rem;">
-          <button type="submit" style="flex: 1;">Add Plant</button>
-          <button type="button" onclick="closeModal('addPlantModal')" style="flex: 1;">Cancel</button>
+        <!-- ============================================================ -->
+        <!-- Full Section Modal                                           -->
+        <!-- ============================================================ -->
+        <div class="modal" id="fullSectionModal">
+            <div class="modal-content modal-full">
+                <header style="align-items: flex-start">
+                    <div>
+                        <h2 id="sectionTitle">FRIDGE STOCK</h2>
+                        <span
+                            id="sectionLastUpdated"
+                            class="section-last-updated"
+                        ></span>
+                    </div>
+                    <button
+                        onclick="closeModal('fullSectionModal')"
+                        style="flex-shrink: 0; margin-top: 0.2rem"
+                    >
+                        &times;
+                    </button>
+                </header>
+                <div id="fullSectionContent"></div>
+            </div>
         </div>
-      </form>
-    </div>
-  </div>
 
-  <!-- ============================================================ -->
-  <!-- Notes: Add Modal                                             -->
-  <!-- ============================================================ -->
-  <div class="modal" id="addNoteModal">
-    <div class="modal-content modal-narrow">
-      <header>
-        <h2>ADD NOTE</h2>
-        <button onclick="closeModal('addNoteModal')">&times;</button>
-      </header>
-      <form id="addNoteForm">
-        <label class="form-label">Note</label>
-        <textarea id="addNoteContent" placeholder="Write your note..." rows="4" required></textarea>
-        <div style="display: flex; gap: 1rem; margin-top: 1.8rem;">
-          <button type="submit" style="flex: 1;">Add Note</button>
-          <button type="button" onclick="closeModal('addNoteModal')" style="flex: 1;">Cancel</button>
+        <!-- ============================================================ -->
+        <!-- Fridge: Edit Modal                                           -->
+        <!-- ============================================================ -->
+        <div class="modal" id="detailModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2 id="detailTitle">EDIT ITEM</h2>
+                    <button onclick="closeModal('detailModal')">&times;</button>
+                </header>
+                <form id="editForm">
+                    <input type="hidden" name="id" id="editId" />
+                    <label class="form-label">Item Name</label>
+                    <input
+                        type="text"
+                        name="itemname"
+                        id="editItemname"
+                        required
+                    />
+                    <label class="form-label">Category</label>
+                    <select name="category" id="editCategory">
+                        <option value="Carbs">Carbs</option>
+                        <option value="Veg">Veg</option>
+                        <option value="Protein">Protein</option>
+                        <option value="Fruits">Fruits</option>
+                        <option value="Others">Others</option>
+                        <option value="Raw">Raw</option>
+                    </select>
+                    <label class="form-label">Portions</label>
+                    <input
+                        type="number"
+                        name="portions"
+                        id="editPortions"
+                        min="0"
+                        value="1"
+                    />
+                    <label class="form-label">Shelf Life (days)</label>
+                    <input
+                        type="number"
+                        name="shelflifedays"
+                        id="editShelflife"
+                        min="0"
+                        placeholder="e.g. 14"
+                    />
+                    <label class="form-label">Created At</label>
+                    <input type="date" name="createdat" id="editCreatedAt" />
+                    <label class="form-label">
+                        Expiry Date
+                        <span
+                            id="expiryAutoLabel"
+                            class="field-auto-tag"
+                            style="display: none"
+                            >auto</span
+                        >
+                    </label>
+                    <input type="date" name="expirydate" id="editExpiry" />
+                    <p class="field-hint" id="expiryHint" style="display: none">
+                        Auto-calculated from Created At + Shelf Life. Edit to
+                        override.
+                    </p>
+                    <div class="detail-readonly-row">
+                        <span class="detail-readonly-label">Last Updated</span>
+                        <span id="editLastUpdated"></span>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                        <button
+                            type="button"
+                            id="deleteItemBtn"
+                            class="delete-btn"
+                            style="flex: 1"
+                        >
+                            Delete Item
+                        </button>
+                        <div style="flex: 1"></div>
+                    </div>
+                    <div style="display: flex; gap: 1rem">
+                        <button type="submit" style="flex: 1">
+                            Save Changes
+                        </button>
+                        <button
+                            type="button"
+                            onclick="closeModal('detailModal')"
+                            style="flex: 1"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-      </form>
-    </div>
-  </div>
 
-  <script src="app.js"></script>
-</body>
+        <!-- ============================================================ -->
+        <!-- Fridge: Add Modal                                            -->
+        <!-- ============================================================ -->
+        <div class="modal" id="addModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2 id="addTitle">ADD NEW ITEM</h2>
+                    <button onclick="closeModal('addModal')">&times;</button>
+                </header>
+                <form id="addForm">
+                    <label class="form-label">Item Name</label>
+                    <input
+                        type="text"
+                        name="itemname"
+                        id="addItemname"
+                        placeholder="e.g. Chicken Breast"
+                        required
+                    />
+                    <label class="form-label">Category</label>
+                    <select name="category" id="addCategory">
+                        <option value="Carbs">Carbs</option>
+                        <option value="Veg">Veg</option>
+                        <option value="Protein">Protein</option>
+                        <option value="Fruits">Fruits</option>
+                        <option value="Others">Others</option>
+                        <option value="Raw">Raw</option>
+                    </select>
+                    <label class="form-label">Portions</label>
+                    <input
+                        type="number"
+                        name="portions"
+                        id="addPortions"
+                        min="0"
+                        value="1"
+                    />
+                    <label class="form-label">Shelf Life (days)</label>
+                    <input
+                        type="number"
+                        name="shelflifedays"
+                        id="addShelflife"
+                        min="0"
+                        placeholder="e.g. 14"
+                    />
+                    <label class="form-label">Created At</label>
+                    <input type="date" name="createdat" id="addCreatedAt" />
+                    <label class="form-label">
+                        Expiry Date
+                        <span
+                            id="addExpiryAutoLabel"
+                            class="field-auto-tag"
+                            style="display: none"
+                            >auto</span
+                        >
+                    </label>
+                    <input type="date" name="expirydate" id="addExpiry" />
+                    <p
+                        class="field-hint"
+                        id="addExpiryHint"
+                        style="display: none"
+                    >
+                        Auto-calculated from Created At + Shelf Life.
+                    </p>
+                    <div style="display: flex; gap: 1rem">
+                        <button type="submit" style="flex: 1">
+                            Add to Fridge
+                        </button>
+                        <button
+                            type="button"
+                            onclick="closeModal('addModal')"
+                            style="flex: 1"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Chores: Add / Edit Modal (shared)                            -->
+        <!-- ============================================================ -->
+        <div class="modal" id="choreDetailModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2 id="choreDetailTitle">EDIT CHORE</h2>
+                    <button onclick="closeModal('choreDetailModal')">
+                        &times;
+                    </button>
+                </header>
+                <form id="choreForm">
+                    <input type="hidden" id="choreEditId" />
+                    <label class="form-label">Task Name</label>
+                    <input type="text" id="choreTaskname" required />
+                    <label class="form-label">Last Done</label>
+                    <input type="date" id="choreLastdone" />
+                    <label class="form-label">Interval (days)</label>
+                    <input
+                        type="number"
+                        id="choreInterval"
+                        min="1"
+                        placeholder="7"
+                    />
+                    <label class="form-label">
+                        Next Due
+                        <span
+                            id="choreNextdueAutoLabel"
+                            class="field-auto-tag"
+                            style="display: none"
+                            >auto</span
+                        >
+                    </label>
+                    <input type="date" id="choreNextdue" />
+                    <p class="field-hint">
+                        Auto-calculated from Last Done + Interval. Edit to
+                        override.
+                    </p>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                        <button
+                            type="button"
+                            id="choreDeleteBtn"
+                            class="delete-btn"
+                            style="flex: 1"
+                        >
+                            Delete
+                        </button>
+                        <div style="flex: 1"></div>
+                    </div>
+                    <div style="display: flex; gap: 1rem">
+                        <button type="submit" style="flex: 1">Save</button>
+                        <button
+                            type="button"
+                            onclick="closeModal('choreDetailModal')"
+                            style="flex: 1"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Change Log: Add / Edit Modal (shared)                        -->
+        <!-- ============================================================ -->
+        <div class="modal" id="changelogDetailModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2 id="changelogDetailTitle">EDIT CHANGE LOG</h2>
+                    <button onclick="closeModal('changelogDetailModal')">
+                        &times;
+                    </button>
+                </header>
+                <form id="changelogForm">
+                    <input type="hidden" id="changelogEditId" />
+                    <label class="form-label">Item Name</label>
+                    <input
+                        type="text"
+                        id="changelogItemname"
+                        placeholder="e.g. Water Filter"
+                        required
+                    />
+                    <label class="form-label">Last Changed</label>
+                    <input type="date" id="changelogLastchanged" />
+                    <label class="form-label">Interval (months)</label>
+                    <input
+                        type="number"
+                        id="changelogInterval"
+                        min="1"
+                        value="3"
+                        placeholder="3"
+                    />
+                    <label class="form-label">
+                        Next Due
+                        <span
+                            id="changelogNextdueAutoLabel"
+                            class="field-auto-tag"
+                            style="display: none"
+                            >auto</span
+                        >
+                    </label>
+                    <input type="date" id="changelogNextdue" />
+                    <p class="field-hint">
+                        Auto-calculated from Last Changed + Interval. Edit to
+                        override.
+                    </p>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                        <button
+                            type="button"
+                            id="changelogDeleteBtn"
+                            class="delete-btn"
+                            style="flex: 1"
+                        >
+                            Delete
+                        </button>
+                        <div style="flex: 1"></div>
+                    </div>
+                    <div style="display: flex; gap: 1rem">
+                        <button type="submit" style="flex: 1">Save</button>
+                        <button
+                            type="button"
+                            onclick="closeModal('changelogDetailModal')"
+                            style="flex: 1"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Bills: Add / Edit Modal (shared)                             -->
+        <!-- ============================================================ -->
+        <div class="modal" id="billDetailModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2 id="billDetailTitle">EDIT BILL</h2>
+                    <button onclick="closeModal('billDetailModal')">
+                        &times;
+                    </button>
+                </header>
+                <form id="billForm">
+                    <input type="hidden" id="billEditId" />
+                    <label class="form-label">Bill Name</label>
+                    <input
+                        type="text"
+                        id="billBillname"
+                        placeholder="e.g. Electricity"
+                        required
+                    />
+                    <label class="form-label">Last Bill Date</label>
+                    <input type="date" id="billLastbilldate" />
+                    <p class="field-hint">
+                        When marked paid, this advances to the current Next Bill
+                        Date.
+                    </p>
+                    <label class="form-label">Interval (months)</label>
+                    <input
+                        type="number"
+                        id="billInterval"
+                        min="1"
+                        value="1"
+                        placeholder="1"
+                    />
+                    <label class="form-label">
+                        Next Bill Date
+                        <span
+                            id="billNextbilldateAutoLabel"
+                            class="field-auto-tag"
+                            style="display: none"
+                            >auto</span
+                        >
+                    </label>
+                    <input type="date" id="billNextbilldate" />
+                    <p class="field-hint">
+                        Auto-calculated from Last Bill Date + Interval. Edit to
+                        override.
+                    </p>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                        <button
+                            type="button"
+                            id="billDeleteBtn"
+                            class="delete-btn"
+                            style="flex: 1"
+                        >
+                            Delete
+                        </button>
+                        <div style="flex: 1"></div>
+                    </div>
+                    <div style="display: flex; gap: 1rem">
+                        <button type="submit" style="flex: 1">Save</button>
+                        <button
+                            type="button"
+                            onclick="closeModal('billDetailModal')"
+                            style="flex: 1"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Plant: Log Event Modal                                       -->
+        <!-- ============================================================ -->
+        <div class="modal" id="plantEventModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2 id="plantEventTitle">LOG EVENT</h2>
+                    <button onclick="closeModal('plantEventModal')">
+                        &times;
+                    </button>
+                </header>
+                <form id="plantEventForm">
+                    <input type="hidden" name="plantId" id="plantEventId" />
+                    <div class="form-check-row">
+                        <label class="form-check-label">
+                            <input
+                                type="checkbox"
+                                name="watered"
+                                id="wateredCheck"
+                            />
+                            <span>Watered today</span>
+                        </label>
+                    </div>
+                    <div class="form-check-row">
+                        <label class="form-check-label">
+                            <input
+                                type="checkbox"
+                                name="fertilised"
+                                id="fertilisedCheck"
+                            />
+                            <span>Fertilised today</span>
+                        </label>
+                    </div>
+                    <div id="fertiliserSelectWrap" style="display: none">
+                        <label class="form-label">Fertiliser Used</label>
+                        <select name="fertiliser">
+                            <option value="">Select...</option>
+                            <option value="20-20-20">20-20-20</option>
+                            <option value="30-10-10">30-10-10</option>
+                            <option value="10-30-20">10-30-20</option>
+                        </select>
+                    </div>
+                    <label class="form-label">Pot Size (cm)</label>
+                    <input
+                        type="number"
+                        name="potsize"
+                        id="plantEventPotsize"
+                        min="1"
+                        placeholder="e.g. 15"
+                    />
+                    <label class="form-label">Notes</label>
+                    <textarea
+                        name="notes"
+                        placeholder="Any notes..."
+                        rows="3"
+                    ></textarea>
+                    <button
+                        type="submit"
+                        style="width: 100%; margin-top: 1.8rem"
+                    >
+                        Save Event
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Plant: Detail Modal                                          -->
+        <!-- ============================================================ -->
+        <div class="modal" id="plantDetailModal">
+            <div class="modal-content modal-plant-detail">
+                <header>
+                    <h2 id="plantDetailTitle">PLANT</h2>
+                    <button onclick="closeModal('plantDetailModal')">
+                        &times;
+                    </button>
+                </header>
+                <div class="plant-detail-body">
+                    <!-- Left: Info + Actions -->
+                    <div class="plant-detail-info">
+                        <div class="plant-name-row">
+                            <input
+                                type="text"
+                                id="pdPlantNameInput"
+                                class="plant-name-input"
+                                placeholder="Plant name"
+                            />
+                            <button
+                                type="button"
+                                data-action="plant-save-name"
+                                data-id=""
+                                id="pdSaveNameBtn"
+                                class="plant-name-save-btn"
+                            >
+                                Save
+                            </button>
+                        </div>
+                        <div class="plant-info-grid">
+                            <span class="plant-info-label">Start Date</span>
+                            <span
+                                class="plant-info-value"
+                                id="pdStartDate"
+                            ></span>
+                            <span class="plant-info-label">Pot Size</span>
+                            <span
+                                class="plant-info-value"
+                                id="pdPotSize"
+                            ></span>
+                            <span class="plant-info-label">Last Watered</span>
+                            <span
+                                class="plant-info-value"
+                                id="pdLastWatered"
+                            ></span>
+                            <span class="plant-info-label"
+                                >Last Fertilised</span
+                            >
+                            <span
+                                class="plant-info-value"
+                                id="pdLastFertilised"
+                            ></span>
+                            <span class="plant-info-label"
+                                >Fertiliser Used</span
+                            >
+                            <span
+                                class="plant-info-value"
+                                id="pdFertiliserUsed"
+                            ></span>
+                        </div>
+                        <div class="plant-latest-note">
+                            <span class="plant-info-label">Latest Note</span>
+                            <p id="pdLatestNote"></p>
+                        </div>
+                        <div class="plant-detail-actions">
+                            <button
+                                type="button"
+                                data-action="plant-archive"
+                                data-id=""
+                                id="pdArchiveBtn"
+                                class="action-wide-btn archive-btn"
+                            >
+                                Archive Plant
+                            </button>
+                            <button
+                                type="button"
+                                data-action="plant-delete"
+                                data-id=""
+                                id="pdDeleteBtn"
+                                class="action-wide-btn delete-btn"
+                            >
+                                Delete Plant
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: History Table -->
+                    <div class="plant-detail-history">
+                        <h4 class="plant-history-title">History</h4>
+                        <div class="plant-history-table-wrap">
+                            <table class="plant-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Pot</th>
+                                        <th>💧</th>
+                                        <th>🌿</th>
+                                        <th>Fertiliser</th>
+                                        <th>Notes</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pdHistoryBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Plant: Add Modal                                             -->
+        <!-- ============================================================ -->
+        <div class="modal" id="addPlantModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2>ADD PLANT</h2>
+                    <button onclick="closeModal('addPlantModal')">
+                        &times;
+                    </button>
+                </header>
+                <form id="addPlantForm">
+                    <label class="form-label">Plant Name</label>
+                    <input
+                        type="text"
+                        id="addPlantName"
+                        placeholder="e.g. Monstera"
+                        required
+                    />
+                    <label class="form-label">Start Date</label>
+                    <input type="date" id="addPlantStartDate" />
+                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                        <button type="submit" style="flex: 1">Add Plant</button>
+                        <button
+                            type="button"
+                            onclick="closeModal('addPlantModal')"
+                            style="flex: 1"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Notes: Add Modal                                             -->
+        <!-- ============================================================ -->
+        <div class="modal" id="addNoteModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2>ADD NOTE</h2>
+                    <button onclick="closeModal('addNoteModal')">
+                        &times;
+                    </button>
+                </header>
+                <form id="addNoteForm">
+                    <label class="form-label">Note</label>
+                    <textarea
+                        id="addNoteContent"
+                        placeholder="Write your note..."
+                        rows="4"
+                        required
+                    ></textarea>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                        <button type="submit" style="flex: 1">Add Note</button>
+                        <button
+                            type="button"
+                            onclick="closeModal('addNoteModal')"
+                            style="flex: 1"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script src="app.js"></script>
+    </body>
 </html>
