@@ -32,7 +32,14 @@ const LIST_META_KEYS = [
     "plants",
     "notes",
 ];
-let listMetadata = {};
+let listMetadata = {
+    fridge_stock: null,
+    chores: null,
+    bills: null,
+    change_log: null,
+    plants: null,
+    notes: null,
+};
 LIST_META_KEYS.forEach((key) => (listMetadata[key] = null));
 
 // STATE FLAGS
@@ -115,15 +122,27 @@ async function setupRealtime() {
         return;
     }
 
-    subscribeToTable("fridge_stock", renderFridgeStock);
-    subscribeToTable("chores", renderChores);
-    subscribeToTable("change_log", renderChangeLog);
-    subscribeToTable("bills", renderBills);
-    subscribeToTable("plants", renderPlants);
+    subscribeToTable("fridge_stock", () => {
+        loadFridgeStock().then(renderFridgeStock);
+    });
+    subscribeToTable("chores", () => {
+        loadChores().then(renderChores);
+    });
+    subscribeToTable("change_log", () => {
+        loadChangeLog().then(renderChores);
+    });
+    subscribeToTable("bills", () => {
+        loadBills().then(renderBills);
+    });
+    subscribeToTable("plants", () => {
+        loadPlants().then(renderPlants);
+    });
     subscribeToTable("plant_history", () => {
         loadPlantHistory().then(renderPlants);
     });
-    subscribeToTable("notes", renderNotes);
+    subscribeToTable("notes", () => {
+        loadNotes().then(renderNotes);
+    });
 }
 
 function cleanupSubscriptions() {
@@ -217,6 +236,15 @@ async function showDashboard() {
 
     setupPanelClicks();
     bindAllForms();
+
+    editingFridgeStockId = null;
+    fridgeStockExpiryManuallySet = false;
+    editingChoreId = null;
+    choreNextDueManuallySet = false;
+    editingChangeLogId = null;
+    changeLogNextDueManuallySet = false;
+    editingBillId = null;
+    billNextDateManuallySet = false;
 
     await loadAllData();
 
@@ -443,6 +471,36 @@ async function loadNotes() {
     }
 }
 
+async function loadListMetadata() {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) {
+            console.error("Supabase not ready for loadListMetadata");
+            return;
+        }
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
+        if (!user?.id) {
+            console.error("No user for loadListMetadata");
+            return;
+        }
+
+        const { data, error } = await sb
+            .from("list_metadata")
+            .select("list_name, last_updated")
+            .eq("user_id", user.id);
+
+        if (error) throw error;
+        data.forEach((row) => {
+            listMetadata[row.list_name] = row.last_updated;
+        });
+    } catch (err) {
+        console.error("Load list metadata error:", err);
+        notes = [];
+    }
+}
+
 async function loadAllData() {
     try {
         await Promise.all([
@@ -453,6 +511,7 @@ async function loadAllData() {
             loadPlants(),
             loadPlantHistory(),
             loadNotes(),
+            loadListMetadata(),
         ]);
         console.log("All data loaded");
     } catch (err) {
@@ -480,14 +539,18 @@ function groupByCategory(items) {
 
 function getExpiryClass(expiryDate) {
     if (!expiryDate) return "";
-    const today = new Date(
-        new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Hong_Kong" }),
-    );
-    today.setHours(0, 0, 0, 0);
-    const expiry = new Date(expiryDate + "T00:00:00Z");
-    const diffDays = Math.floor((expiry - today) / 86400000);
-    if (diffDays < 0) return "danger";
-    if (diffDays <= 7) return "warning";
+    const [todayY, todayM, todayD] = new Date()
+        .toISOString()
+        .slice(0, 10)
+        .split("-")
+        .map(Number);
+    const [expiryY, expiryM, expiryD] = expiryDate.split("-").map(Number);
+
+    const todayNum = todayY * 10000 + todayM * 100 + todayD;
+    const expiryNum = expiryY * 10000 + expiryM * 100 + expiryD;
+
+    if (expiryNum < todayNum) return "danger";
+    if (expiryNum - todayNum <= 7) return "warning";
     return "";
 }
 
@@ -513,21 +576,19 @@ function buildFridgeHTML(showZero) {
     const items = getVisibleItems(showZero);
     const grouped = groupByCategory(items);
     const forceFullWidth = ["Proteins", "Raw Food"];
+    const alwaysHalfWidth = ["Carbs", "Veggies", "Fruits", "Others"];
 
     let html = '<div class="fridge-inner-grid">';
     fridgeCategoryOrder.forEach((cat) => {
         const catItems = grouped[cat];
-        const alwaysHalfWidth = ["Carbs", "Veggies", "Fruits", "Others"];
-        const wide =
-            !alwaysHalfWidth.includes(cat) ||
-            catItems.length >= 3 ||
-            forceFullWidth.includes(cat);
+        const isAlwaysHalf = alwaysHalfWidth.includes(cat);
+        const isForceFull = forceFullWidth.includes(cat);
+        const wide = isForceFull || (!isAlwaysHalf && catItems.length >= 3);
         const cls = wide ? "col-full" : "col-half";
 
         if (catItems.length === 0) {
             html += `<div class="fridge-group ${cls}">
         <div class="fridge-group-title">${cat}</div>
-        <div class="fridge-empty">No items</div>
       </div>`;
         } else {
             html += `<div class="fridge-group ${cls}">
@@ -555,14 +616,18 @@ function renderFridgeStock() {
 // CHORES
 function getDueClass(nextDueDate) {
     if (!nextDueDate) return "";
-    const today = new Date(
-        new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Hong_Kong" }),
-    );
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(nextDueDate + "T00:00:00Z");
-    const diffDays = Math.floor((due - today) / 86400000);
-    if (diffDays < 0) return "danger";
-    if (diffDays <= 3) return "warning";
+    const [todayY, todayM, todayD] = new Date()
+        .toISOString()
+        .slice(0, 10)
+        .split("-")
+        .map(Number);
+    const [dueY, dueM, dueD] = nextDueDate.split("-").map(Number);
+
+    const todayNum = todayY * 10000 + todayM * 100 + todayD;
+    const dueNum = dueY * 10000 + dueM * 100 + dueD;
+
+    if (dueNum < todayNum) return "danger";
+    if (dueNum - todayNum <= 3) return "warning";
     return "";
 }
 
@@ -653,7 +718,7 @@ function renderBills() {
 function buildPlantsHTML(showArchived = false) {
     const visible = showArchived ? plants : plants.filter((p) => !p.archived);
     if (!visible.length) {
-        return '<p style="color: var(--text-secondary); font-style: italic; font-size: var(--item-font); padding: 0.5rem 0;">No plants</p>';
+        return "";
     }
     let html = '<ul class="item-list">';
     visible.forEach((p) => {
@@ -1075,8 +1140,8 @@ function openPlantDetail(plantId) {
     const archiveBtn = document.getElementById("pdArchiveBtn");
     archiveBtn.dataset.id = plantId;
     archiveBtn.textContent = plant.archived
-        ? "Unarchive Plant"
-        : "Archive Plant";
+        ? "Unarchive"
+        : "Archive";
     archiveBtn.classList.toggle("is-archived", !!plant.archived);
 
     document.getElementById("pdDeleteBtn").dataset.id = plantId;
@@ -1180,7 +1245,7 @@ function refreshListLastUpdated() {
 // DATE HANDLERS
 function formatShortDate(value) {
     if (!value) return "";
-    const date = new Date(value);
+    const date = new Date(value + "T00:00:00Z");
     const day = date.toLocaleDateString("en-GB", {
         day: "2-digit",
         timeZone: "Asia/Hong_Kong",
@@ -1191,14 +1256,14 @@ function formatShortDate(value) {
             timeZone: "Asia/Hong_Kong",
         })
         .toUpperCase();
-    return `${day} ${month}`;
+    return day + " " + month;
 }
 
 function formatDateInput(value) {
     if (!value) return "";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toISOString().slice(0, 10);
+    const date = new Date(value + "T00:00:00Z");
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toISOString().slice(0, 10);
 }
 
 function parseDisplayDate(value) {
@@ -1254,13 +1319,18 @@ function calcNextDueByMonths(lastDate, intervalMonths) {
 
 function formatMetaTimestamp(iso) {
     if (!iso) return "No recent activity";
-    return `Last updated ${new Date(iso).toLocaleString("en-GB", {
+
+    const date = new Date(iso + "T00:00:00");
+
+    return `Last updated ${date.toLocaleString("en-GB", {
         day: "2-digit",
         month: "short",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        second: "2-digit",
         timeZone: "Asia/Hong_Kong",
+        timeZoneName: "HKT",
     })}`;
 }
 
@@ -1286,6 +1356,9 @@ async function saveFridgeItem(item, isUpdate = false) {
 
         let error;
         if (isUpdate) {
+            if (!item.id || item.id === "undefined" || item.id === "") {
+                throw new Error("Invalid item ID for update");
+            }
             ({ error } = await sb
                 .from("fridge_stock")
                 .update(data)
@@ -1297,6 +1370,8 @@ async function saveFridgeItem(item, isUpdate = false) {
         }
 
         if (error) throw error;
+
+        fridgeStockExpiryManuallySet = false;
 
         await loadFridgeStock();
         renderFridgeStock();
@@ -1360,6 +1435,9 @@ async function saveChore(chore, isUpdate = false) {
 
         let error;
         if (isUpdate) {
+            if (!chore.id || chore.id === "undefined" || chore.id === "") {
+                throw new Error("Invalid item ID for update");
+            }
             ({ error } = await sb
                 .from("chores")
                 .update(data)
@@ -1371,6 +1449,8 @@ async function saveChore(chore, isUpdate = false) {
         }
 
         if (error) throw error;
+
+        choreNextDueManuallySet = false;
 
         await loadChores();
         renderChores();
@@ -1434,6 +1514,9 @@ async function saveChangeLog(cl, isUpdate = false) {
 
         let error;
         if (isUpdate) {
+            if (!cl.id || cl.id === "undefined" || cl.id === "") {
+                throw new Error("Invalid item ID for update");
+            }
             ({ error } = await sb
                 .from("change_log")
                 .update(data)
@@ -1445,6 +1528,8 @@ async function saveChangeLog(cl, isUpdate = false) {
         }
 
         if (error) throw error;
+
+        changelogNextDueManuallySet = false;
 
         await loadChangeLog();
         renderChangeLog();
@@ -1508,6 +1593,9 @@ async function saveBill(bill, isUpdate = false) {
 
         let error;
         if (isUpdate) {
+            if (!bill.id || bill.id === "undefined" || bill.id === "") {
+                throw new Error("Invalid item ID for update");
+            }
             ({ error } = await sb
                 .from("bills")
                 .update(data)
@@ -1519,6 +1607,8 @@ async function saveBill(bill, isUpdate = false) {
         }
 
         if (error) throw error;
+
+        billNextDateManuallySet = false;
 
         await loadBills();
         renderBills();
@@ -1871,6 +1961,9 @@ function bindAllForms() {
         .getElementById("fridgeStockForm")
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
+            const editId = document.getElementById("fridgeStockEditId").value;
+            const isUpdate =
+                !!editId && editId !== "undefined" && editId !== "";
             const shelfLifeDays =
                 parseInt(
                     document.getElementById("fridgeStockShelfLife").value,
@@ -1886,6 +1979,7 @@ function bindAllForms() {
                   : null;
 
             const item = {
+                id: isUpdate ? editId : null,
                 item_name: document
                     .getElementById("fridgeStockItemName")
                     .value.trim(),
@@ -1901,7 +1995,7 @@ function bindAllForms() {
                 last_updated: new Date().toISOString().slice(0, 10),
             };
 
-            await saveFridgeItem(item, !!editingFridgeStockId);
+            await saveFridgeItem(item, isUpdate);
             closeModal("fridgeStockDetailModal");
             editingFridgeStockId = null;
             fridgeStockExpiryManuallySet = false;
@@ -1910,15 +2004,19 @@ function bindAllForms() {
     document
         .getElementById("fridgeStockDeleteBtn")
         ?.addEventListener("click", async () => {
-            await deleteFridgeItem(editingFridgeStockId);
-            closeModal("fridgeStockDetailModal");
-            editingFridgeStockId = null;
+            if (editingFridgeStockId) {
+                await deleteFridgeItem(editingFridgeStockId);
+                closeModal("fridgeStockDetailModal");
+                editingFridgeStockId = null;
+            }
         });
 
     document
         .getElementById("choreForm")
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
+            const editId = document.getElementById("choreEditId").value;
+            const isUpdate = !!editId && editId !== "undefined";
             const lastDoneDate =
                 document.getElementById("choreLastDoneDate").value || null;
             const intervalDays =
@@ -1933,6 +2031,7 @@ function bindAllForms() {
                   : null;
 
             const chore = {
+                id: isUpdate ? editId : null,
                 task_name: document
                     .getElementById("choreTaskName")
                     .value.trim(),
@@ -1941,7 +2040,7 @@ function bindAllForms() {
                 next_due_date: nextDueDate,
             };
 
-            await saveChore(chore, !!editingChoreId);
+            await saveChore(chore, isUpdate);
             closeModal("choreDetailModal");
             editingChoreId = null;
             choreNextDueManuallySet = false;
@@ -1950,15 +2049,19 @@ function bindAllForms() {
     document
         .getElementById("choreDeleteBtn")
         ?.addEventListener("click", async () => {
-            await deleteChore(editingChoreId);
-            closeModal("choreDetailModal");
-            editingChoreId = null;
+            if (editingChoreId) {
+                await deleteChore(editingChoreId);
+                closeModal("choreDetailModal");
+                editingChoreId = null;
+            }
         });
 
     document
         .getElementById("changelogForm")
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
+            const editId = document.getElementById("changeLogEditId").value;
+            const isUpdate = !!editId && editId !== "undefined";
             const lastChangedDate =
                 document.getElementById("changeLogLastChanged").value || null;
             const intervalMonths =
@@ -1973,6 +2076,7 @@ function bindAllForms() {
                   : null;
 
             const cl = {
+                id: isUpdate ? editId : null,
                 item_name: document
                     .getElementById("changeLogItemName")
                     .value.trim(),
@@ -1981,7 +2085,7 @@ function bindAllForms() {
                 next_change_due: nextChangeDue,
             };
 
-            await saveChangeLog(cl, !!editingChangeLogId);
+            await saveChangeLog(cl, isUpdate);
             closeModal("changeLogDetailModal");
             editingChangeLogId = null;
             changeLogNextDueManuallySet = false;
@@ -1990,15 +2094,19 @@ function bindAllForms() {
     document
         .getElementById("changeLogDeleteBtn")
         ?.addEventListener("click", async () => {
-            await deleteChangeLog(editingChangeLogId);
-            closeModal("changeLogDetailModal");
-            editingChangeLogId = null;
+            if (editingChangeLogId) {
+                await deleteChangeLog(editingChangeLogId);
+                closeModal("changeLogDetailModal");
+                editingChangeLogId = null;
+            }
         });
 
     document
         .getElementById("billForm")
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
+            const editId = document.getElementById("billEditId").value;
+            const isUpdate = !!editId && editId !== "undefined";
             const lastBillDate =
                 document.getElementById("billLastBillDate").value || null;
             const intervalMonths =
@@ -2013,13 +2121,14 @@ function bindAllForms() {
                   : null;
 
             const bill = {
+                id: isUpdate ? editId : null,
                 bill_name: document.getElementById("billBillName").value.trim(),
                 last_bill_date: lastBillDate,
                 interval_months: intervalMonths,
                 next_bill_date: nextBillDate,
             };
 
-            await saveBill(bill, !!editingBillId);
+            await saveBill(bill, isUpdate);
             closeModal("billDetailModal");
             editingBillId = null;
             billNextDateManuallySet = false;
@@ -2028,9 +2137,11 @@ function bindAllForms() {
     document
         .getElementById("billDeleteBtn")
         ?.addEventListener("click", async () => {
-            await deleteBill(editingBillId);
-            closeModal("billDetailModal");
-            editingBillId = null;
+            if (editingBillId) {
+                await deleteBill(editingBillId);
+                closeModal("billDetailModal");
+                editingBillId = null;
+            }
         });
 
     document

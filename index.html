@@ -193,17 +193,18 @@
                     </div>
 
                     <div class="modal-actions">
-                        <button type="submit">Save</button>
+                        <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
                             id="fridgeStockDeleteBtn"
-                            style="display: none"
+                            class="delete-btn"
                         >
                             Delete
                         </button>
                         <button
                             type="button"
                             onclick="closeModal('fridgeStockDetailModal')"
+                            class="cancel-btn"
                         >
                             Cancel
                         </button>
@@ -244,23 +245,19 @@
                         >
                     </label>
                     <input type="date" id="choreNextDueDate" />
-                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                    <div class="modal-actions">
+                        <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
                             id="choreDeleteBtn"
                             class="delete-btn"
-                            style="flex: 1"
                         >
                             Delete
                         </button>
-                        <div style="flex: 1"></div>
-                    </div>
-                    <div style="display: flex; gap: 1rem">
-                        <button type="submit" style="flex: 1">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('choreDetailModal')"
-                            style="flex: 1"
+                            class="cancel-btn"
                         >
                             Cancel
                         </button>
@@ -301,23 +298,19 @@
                         >
                     </label>
                     <input type="date" id="changeLogNextDueDate" />
-                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                    <div class="modal-actions">
+                        <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
                             id="changeLogDeleteBtn"
                             class="delete-btn"
-                            style="flex: 1"
                         >
                             Delete
                         </button>
-                        <div style="flex: 1"></div>
-                    </div>
-                    <div style="display: flex; gap: 1rem">
-                        <button type="submit" style="flex: 1">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('changeLogDetailModal')"
-                            style="flex: 1"
+                            class="cancel-btn"
                         >
                             Cancel
                         </button>
@@ -358,23 +351,19 @@
                         >
                     </label>
                     <input type="date" id="billNextBillDate" />
-                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
+                    <div class="modal-actions">
+                        <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
                             id="billDeleteBtn"
                             class="delete-btn"
-                            style="flex: 1"
                         >
                             Delete
                         </button>
-                        <div style="flex: 1"></div>
-                    </div>
-                    <div style="display: flex; gap: 1rem">
-                        <button type="submit" style="flex: 1">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('billDetailModal')"
-                            style="flex: 1"
+                            class="cancel-btn"
                         >
                             Cancel
                         </button>
@@ -397,12 +386,12 @@
                     <input type="text" id="addPlantName" required />
                     <label class="form-label">Starting Date</label>
                     <input type="date" id="addPlantStartingDate" />
-                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
-                        <button type="submit" style="flex: 1">Save</button>
+                    <div class="modal-actions">
+                        <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('plantAddModal')"
-                            style="flex: 1"
+                            class="cancel-btn"
                         >
                             Cancel
                         </button>
@@ -455,13 +444,13 @@
                         </table>
                     </div>
                 </div>
-                <div style="display: flex; gap: 1rem">
+                <div class="modal-actions">
                     <button
                         type="button"
                         data-action="plant-save-name"
                         data-id=""
                         id="pdSaveNameBtn"
-                        class="plant-name-save-btn"
+                        class="save-btn"
                     >
                         Save
                     </button>
@@ -470,18 +459,25 @@
                         data-action="plant-archive"
                         data-id=""
                         id="pdArchiveBtn"
-                        class="action-wide-btn archive-btn"
+                        class="archive-btn"
                     >
-                        Archive Plant
+                        Archive
                     </button>
                     <button
                         type="button"
                         data-action="plant-delete"
                         data-id=""
                         id="pdDeleteBtn"
-                        class="action-wide-btn delete-btn"
+                        class="delete-btn"
                     >
-                        Delete Plant
+                        Delete
+                    </button>
+                    <button
+                        type="button"
+                        onclick="closeModal('plantDetailModal')"
+                        class="cancel-btn"
+                    >
+                        Cancel
                     </button>
                 </div>
             </div>
@@ -539,12 +535,12 @@
                         id="plantEventNotes"
                         rows="3"
                     ></textarea>
-                    <div style="display: flex; gap: 1rem">
-                        <button type="submit" style="flex: 1">Save</button>
+                    <div class="modal-actions">
+                        <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('plantEventModal')"
-                            style="flex: 1"
+                            class="cancel-btn"
                         >
                             Cancel
                         </button>
@@ -565,12 +561,12 @@
                 <form id="addNoteForm">
                     <label class="form-label">Note</label>
                     <textarea id="addNoteContent" rows="4" required></textarea>
-                    <div style="display: flex; gap: 1rem; margin-top: 1.8rem">
-                        <button type="submit" style="flex: 1">Save</button>
+                    <div class="modal-actions">
+                        <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('noteAddModal')"
-                            style="flex: 1"
+                            class="cancel-btn"
                         >
                             Cancel
                         </button>

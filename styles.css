@@ -10,12 +10,19 @@
     --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     --btn-bg: #e4e6ea;
     --btn-bg-hover: #d0d3d9;
-    --btn-done-bg: #d4edda;
-    --btn-done-color: #1e7e34;
-    --btn-delete-bg: #fde8ea;
-    --btn-delete-color: #c82333;
+    --btn-green-bg: #e0fce8;
+    --btn-green-hover: #c3e6cb;
+    --btn-green-color: #1e7e34;
+    --btn-blue-bg: #def0ff;
+    --btn-blue-hover: #b3d9ff;
+    --btn-blue-color: #0056b3;
+    --btn-red-bg: #fde8ea;
+    --btn-red-hover: #f5c6cb;
+    --btn-red-color: #c82333;
     --btn-radius: 10px;
-    --btn-size: 40px;
+    --btn-size: 44px;
+    --btn-font: 1.2rem;
+    --btn-weight: 600;
     --item-font: 1.6rem;
     --title-font: 1.8rem;
     --gap: 1.6rem;
@@ -102,9 +109,8 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
     grid-template-rows: 1fr 1fr 1fr;
-    gap: 1.2rem;
+    gap: 1rem;
     padding: 1rem;
-    height: 100%;
 }
 
 [data-section="fridge_stock"] {
@@ -139,33 +145,30 @@ body {
 
 /* BUTTONS */
 .add-btn,
-.action-btn {
+.action-btn,
+.modal header button {
     background: var(--btn-bg);
-    color: var(--text-primary);
+    color: var(--text-secondary);
     border: none;
     width: var(--btn-size);
     height: var(--btn-size);
     border-radius: var(--btn-radius);
     cursor: pointer;
-    font-size: 1.2rem;
-    font-weight: 600;
+    font-size: var(--btn-font);
+    font-weight: var(--btn-weight);
     flex-shrink: 0;
     line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-left: 0.4rem;
     transition:
         background 0.15s ease,
         transform 0.1s ease;
 }
 
-.add-btn {
-    font-size: 1.4rem;
-}
-
 .add-btn:hover,
-.action-btn:hover:not(:disabled) {
+.action-btn:hover:not(:disabled),
+.modal header button:hover {
     background: var(--btn-bg-hover);
 }
 
@@ -177,34 +180,102 @@ body {
 [data-action="done"],
 [data-action="changed"],
 [data-action="paid"] {
-    background: var(--btn-done-bg);
-    color: var(--btn-done-color);
+    background: var(--btn-green-bg);
+    color: var(--btn-green-color);
 }
 
 [data-action="done"]:hover,
 [data-action="changed"]:hover,
 [data-action="paid"]:hover {
-    background: #c3e6cb;
+    background: var(--btn-green-hover) !important;
 }
 
 [data-action="plant-log"] {
-    background: #cce7ff;
-    color: #0056b3;
+    background: var(--btn-blue-bg);
+    color: var(--btn-blue-color);
 }
 
 [data-action="plant-log"]:hover {
-    background: #b3d9ff;
+    background: var(--btn-blue-hover) !important;
 }
 
-[data-action="note-delete"],
+[data-action="note-delete"] {
+    background: var(--btn-red-bg);
+    color: var(--btn-red-color);
+}
+
+[data-action="note-delete"]:hover {
+    background: var(--btn-red-hover) !important;
+}
+
+.modal-actions {
+    display: flex !important;
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    margin-top: 1.8rem;
+    flex-wrap: wrap;
+}
+
+.modal-actions button {
+    flex: 1;
+    min-height: 52px !important;
+    padding: 1rem 1.2rem;
+    font-size: var(--item-font);
+    font-weight: 500;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s ease,
+        transform 0.1s ease;
+}
+
+.save-btn {
+    background: var(--btn-green-bg) !important;
+    color: var(--btn-green-color) !important;
+}
+
+.save-btn:hover {
+    background: var(--btn-green-hover) !important;
+}
+
 .delete-btn {
-    background: var(--btn-delete-bg) !important;
-    color: var(--btn-delete-color) !important;
+    background: var(--btn-red-bg) !important;
+    color: var(--btn-red-color) !important;
 }
 
-[data-action="note-delete"]:hover,
 .delete-btn:hover {
-    background: #f5c6cb !important;
+    background: var(--btn-red-hover) !important;
+}
+
+.cancel-btn {
+    background: var(--btn-bg) !important;
+    color: var(--text-primary) !important;
+}
+
+.cancel-btn:hover {
+    background: var(--btn-bg-hover) !important;
+}
+
+.archive-btn {
+    background: var(--btn-blue-bg) !important;
+    color: var(--btn-blue-color) !important;
+}
+
+.archive-btn:hover {
+    background: var(--btn-blue-hover) !important;
+}
+
+.archive-btn.is-archived {
+    background: var(--btn-blue-bg) !important;
+    color: var(--btn-blue-color) !important;
+}
+
+.archive-btn.is-archived:hover {
+    background: var(--btn-blue-hover) !important;
 }
 
 button:disabled {
@@ -213,20 +284,19 @@ button:disabled {
 }
 
 button[type="submit"] {
-    width: 100%;
     margin-top: 1.8rem;
     padding: 1.3rem;
     font-size: var(--item-font);
     font-weight: 500;
-    background: #6aaa84;
-    color: #ffffff;
+    background: var(--btn-green-bg);
+    color: var(--btn-green-color);
     border: none;
     border-radius: 12px;
     cursor: pointer;
 }
 
 button[type="submit"]:hover {
-    background: #5a9e75;
+    background: var(--btn-green-hover);
 }
 
 button[type="button"] {
@@ -238,49 +308,10 @@ button[type="button"] {
     font-size: var(--item-font);
     font-weight: 500;
     cursor: pointer;
-    width: 100%;
 }
 
 button[type="button"]:hover {
     background: var(--btn-bg-hover);
-}
-
-.plant-detail-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-}
-
-.action-wide-btn {
-    width: 100%;
-    padding: 1.1rem;
-    border-radius: 12px;
-    border: none;
-    font-size: var(--item-font);
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s ease;
-    font-family: "Roboto", sans-serif;
-}
-
-.archive-btn {
-    background: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeeba !important;
-}
-
-.archive-btn:hover {
-    background: #ffe88a;
-}
-
-.archive-btn.is-archived {
-    background: #d4edda;
-    color: #1e7e34;
-    border-color: #c3e6cb !important;
-}
-
-.archive-btn.is-archived:hover {
-    background: #c3e6cb;
 }
 
 /* TABLET TOUCH */
@@ -320,6 +351,7 @@ button[type="button"]:hover {
     cursor: pointer;
     border-bottom: 1.5px solid var(--border);
     flex-shrink: 0;
+    background: var(--bg-primary);
 }
 
 .panel-header h3 {
@@ -383,15 +415,15 @@ button[type="button"]:hover {
 }
 
 .item-meta {
-    color: var(--text-secondary);
+    color: var(--text-primary);
     font-size: 1.3rem;
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
     font-weight: 400;
     line-height: 1.3;
     display: flex;
     align-items: center;
     height: 100%;
-    margin-right: auto;
+    margin-right: 0.4rem;
     min-width: 4rem;
 }
 
@@ -466,24 +498,6 @@ button[type="button"]:hover {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin: 0;
-}
-
-.modal header button {
-    background: var(--btn-bg);
-    border: none;
-    width: 48px;
-    height: 48px;
-    border-radius: var(--btn-radius);
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: var(--text-secondary);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal header button:hover {
-    background: var(--btn-bg-hover);
 }
 
 /* FORMS */
@@ -658,19 +672,15 @@ form::-webkit-scrollbar-thumb {
     align-items: start;
 }
 
-.portion-number {
-    font-weight: 500;
-}
-
 .fridge-date {
     color: var(--text-secondary);
 }
 
-.fridge-empty {
-    color: var(--text-secondary);
-    font-size: var(--item-font);
-    font-style: italic;
-    padding: 0.5rem 0;
+.portion-number,
+.portion-zero {
+    width: 1.8rem;
+    text-align: center;
+    display: inline-block;
 }
 
 .portion-zero {
@@ -695,24 +705,6 @@ form::-webkit-scrollbar-thumb {
     padding: 0.6rem 0.9rem !important;
     border-radius: 10px !important;
     margin-bottom: 0 !important;
-}
-
-.plant-name-save-btn {
-    flex-shrink: 0;
-    background: var(--btn-bg);
-    color: var(--text-primary);
-    border: none;
-    border-radius: 10px;
-    padding: 0.6rem 1.2rem;
-    font-size: 1.3rem;
-    font-weight: 500;
-    cursor: pointer;
-    font-family: "Roboto", sans-serif;
-    transition: background 0.15s ease;
-}
-
-.plant-name-save-btn:hover {
-    background: var(--btn-bg-hover);
 }
 
 .plant-info-grid {
