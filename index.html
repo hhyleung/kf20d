@@ -2,7 +2,10 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
         <meta name="robots" content="noindex, nofollow" />
         <title>kf20d</title>
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -12,14 +15,14 @@
         <!-- LOGIN PAGE -->
         <div id="loginContainer">
             <div class="login-modal">
-              <h2>Login</h2>
-              <form id="loginForm">
-                  <label>Email</label>
-                  <input type="email" id="loginEmail" required />
-                  <label>Password</label>
-                  <input type="password" id="loginPassword" required />
-                  <button type="submit">Login</button>
-              </form>
+                <h2>Login</h2>
+                <form id="loginForm">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" required />
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" required />
+                    <button type="submit">Login</button>
+                </form>
             </div>
         </div>
 
@@ -100,7 +103,7 @@
         </div>
 
         <!-- FRIDGE STOCK -->
-        <div class="modal" id="fridgeStockDetailModal" >
+        <div class="modal" id="fridgeStockDetailModal">
             <div class="modal-content modal-wide">
                 <header>
                     <h2 id="fridgeStockModalTitle">Fridge Item Details</h2>
@@ -110,12 +113,12 @@
                     >
                         &times;
                     </button>
-                </div>
+                </header>
 
                 <form id="fridgeStockForm">
                     <input type="hidden" id="fridgeStockEditId" name="id" />
 
-                    <div class="form-group">
+                    <div>
                         <label>Item Name</label>
                         <input
                             type="text"
@@ -125,7 +128,7 @@
                         />
                     </div>
 
-                    <div class="form-group">
+                    <div>
                         <label>Category</label>
                         <select id="fridgeStockCategory" name="category">
                             <option value="Carbs">Carbs</option>
@@ -137,8 +140,8 @@
                         </select>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
+                    <div>
+                        <div>
                             <label>Portions</label>
                             <input
                                 type="number"
@@ -148,7 +151,7 @@
                                 value="5"
                             />
                         </div>
-                        <div class="form-group">
+                        <div>
                             <label>Shelf Life (days)</label>
                             <input
                                 type="number"
@@ -156,11 +159,13 @@
                                 name="shelf_life_days"
                                 min="0"
                             />
-                            <small id="fridgeStockExpiryDateAutoLabel">Auto</small>
+                            <small id="fridgeStockExpiryDateAutoLabel"
+                                >Auto</small
+                            >
                         </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
+                    <div>
+                        <div>
                             <label>Creation Date</label>
                             <input
                                 type="date"
@@ -169,7 +174,7 @@
                                 required
                             />
                         </div>
-                        <div class="form-group">
+                        <div>
                             <label>Expiry Date</label>
                             <input
                                 type="date"
@@ -525,7 +530,11 @@
                         min="1"
                     />
                     <label class="form-label">Notes</label>
-                    <textarea name="notes" id="plantEventNotes" rows="3"></textarea>
+                    <textarea
+                        name="notes"
+                        id="plantEventNotes"
+                        rows="3"
+                    ></textarea>
                     <div style="display: flex; gap: 1rem">
                         <button type="submit" style="flex: 1">Save</button>
                         <button

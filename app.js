@@ -194,11 +194,14 @@ function showLogin() {
     realtimeSetupDone = false;
 }
 
-function showDashboard() {
+async function showDashboard() {
     document.getElementById("loginContainer").style.display = "none";
     const dash = document.querySelector(".dashboard");
     dash.style.removeProperty("display");
     dash.style.display = "grid";
+
+    setupPanelClicks();
+    await loadAllData();
 
     renderFridgeStock();
     renderChores();
@@ -206,8 +209,6 @@ function showDashboard() {
     renderBills();
     renderPlants();
     renderNotes();
-
-    setupPanelClicks();
 
     if (!realtimeSetupDone) {
         realtimeSetupDone = true;
@@ -883,7 +884,7 @@ function openChangeLogDetail(clId = null) {
     document.getElementById("changeLogItemName").value = "";
     document.getElementById("changeLogLastChanged").value = "";
     document.getElementById("changeLogIntervalMonths").value = "3";
-    document.getElementById("changeLogNextDue").value = "";
+    document.getElementById("changeLogNextDueDate").value = "";
 
     document.getElementById("changeLogDetailTitle").textContent = isEditing
         ? "EDIT CHANGE LOG"
@@ -1646,6 +1647,7 @@ async function saveFridgeItem(item, isUpdate = false) {
         if (error) throw error;
 
         await loadFridgeStock();
+        renderFridgeStock();
         touchMetadata("fridge_stock");
     } catch (error) {
         console.error("Save fridge_stock failed:", error);
@@ -1677,6 +1679,7 @@ async function deleteFridgeItem(id) {
         if (error) throw error;
 
         await loadFridgeStock();
+        renderFridgeStock();
         touchMetadata("fridge_stock");
     } catch (err) {
         console.error("Delete fridge_stock failed:", err);
@@ -1718,6 +1721,7 @@ async function saveChore(chore, isUpdate = false) {
         if (error) throw error;
 
         await loadChores();
+        renderChores();
         touchMetadata("chores");
     } catch (error) {
         console.error("Save chore failed:", error);
@@ -1749,6 +1753,7 @@ async function deleteChore(id) {
         if (error) throw error;
 
         await loadChores();
+        renderChores();
         touchMetadata("chores");
     } catch (err) {
         console.error("Delete chore failed:", err);
@@ -1790,6 +1795,7 @@ async function saveChangeLog(cl, isUpdate = false) {
         if (error) throw error;
 
         await loadChangeLog();
+        renderChangeLog();
         touchMetadata("change_log");
     } catch (error) {
         console.error("Save change_log failed:", error);
@@ -1821,6 +1827,7 @@ async function deleteChangeLog(id) {
         if (error) throw error;
 
         await loadChangeLog();
+        renderChangeLog();
         touchMetadata("change_log");
     } catch (err) {
         console.error("Delete change_log failed:", err);
@@ -1862,6 +1869,7 @@ async function saveBill(bill, isUpdate = false) {
         if (error) throw error;
 
         await loadBills();
+        renderBills();
         touchMetadata("bills");
     } catch (error) {
         console.error("Save bill failed:", error);
@@ -1893,6 +1901,7 @@ async function deleteBill(id) {
         if (error) throw error;
 
         await loadBills();
+        renderBills();
         touchMetadata("bills");
     } catch (err) {
         console.error("Delete bill failed:", err);
@@ -1924,6 +1933,7 @@ async function savePlant(plant) {
 
         await loadPlants();
         await loadPlantHistory();
+        renderPlants();
         touchMetadata("plants");
     } catch (err) {
         console.error("Save plant failed:", err);
@@ -1959,6 +1969,7 @@ async function updatePlant(plantId, updates) {
 
         await loadPlants();
         await loadPlantHistory();
+        renderPlants();
         touchMetadata("plants");
     } catch (err) {
         console.error("Update plant failed:", err);
@@ -1996,6 +2007,7 @@ async function deletePlant(plantId) {
 
         await loadPlants();
         await loadPlantHistory();
+        renderPlants();
         touchMetadata("plants");
     } catch (err) {
         console.error("Delete plant failed:", err);
@@ -2073,6 +2085,7 @@ async function saveNote(content) {
         if (error) throw error;
 
         await loadNotes();
+        renderNotes();
         touchMetadata("notes");
         document.getElementById("addNoteContent").value = "";
     } catch (err) {
