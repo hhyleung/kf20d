@@ -3,6 +3,7 @@ const SUPABASE_URL = "https://ilfrtrfohdhoquemptmj.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_s8LcKiFr_XOf_fg9O2ubBQ_8mElMJ6L";
 let sbClient = null;
 let isAuthenticated = false;
+let realtimeSetupDone = false;
 let subscriptions = [];
 
 // LISTS
@@ -77,7 +78,8 @@ function subscribeToTable(tableName, renderFunc) {
     ensureSupabaseReady()
         .then((sb) => {
             if (!sb) return;
-            const channel = sb.channel(tableName);
+            const channelName = `${tableName}_${Date.now()}`;
+            const channel = sb.channel(channelName);
             channel
                 .on(
                     "postgres_changes",
@@ -189,6 +191,7 @@ function showLogin() {
     document.getElementById("loginContainer").style.display = "flex";
     document.querySelector(".dashboard").style.display = "none";
     cleanupSubscriptions();
+    realtimeSetupDone = false;
 }
 
 function showDashboard() {
@@ -205,7 +208,11 @@ function showDashboard() {
     renderNotes();
 
     setupPanelClicks();
-    setTimeout(setupRealtime, 500);
+
+    if (!realtimeSetupDone) {
+        realtimeSetupDone = true;
+        setTimeout(setupRealtime, 500);
+    }
 }
 
 // DATA LOADERS
@@ -216,7 +223,9 @@ async function loadFridgeStock() {
             console.error("Supabase not ready for loadFridgeStock");
             return;
         }
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadFridgeStock");
             fridgeStock = [];
@@ -246,7 +255,9 @@ async function loadChores() {
             console.error("Supabase not ready for loadChores");
             return;
         }
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadChores");
             chores = [];
@@ -275,7 +286,9 @@ async function loadChangeLog() {
             console.error("Supabase not ready for loadChangeLog");
             return;
         }
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadChangeLog");
             changeLog = [];
@@ -304,7 +317,9 @@ async function loadBills() {
             console.error("Supabase not ready for loadBills");
             return;
         }
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadBills");
             bills = [];
@@ -333,7 +348,9 @@ async function loadPlants() {
             console.error("Supabase not ready for loadPlants");
             return;
         }
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadPlants");
             plants = [];
@@ -384,7 +401,9 @@ async function loadNotes() {
             console.error("Supabase not ready for loadNotes");
             return;
         }
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadNotes");
             notes = [];
@@ -1602,7 +1621,9 @@ async function saveFridgeItem(item, isUpdate = false) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1618,6 +1639,7 @@ async function saveFridgeItem(item, isUpdate = false) {
                 .eq("id", item.id)
                 .eq("user_id", user.id));
         } else {
+            delete data.id;
             ({ error } = await sb.from("fridge_stock").insert(data));
         }
 
@@ -1641,7 +1663,9 @@ async function deleteFridgeItem(id) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1669,7 +1693,9 @@ async function saveChore(chore, isUpdate = false) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1685,6 +1711,7 @@ async function saveChore(chore, isUpdate = false) {
                 .eq("id", chore.id)
                 .eq("user_id", user.id));
         } else {
+            delete data.id;
             ({ error } = await sb.from("chores").insert(data));
         }
 
@@ -1708,7 +1735,9 @@ async function deleteChore(id) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1736,7 +1765,9 @@ async function saveChangeLog(cl, isUpdate = false) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1752,6 +1783,7 @@ async function saveChangeLog(cl, isUpdate = false) {
                 .eq("id", cl.id)
                 .eq("user_id", user.id));
         } else {
+            delete data.id;
             ({ error } = await sb.from("change_log").insert(data));
         }
 
@@ -1775,7 +1807,9 @@ async function deleteChangeLog(id) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1803,7 +1837,9 @@ async function saveBill(bill, isUpdate = false) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1819,6 +1855,7 @@ async function saveBill(bill, isUpdate = false) {
                 .eq("id", bill.id)
                 .eq("user_id", user.id));
         } else {
+            delete data.id;
             ({ error } = await sb.from("bills").insert(data));
         }
 
@@ -1842,7 +1879,9 @@ async function deleteBill(id) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1870,7 +1909,9 @@ async function savePlant(plant) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1898,7 +1939,9 @@ async function updatePlant(plantId, updates) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1933,7 +1976,9 @@ async function deletePlant(plantId) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error: error1 } = await sb
@@ -2014,7 +2059,9 @@ async function saveNote(content) {
     }
 
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id || !content.trim()) return;
 
         const { error } = await sb.from("notes").insert({
@@ -2043,7 +2090,9 @@ async function touchMetadata(listName) {
         const sb = await ensureSupabaseReady();
         if (!sb) return;
 
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) return;
 
         await sb.from("list_metadata").upsert(
@@ -2070,7 +2119,9 @@ document.addEventListener("click", async (e) => {
         const sb = await ensureSupabaseReady();
         if (!sb) return;
 
-        const { data: { user } } = await sb.auth.getUser();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
         if (!user?.id) {
             alert("Not authenticated");
             return;
@@ -2289,95 +2340,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     setupPanelClicks();
 
-    //bindAllForms();
+    bindAllForms();
 
     setTimeout(setupRealtime, 500);
-
-    // --- Chores: add button ---
-    document
-        .querySelectorAll('.panel[data-section="chores"] .add-btn')
-        .forEach((btn) =>
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                editingChoreId = null;
-                choreNextDueManuallySet = false;
-                document.getElementById("choreEditId").value = "";
-                document.getElementById("choreTaskName").value = "";
-                document.getElementById("choreLastDoneDate").value = "";
-                document.getElementById("choreIntervalDays").value = "7";
-                document.getElementById("choreNextDueDate").value = "";
-                document.getElementById("choreDetailTitle").textContent =
-                    "ADD CHORE";
-                document.getElementById("choreDeleteBtn").style.display =
-                    "none";
-                openModal("choreDetailModal");
-            }),
-        );
-
-    ["choreLastDoneDate", "choreIntervalDays"].forEach((id) =>
-        document.getElementById(id)?.addEventListener("change", () => {
-            choreNextDueManuallySet = false;
-            refreshChoreNextDue();
-        }),
-    );
-    document
-        .getElementById("choreNextDueDate")
-        ?.addEventListener("input", () => {
-            choreNextDueManuallySet = true;
-            document.getElementById("choreNextDueDateAutoLabel").style.display =
-                "none";
-        });
-
-    // Chores form (add/edit shared)
-    document
-        .getElementById("choreForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const taskname = document
-                .getElementById("choreTaskName")
-                .value.trim();
-            const lastdone =
-                document.getElementById("choreLastDoneDate").value || null;
-            const interval =
-                parseInt(
-                    document.getElementById("choreIntervalDays").value,
-                    10,
-                ) || null;
-            const nextdue = choreNextDueManuallySet
-                ? document.getElementById("choreNextDueDate").value
-                : lastdone && interval
-                  ? calcNextDueByDays(lastdone, interval)
-                  : null;
-
-            const chore = {
-                id: editingChoreId || undefined,
-                taskname,
-                lastdone,
-                interval,
-                nextdue,
-            };
-            try {
-                await saveChore(chore, !!editingChoreId);
-                closeModal("choreDetailModal");
-                editingChoreId = null;
-                choreNextDueManuallySet = false;
-            } catch (err) {
-                alert("Save failed: " + err.message);
-            }
-        });
-
-    // Chore delete
-    document
-        .getElementById("choreDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (confirm("Delete this chore?")) {
-                try {
-                    await deleteChore(editingChoreId);
-                    closeModal("choreDetailModal");
-                    editingChoreId = null;
-                } catch (err) {
-                    alert("Delete failed: " + err.message);
-                }
-            }
-        });
 });
