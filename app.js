@@ -97,6 +97,8 @@ function subscribeToTable(tableName, renderFunc) {
 }
 
 async function setupRealtime() {
+    cleanupSubscriptions();
+
     const sb = await ensureSupabaseReady();
     if (!sb || !sb.auth.getSession()) {
         console.log("Skipping realtime - not ready");
@@ -214,7 +216,7 @@ async function loadFridgeStock() {
             console.error("Supabase not ready for loadFridgeStock");
             return;
         }
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadFridgeStock");
             fridgeStock = [];
@@ -244,7 +246,7 @@ async function loadChores() {
             console.error("Supabase not ready for loadChores");
             return;
         }
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadChores");
             chores = [];
@@ -273,7 +275,7 @@ async function loadChangeLog() {
             console.error("Supabase not ready for loadChangeLog");
             return;
         }
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadChangeLog");
             changeLog = [];
@@ -302,7 +304,7 @@ async function loadBills() {
             console.error("Supabase not ready for loadBills");
             return;
         }
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadBills");
             bills = [];
@@ -331,7 +333,7 @@ async function loadPlants() {
             console.error("Supabase not ready for loadPlants");
             return;
         }
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadPlants");
             plants = [];
@@ -382,7 +384,7 @@ async function loadNotes() {
             console.error("Supabase not ready for loadNotes");
             return;
         }
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) {
             console.error("No user for loadNotes");
             notes = [];
@@ -1600,7 +1602,7 @@ async function saveFridgeItem(item, isUpdate = false) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1639,7 +1641,7 @@ async function deleteFridgeItem(id) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1667,7 +1669,7 @@ async function saveChore(chore, isUpdate = false) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1706,7 +1708,7 @@ async function deleteChore(id) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1734,7 +1736,7 @@ async function saveChangeLog(cl, isUpdate = false) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1773,7 +1775,7 @@ async function deleteChangeLog(id) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1801,7 +1803,7 @@ async function saveBill(bill, isUpdate = false) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1840,7 +1842,7 @@ async function deleteBill(id) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error } = await sb
@@ -1868,7 +1870,7 @@ async function savePlant(plant) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1896,7 +1898,7 @@ async function updatePlant(plantId, updates) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const data = {
@@ -1931,7 +1933,7 @@ async function deletePlant(plantId) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) throw new Error("Not authenticated");
 
         const { error: error1 } = await sb
@@ -2012,7 +2014,7 @@ async function saveNote(content) {
     }
 
     try {
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id || !content.trim()) return;
 
         const { error } = await sb.from("notes").insert({
@@ -2041,7 +2043,7 @@ async function touchMetadata(listName) {
         const sb = await ensureSupabaseReady();
         if (!sb) return;
 
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) return;
 
         await sb.from("list_metadata").upsert(
@@ -2068,7 +2070,7 @@ document.addEventListener("click", async (e) => {
         const sb = await ensureSupabaseReady();
         if (!sb) return;
 
-        const { data: user } = await sb.auth.getUser();
+        const { data: { user } } = await sb.auth.getUser();
         if (!user?.id) {
             alert("Not authenticated");
             return;
@@ -2315,7 +2317,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ["choreLastDoneDate", "choreIntervalDays"].forEach((id) =>
         document.getElementById(id)?.addEventListener("change", () => {
             choreNextDueManuallySet = false;
-            refreshChoreNextDueIfNeeded();
+            refreshChoreNextDue();
         }),
     );
     document
