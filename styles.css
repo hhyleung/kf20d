@@ -379,6 +379,17 @@ button[type="button"]:hover {
 }
 
 /* MODALS */
+#fridgeStockDetailModal,
+#choreDetailModal,
+#changeLogDetailModal,
+#billDetailModal,
+#plantDetailModal,
+#plantAddModal,
+#plantEventModal,
+#noteAddModal {
+    z-index: 1100;
+}
+
 .modal {
     position: fixed;
     top: 0;
@@ -411,7 +422,7 @@ button[type="button"]:hover {
 }
 
 .modal-wide {
-    max-width: 75vw !important;
+    max-width: 50vw !important;
 }
 
 .modal-narrow {
@@ -601,7 +612,6 @@ form::-webkit-scrollbar-thumb {
     min-width: 0;
     margin-bottom: 1.2rem;
 }
-
 
 .fridge-group.col-half {
     grid-column: span 1;

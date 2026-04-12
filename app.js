@@ -485,8 +485,9 @@ function fridgeItemRow(item, showZero = false) {
             ? `<span class="portion-zero">${item.portions}</span>`
             : `<span class="portion-number">${item.portions}</span>`;
 
-    return `<li class="item-row${item.portions === 0 && !showZero ? " zero-portions" : ""}" 
-          data-open-detail="${item.id}">
+    const zeroClass = item.portions === 0 ? " zero-portions" : "";
+
+    return `<li class="item-row${zeroClass}" data-open-detail="${item.id}">
     <span class="item-key ${expiryClass}">${item.item_name}</span>
     <span class="item-value">
       ${dateStr}
