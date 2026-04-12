@@ -154,6 +154,7 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin-left: 0.4rem;
     transition:
         background 0.15s ease,
         transform 0.1s ease;
@@ -174,21 +175,31 @@ body {
 }
 
 [data-action="done"],
+[data-action="changed"],
 [data-action="paid"] {
     background: var(--btn-done-bg);
     color: var(--btn-done-color);
 }
 
 [data-action="done"]:hover,
+[data-action="changed"]:hover,
 [data-action="paid"]:hover {
     background: #c3e6cb;
+}
+
+[data-action="plant-log"] {
+    background: #cce7ff;
+    color: #0056b3;
+}
+
+[data-action="plant-log"]:hover {
+    background: #b3d9ff;
 }
 
 [data-action="note-delete"],
 .delete-btn {
     background: var(--btn-delete-bg) !important;
     color: var(--btn-delete-color) !important;
-    border: 1px solid #f5c6cb;
 }
 
 [data-action="note-delete"]:hover,
@@ -340,6 +351,7 @@ button[type="button"]:hover {
     font-weight: 400;
     gap: 0.6rem;
     transition: background 0.12s ease;
+    margin-left: 0.4rem;
 }
 
 .item-row:hover {
@@ -364,14 +376,23 @@ button[type="button"]:hover {
 .item-value {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.6rem;
     flex-shrink: 0;
+    margin-right: auto;
+    min-width: 4rem;
 }
 
 .item-meta {
     color: var(--text-secondary);
-    font-size: var(--item-font);
+    font-size: 1.3rem;
+    font-family: 'Courier New', monospace;
     font-weight: 400;
+    line-height: 1.3;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    margin-right: auto;
+    min-width: 4rem;
 }
 
 .item-sep {
@@ -582,13 +603,11 @@ form::-webkit-scrollbar-thumb {
 }
 
 /* OVERALL */
-.expiry-warning,
-.due-warning {
+.warning {
     color: #c8860a;
 }
 
-.expiry-danger,
-.due-danger {
+.danger {
     color: #c82333;
 }
 
@@ -808,4 +827,7 @@ form::-webkit-scrollbar-thumb {
     color: var(--text-secondary);
     font-style: italic;
     margin-left: 0.5rem;
+}
+.plant-meta-pot {
+    margin-right: 2rem;
 }

@@ -53,7 +53,7 @@
                         <h3>Change Log</h3>
                         <button class="add-btn" title="Add item">+</button>
                     </div>
-                    <div class="panel-content" id="changelogContent"></div>
+                    <div class="panel-content" id="changeLogContent"></div>
                 </div>
 
                 <!-- BILLS: COL 4 ROW 1 -->
@@ -106,7 +106,7 @@
         <div class="modal" id="fridgeStockDetailModal">
             <div class="modal-content modal-wide">
                 <header>
-                    <h2 id="fridgeStockModalTitle">Fridge Item Details</h2>
+                    <h2 id="fridgeStockDetailTitle">Fridge Item Details</h2>
                     <button
                         class="close-btn"
                         onclick="closeModal('fridgeStockDetailModal')"
@@ -159,9 +159,6 @@
                                 name="shelf_life_days"
                                 min="0"
                             />
-                            <small id="fridgeStockExpiryDateAutoLabel"
-                                >Auto</small
-                            >
                         </div>
                     </div>
                     <div>
@@ -175,7 +172,14 @@
                             />
                         </div>
                         <div>
-                            <label>Expiry Date</label>
+                            <label
+                                >Expiry Date<span
+                                    id="fridgeStockExpiryDateAutoLabel"
+                                    class="field-auto-tag"
+                                    style="display: none"
+                                    >auto</span
+                                ></label
+                            >
                             <input
                                 type="date"
                                 id="fridgeStockExpiryDate"
@@ -185,7 +189,7 @@
                     </div>
 
                     <div class="form-meta">
-                        <span id="fridgeStockLastUpdated"></span>
+                        Last updated: <span id="fridgeStockLastUpdated"></span>
                     </div>
 
                     <div class="modal-actions">
@@ -554,7 +558,7 @@
             <div class="modal-content modal-narrow">
                 <header>
                     <h2>Add Note</h2>
-                    <button onclick="closeModal('addNoteModal')">
+                    <button onclick="closeModal('noteAddModal')">
                         &times;
                     </button>
                 </header>

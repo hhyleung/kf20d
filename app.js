@@ -200,7 +200,24 @@ async function showDashboard() {
     dash.style.removeProperty("display");
     dash.style.display = "grid";
 
+    [
+        "fullListModal",
+        "fridgeStockDetailModal",
+        "choreDetailModal",
+        "changeLogDetailModal",
+        "billDetailModal",
+        "plantDetailModal",
+        "plantAddModal",
+        "plantEventModal",
+        "noteAddModal",
+    ].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = "none";
+    });
+
     setupPanelClicks();
+    bindAllForms();
+
     await loadAllData();
 
     renderFridgeStock();
@@ -463,39 +480,33 @@ function groupByCategory(items) {
 
 function getExpiryClass(expiryDate) {
     if (!expiryDate) return "";
-    const today = new Date();
+    const today = new Date(
+        new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Hong_Kong" }),
+    );
     today.setHours(0, 0, 0, 0);
     const expiry = new Date(expiryDate + "T00:00:00Z");
     const diffDays = Math.floor((expiry - today) / 86400000);
-    if (diffDays < 0) return "expiry-danger";
-    if (diffDays <= 7) return "expiry-warning";
+    if (diffDays < 0) return "danger";
+    if (diffDays <= 7) return "warning";
     return "";
 }
 
 function fridgeItemRow(item, showZero = false) {
     const expiryClass = getExpiryClass(item.expiry_date);
-    const isRaw = item.category === "Raw Food";
-    const dateVal = isRaw ? item.expiry_date : item.created_at;
-    const dateStr = dateVal
-        ? `<span class="item-seps"></span><span class="fridge-date">${formatShortDate(dateVal)}</span>`
-        : "";
-
     const portionsDisplay =
         item.portions === 0 && showZero
             ? `<span class="portion-zero">${item.portions}</span>`
             : `<span class="portion-number">${item.portions}</span>`;
-
     const zeroClass = item.portions === 0 ? " zero-portions" : "";
 
     return `<li class="item-row${zeroClass}" data-open-detail="${item.id}">
-    <span class="item-key ${expiryClass}">${item.item_name}</span>
-    <span class="item-value">
-      ${dateStr}
-      <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="1" title="Add portion">+</button>
-      ${portionsDisplay}
-      <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="-1" title="Remove portion">-</button>
-    </span>
-  </li>`;
+        <span class="item-key ${expiryClass}">${item.item_name}</span>
+        <span class="item-value">
+            <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="1">+</button>
+            ${portionsDisplay}
+            <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="-1">-</button>
+        </span>
+    </li>`;
 }
 
 function buildFridgeHTML(showZero) {
@@ -544,12 +555,14 @@ function renderFridgeStock() {
 // CHORES
 function getDueClass(nextDueDate) {
     if (!nextDueDate) return "";
-    const today = new Date();
+    const today = new Date(
+        new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Hong_Kong" }),
+    );
     today.setHours(0, 0, 0, 0);
     const due = new Date(nextDueDate + "T00:00:00Z");
     const diffDays = Math.floor((due - today) / 86400000);
-    if (diffDays < 0) return "due-danger";
-    if (diffDays <= 3) return "due-warning";
+    if (diffDays < 0) return "danger";
+    if (diffDays <= 3) return "warning";
     return "";
 }
 
@@ -560,22 +573,13 @@ function buildChoresHTML() {
         const lastDoneText = chore.last_done_date
             ? formatShortDate(chore.last_done_date)
             : "Never";
-        const nextDueText = chore.next_due_date
-            ? formatShortDate(chore.next_due_date)
-            : "";
-        const intervalText = chore.interval_days
-            ? `${chore.interval_days}d`
-            : "";
-
         html += `<li class="item-row" data-open-chore="${chore.id}">
-      <span class="item-key ${dueClass}">${chore.task_name}</span>
-      <span class="item-value">
-        <span class="item-meta">
-          ${lastDoneText} → ${nextDueText} ${intervalText}
-        </span>
-        <button class="action-btn" data-action="done" data-id="${chore.id}" title="Mark done">✓</button>
-      </span>
-    </li>`;
+            <span class="item-key ${dueClass}">${chore.task_name}</span>
+            <span class="item-value">
+                <span class="item-meta">${lastDoneText}</span>
+                <button class="action-btn" data-action="done" data-id="${chore.id}">✓</button>
+            </span>
+        </li>`;
     });
     html += "</ul>";
     return html;
@@ -597,29 +601,20 @@ function buildChangeLogHTML() {
         const lastChangedText = cl.last_changed_date
             ? formatShortDate(cl.last_changed_date)
             : "Never";
-        const nextDueText = cl.next_change_due
-            ? formatShortDate(cl.next_change_due)
-            : "";
-        const intervalText = cl.interval_months
-            ? `${cl.interval_months}mo`
-            : "";
-
         html += `<li class="item-row" data-open-changelog="${cl.id}">
-      <span class="item-key ${dueClass}">${cl.item_name}</span>
-      <span class="item-value">
-        <span class="item-meta">
-          ${lastChangedText} → ${nextDueText} ${intervalText}
-        </span>
-        <button class="action-btn" data-action="changed" data-id="${cl.id}" title="Mark changed">✓</button>
-      </span>
-    </li>`;
+            <span class="item-key ${dueClass}">${cl.item_name}</span>
+            <span class="item-value">
+                <span class="item-meta">${lastChangedText}</span>
+                <button class="action-btn" data-action="changed" data-id="${cl.id}">✓</button>
+            </span>
+        </li>`;
     });
     html += "</ul>";
     return html;
 }
 
 function renderChangeLog() {
-    document.getElementById("changelogContent").innerHTML =
+    document.getElementById("changeLogContent").innerHTML =
         buildChangeLogHTML();
     if (currentFullList === "change_log") {
         document.getElementById("fullListContent").innerHTML =
@@ -635,19 +630,13 @@ function buildBillsHTML() {
         const nextDueText = bill.next_bill_date
             ? formatShortDate(bill.next_bill_date)
             : "";
-        const intervalText = bill.interval_months
-            ? `${bill.interval_months}mo`
-            : "";
-
         html += `<li class="item-row" data-open-bill="${bill.id}">
-      <span class="item-key ${dueClass}">${bill.bill_name}</span> 
-      <span class="item-value">
-        <span class="item-meta">
-          ${nextDueText} ${intervalText}
-        </span>
-        <button class="action-btn" data-action="paid" data-id="${bill.id}" title="Mark paid">✓</button>
-      </span>
-    </li>`;
+            <span class="item-key ${dueClass}">${bill.bill_name}</span>
+            <span class="item-value">
+                <span class="item-meta">${nextDueText}</span>
+                <button class="action-btn" data-action="paid" data-id="${bill.id}">✓</button>
+            </span>
+        </li>`;
     });
     html += "</ul>";
     return html;
@@ -663,24 +652,23 @@ function renderBills() {
 // PLANTS
 function buildPlantsHTML(showArchived = false) {
     const visible = showArchived ? plants : plants.filter((p) => !p.archived);
-
     if (!visible.length) {
         return '<p style="color: var(--text-secondary); font-style: italic; font-size: var(--item-font); padding: 0.5rem 0;">No plants</p>';
     }
-
     let html = '<ul class="item-list">';
     visible.forEach((p) => {
+        const lastEvent = p.last_watered_date || p.last_fertilised_date;
+        const lastEventText = lastEvent ? formatShortDate(lastEvent) : "";
         html += `<li class="item-row" data-open-plant="${p.id}">
-      <span class="item-key">
-        ${p.plant_name} ${p.archived ? '<span class="plant-archived-tag">archived</span>' : ""}
-      </span>
-      <span class="item-value">
-        <span class="item-meta">
-          ${p.pot_size ? `${p.pot_size}cm` : ""}
-        </span>
-        <button class="action-btn" data-action="plant-log" data-id="${p.id}" title="Log event">📝</button>
-      </span>
-    </li>`;
+            <span class="item-key">${p.plant_name}${p.archived ? ' <span class="plant-archived-tag">archived</span>' : ""}</span>
+            <span class="item-value">
+                <span class="item-meta plant-meta">
+                    ${p.pot_size ? `<span class="plant-meta-pot">${p.pot_size} cm</span>` : ""}
+                    ${lastEventText}
+                </span>
+                <button class="action-btn" data-action="plant-log" data-id="${p.id}">+</button>
+            </span>
+        </li>`;
     });
     html += "</ul>";
     return html;
@@ -699,11 +687,12 @@ function buildNotesHTML() {
     let html = '<ul class="item-list">';
     notes.forEach((note) => {
         html += `<li class="item-row">
-      <span class="item-key">${note.content}</span>
-      <span class="item-value">
-        <button class="action-btn" data-action="note-delete" data-id="${note.id}" title="Delete note">×</button>
-      </span>
-    </li>`;
+            <span class="item-key">${note.content}</span>
+            <span class="item-value">
+                <span class="item-meta">&nbsp;</span>
+                <button class="action-btn" data-action="note-delete" data-id="${note.id}" title="Delete note">&times;</button>
+            </span>
+        </li>`;
     });
     html += "</ul>";
     return html;
@@ -763,7 +752,7 @@ function openFridgeStockDetail(itemId = null) {
         .slice(0, 10);
     document.getElementById("fridgeStockExpiryDate").value = "";
 
-    document.getElementById("fridgeStockModalTitle").textContent = isEditing
+    document.getElementById("fridgeStockDetailTitle").textContent = isEditing
         ? "EDIT FRIDGE ITEM"
         : "ADD FRIDGE ITEM";
 
@@ -1075,7 +1064,7 @@ function openPlantDetail(plantId) {
         <td>
           <button class="action-btn" data-action="plant-history-delete" 
                   data-id="${h.id}" data-plantid="${plantId}"
-                  style="font-size: 0.9rem; width: 32px; height: 32px;">×</button>
+                  style="font-size: 0.9rem; width: 32px; height: 32px;">&times;</button>
         </td>
       </tr>
     `,
@@ -1191,11 +1180,18 @@ function refreshListLastUpdated() {
 // DATE HANDLERS
 function formatShortDate(value) {
     if (!value) return "";
-    return new Date(value).toLocaleDateString("en-GB", {
+    const date = new Date(value);
+    const day = date.toLocaleDateString("en-GB", {
         day: "2-digit",
-        month: "short",
-        timeZone: "UTC",
+        timeZone: "Asia/Hong_Kong",
     });
+    const month = date
+        .toLocaleDateString("en-GB", {
+            month: "short",
+            timeZone: "Asia/Hong_Kong",
+        })
+        .toUpperCase();
+    return `${day} ${month}`;
 }
 
 function formatDateInput(value) {
@@ -1229,20 +1225,21 @@ function addMonths(dateStr, months) {
 function calcFridgeStockExpiry() {
     if (fridgeStockExpiryManuallySet) return;
 
-    const createdAtEl = document.getElementById("fridgeStockCreatedAt");
-    const shelfLifeEl = document.getElementById("fridgeStockShelfLife");
+    const createdAt = document.getElementById("fridgeStockCreatedAt")?.value;
+    const shelfLifeDays = parseInt(
+        document.getElementById("fridgeStockShelfLife")?.value || "0",
+        10,
+    );
     const expiryEl = document.getElementById("fridgeStockExpiryDate");
     const autoLabelEl = document.getElementById(
         "fridgeStockExpiryDateAutoLabel",
     );
 
-    const createdAt = createdAtEl?.value;
-    const shelfLifeDays = parseInt(shelfLifeEl?.value || "0", 10);
-
     if (createdAt && shelfLifeDays > 0) {
         expiryEl.value = addDays(createdAt, shelfLifeDays);
         if (autoLabelEl) autoLabelEl.style.display = "inline-block";
     } else {
+        if (expiryEl && !fridgeStockExpiryManuallySet) expiryEl.value = "";
         if (autoLabelEl) autoLabelEl.style.display = "none";
     }
 }
@@ -1263,6 +1260,7 @@ function formatMetaTimestamp(iso) {
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Hong_Kong",
     })}`;
 }
 
@@ -2280,7 +2278,7 @@ document.addEventListener("click", async (e) => {
 
     const detailRow = e.target.closest("[data-open-detail]");
     if (detailRow) {
-        openFridgeStockModal(detailRow.dataset.openDetail);
+        openFridgeStockDetail(detailRow.dataset.openDetail);
         return;
     }
 
@@ -2325,32 +2323,4 @@ document.addEventListener("DOMContentLoaded", async () => {
             await login(email, password);
         });
     }
-
-    [
-        "fullListModal",
-        "fridgeStockDetailModal",
-        "choreDetailModal",
-        "changeLogDetailModal",
-        "billDetailModal",
-        "plantDetailModal",
-        "plantAddModal",
-        "plantEventModal",
-        "noteAddModal",
-    ].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = "none";
-    });
-
-    renderFridgeStock();
-    renderChores();
-    renderChangeLog();
-    renderBills();
-    renderPlants();
-    renderNotes();
-
-    setupPanelClicks();
-
-    bindAllForms();
-
-    setTimeout(setupRealtime, 500);
 });
