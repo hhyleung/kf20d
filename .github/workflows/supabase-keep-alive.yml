@@ -1,0 +1,57 @@
+name: Supabase Keep-Alive Ping (INSERT + GET Fallback)
+
+on:
+  schedule:
+    - cron: '0 12 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Keep Supabase Active
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "Keeping Supabase active"
+
+          echo "Attempting to INSERT..."
+          INSERT_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "${SUPABASE_URL}/rest/v1/keep_alive?select=id" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d '{"pinged_at": "now()"}')
+
+          INSERT_CODE=$(echo "$INSERT_RESPONSE" | tail -n1)
+          INSERT_BODY=$(echo "$INSERT_RESPONSE" | sed '$d')
+
+          echo "  INSERT status: $INSERT_CODE | Response: $INSERT_BODY"
+
+          if [ "$INSERT_CODE" -ge 200 ] && [ "$INSERT_CODE" -lt 300 ]; then
+            echo "INSERT sucessful!"
+            exit 0
+          fi
+
+          echo "INSERT failed, attempting GET ping..."
+          GET_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET "${SUPABASE_URL}/rest/v1/notes?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+
+          GET_CODE=$(echo "$GET_RESPONSE" | tail -n1)
+          GET_BODY=$(echo "$GET_RESPONSE" | sed '$d')
+
+          echo "  GET status: $GET_CODE | Response: $GET_BODY"
+
+          if [ "$GET_CODE" -ge 200 ] && [ "$GET_CODE" -lt 300 ]; then
+            echo "GET ping sucessful!"
+            exit 0
+          fi
+
+          echo "INSERT and GET ping both failed..."
+          echo "INSERT: $INSERT_CODE | GET: $GET_CODE"
+          exit 1
