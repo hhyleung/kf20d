@@ -510,7 +510,7 @@
                     </div>
                     <div id="fertiliserSelectWrap" style="display: none">
                         <label class="form-label">Fertiliser Used</label>
-                        <select name="fertiliser">
+                        <select name="fertiliser" id="fertiliserSelect">
                             <option value="20-20-20">20-20-20</option>
                             <option value="30-10-10">30-10-10</option>
                             <option value="10-30-20">10-30-20</option>
@@ -525,7 +525,7 @@
                         min="1"
                     />
                     <label class="form-label">Notes</label>
-                    <textarea name="notes" rows="3"></textarea>
+                    <textarea name="notes" id="plantEventNotes" rows="3"></textarea>
                     <div style="display: flex; gap: 1rem">
                         <button type="submit" style="flex: 1">Save</button>
                         <button

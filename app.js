@@ -74,10 +74,10 @@ async function ensureSupabaseReady() {
 }
 
 function subscribeToTable(tableName, renderFunc) {
-    const sb = ensureSupabaseReady()
+    ensureSupabaseReady()
         .then((sb) => {
             if (!sb) return;
-            const channel = sb.channel(`realtime:${tableName}`);
+            const channel = sb.channel(tableName);
             channel
                 .on(
                     "postgres_changes",
@@ -89,9 +89,8 @@ function subscribeToTable(tableName, renderFunc) {
                     renderFunc,
                 )
                 .subscribe((status) => {
-                    console.log(`Realtime ${tableName} subscribed: ${status}`);
-                })
-                .catch(console.error);
+                    console.log(`Realtime ${tableName}: ${status}`);
+                });
             subscriptions.push(channel);
         })
         .catch(console.error);
@@ -808,13 +807,13 @@ function openChoreDetail(choreId = null) {
         );
         document.getElementById("choreIntervalDays").value =
             chore.interval_days || "7";
-        document.getElementById("choreNextDue").value = formatDateInput(
+        document.getElementById("choreNextDueDate").value = formatDateInput(
             chore.next_due_date,
         );
 
         const expectedNextDue =
             chore.last_done_date && chore.interval_days
-                ? calcChoreNextDue(chore.last_done_date, chore.interval_days)
+                ? calcNextDueByDays(chore.last_done_date, chore.interval_days)
                 : null;
         choreNextDueManuallySet = !!(
             chore.next_due_date && chore.next_due_date !== expectedNextDue
@@ -885,7 +884,7 @@ function openChangeLogDetail(clId = null) {
 
         const expectedNextDue =
             cl.last_changed_date && cl.interval_months
-                ? calcChangeLogNextDue(cl.last_changed_date, cl.interval_months)
+                ? calcNextDueByMonths(cl.last_changed_date, cl.interval_months)
                 : null;
         changelogNextDueManuallySet = !!(
             cl.next_change_due && cl.next_change_due !== expectedNextDue
@@ -958,7 +957,7 @@ function openBillDetail(billId = null) {
 
         const expectedNextDate =
             bill.last_bill_date && bill.interval_months
-                ? calcBillNextDate(bill.last_bill_date, bill.interval_months)
+                ? calcNextDueByMonths(bill.last_bill_date, bill.interval_months)
                 : null;
         billNextDateManuallySet = !!(
             bill.next_bill_date && bill.next_bill_date !== expectedNextDate
@@ -2301,7 +2300,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 editingChoreId = null;
                 choreNextDueManuallySet = false;
                 document.getElementById("choreEditId").value = "";
-                document.getElementById("choreTaskname").value = "";
+                document.getElementById("choreTaskName").value = "";
                 document.getElementById("choreLastDoneDate").value = "";
                 document.getElementById("choreIntervalDays").value = "7";
                 document.getElementById("choreNextDueDate").value = "";
@@ -2333,7 +2332,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
             const taskname = document
-                .getElementById("choreTaskname")
+                .getElementById("choreTaskName")
                 .value.trim();
             const lastdone =
                 document.getElementById("choreLastDoneDate").value || null;
