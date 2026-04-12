@@ -511,7 +511,8 @@ function buildFridgeHTML(showZero) {
 }
 
 function renderFridgeStock() {
-    document.getElementById("fridgeStockContent").innerHTML = buildFridgeHTML(false);
+    document.getElementById("fridgeStockContent").innerHTML =
+        buildFridgeHTML(false);
     if (currentFullList === "fridge_stock") {
         document.getElementById("fullListContent").innerHTML =
             buildFridgeHTML(true);
@@ -725,6 +726,7 @@ function closeModal(id) {
     }
 }
 
+// FRIDGE STOCK
 function openFridgeStockDetail(itemId = null) {
     const isEditing = !!itemId;
     editingFridgeStockId = itemId;
@@ -781,6 +783,7 @@ function openFridgeStockDetail(itemId = null) {
     openModal("fridgeStockDetailModal");
 }
 
+// CHORES
 function openChoreDetail(choreId = null) {
     const isEditing = !!choreId;
     editingChoreId = choreId;
@@ -851,6 +854,7 @@ function refreshChoreNextDue() {
     }
 }
 
+// CHANGE LOG
 function openChangeLogDetail(clId = null) {
     const isEditing = !!clId;
     editingChangeLogId = clId;
@@ -923,6 +927,7 @@ function refreshChangeLogNextDue() {
     }
 }
 
+// BILLS
 function openBillDetail(billId = null) {
     const isEditing = !!billId;
     editingBillId = billId;
@@ -993,6 +998,7 @@ function refreshBillNextDate() {
     }
 }
 
+// PLANTS
 function openPlantAddModal() {
     document.getElementById("addPlantName").value = "";
     document.getElementById("addPlantStartingDate").value = new Date()
@@ -1082,6 +1088,7 @@ function openPlantEventModal(plantId) {
     openModal("plantEventModal");
 }
 
+// FULL LIST
 function setupPanelClicks() {
     const listMetaKeyMap = {
         fridge_stock: "fridge_stock",
@@ -1106,6 +1113,33 @@ function setupPanelClicks() {
                     buildFullListHTML(section);
                 refreshListLastUpdated();
                 openModal("fullListModal");
+            }
+        });
+    });
+
+    document.querySelectorAll(".panel .add-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const section = btn.closest(".panel").dataset.section;
+            switch (section) {
+                case "fridge_stock":
+                    openFridgeStockDetail();
+                    break;
+                case "chores":
+                    openChoreDetail();
+                    break;
+                case "change_log":
+                    openChangeLogDetail();
+                    break;
+                case "bills":
+                    openBillDetail();
+                    break;
+                case "plants":
+                    openPlantAddModal();
+                    break;
+                case "notes":
+                    openModal("noteAddModal");
+                    break;
             }
         });
     });
@@ -1186,10 +1220,8 @@ function calcFridgeStockExpiry() {
     if (createdAt && shelfLifeDays > 0) {
         expiryEl.value = addDays(createdAt, shelfLifeDays);
         if (autoLabelEl) autoLabelEl.style.display = "inline-block";
-        if (hintEl) hintEl.style.display = "block";
     } else {
         if (autoLabelEl) autoLabelEl.style.display = "none";
-        if (hintEl) hintEl.style.display = "none";
     }
 }
 
@@ -1212,7 +1244,355 @@ function formatMetaTimestamp(iso) {
     })}`;
 }
 
+function bindAutoCalculations() {
+    ["fridgeStockCreatedAt", "fridgeStockShelfLife"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                fridgeStockExpiryManuallySet = false;
+                calcFridgeStockExpiry();
+            });
+        }
+    });
+    const fridgeExpiryEl = document.getElementById("fridgeStockExpiryDate");
+    if (fridgeExpiryEl) {
+        fridgeExpiryEl.addEventListener("input", () => {
+            fridgeStockExpiryManuallySet = true;
+            const autoLabel = document.getElementById(
+                "fridgeStockExpiryDateAutoLabel",
+            );
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    ["choreLastDoneDate", "choreIntervalDays"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                choreNextDueManuallySet = false;
+                refreshChoreNextDue();
+            });
+        }
+    });
+    const choreNextDueEl = document.getElementById("choreNextDueDate");
+    if (choreNextDueEl) {
+        choreNextDueEl.addEventListener("input", () => {
+            choreNextDueManuallySet = true;
+            const autoLabel = document.getElementById(
+                "choreNextDueDateAutoLabel",
+            );
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    ["changeLogLastChanged", "changeLogIntervalMonths"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                changeLogNextDueManuallySet = false;
+                refreshChangeLogNextDue();
+            });
+        }
+    });
+    const changelogNextDueEl = document.getElementById("changeLogNextDueDate");
+    if (changelogNextDueEl) {
+        changelogNextDueEl.addEventListener("input", () => {
+            changelogNextDueManuallySet = true;
+            const autoLabel = document.getElementById(
+                "changeLogNextDueDateAutoLabel",
+            );
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    ["billLastBillDate", "billIntervalMonths"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                billNextDateManuallySet = false;
+                refreshBillNextDate();
+            });
+        }
+    });
+    const billNextDateEl = document.getElementById("billNextBillDate");
+    if (billNextDateEl) {
+        billNextDateEl.addEventListener("input", () => {
+            billNextDateManuallySet = true;
+            const autoLabel = document.getElementById(
+                "billNextBillDateAutoLabel",
+            );
+            if (autoLabel) autoLabel.style.display = "none";
+        });
+    }
+
+    const fertilisedCheck = document.getElementById("fertilisedCheck");
+    if (fertilisedCheck) {
+        fertilisedCheck.addEventListener("change", (e) => {
+            document.getElementById("fertiliserSelectWrap").style.display = e
+                .target.checked
+                ? "block"
+                : "none";
+        });
+    }
+}
+
+// FORM HANDLERS
+// FRIDGE STOCK
+async function fridgeFormHandler(e) {
+    e.preventDefault();
+    const shelfLifeDays =
+        parseInt(document.getElementById("fridgeStockShelfLife").value, 10) ||
+        null;
+    const createdAt = document.getElementById("fridgeStockCreatedAt").value;
+    const expiryDate = fridgeStockExpiryManuallySet
+        ? document.getElementById("fridgeStockExpiryDate").value
+        : createdAt && shelfLifeDays
+          ? addDays(createdAt, shelfLifeDays)
+          : null;
+
+    const item = {
+        id: editingFridgeStockId || undefined,
+        item_name: document.getElementById("fridgeStockItemName").value.trim(),
+        category: document.getElementById("fridgeStockCategory").value,
+        portions:
+            parseInt(
+                document.getElementById("fridgeStockPortions").value,
+                10,
+            ) || 0,
+        shelf_life_days: shelfLifeDays,
+        created_at: createdAt,
+        expiry_date: expiryDate,
+        last_updated: new Date().toISOString().slice(0, 10),
+    };
+
+    await saveFridgeItem(item, !!editingFridgeStockId);
+    closeModal("fridgeStockDetailModal");
+    editingFridgeStockId = null;
+    fridgeStockExpiryManuallySet = false;
+}
+
+async function fridgeDeleteHandler() {
+    await deleteFridgeItem(editingFridgeStockId);
+    closeModal("fridgeStockDetailModal");
+    editingFridgeStockId = null;
+}
+
+// CHORES
+async function choreFormHandler(e) {
+    e.preventDefault();
+    const taskName = document.getElementById("choreTaskName").value.trim();
+    const lastDoneDate =
+        document.getElementById("choreLastDoneDate").value || null;
+    const intervalDays =
+        parseInt(document.getElementById("choreIntervalDays").value, 10) ||
+        null;
+    const nextDueDate = choreNextDueManuallySet
+        ? document.getElementById("choreNextDueDate").value
+        : lastDoneDate && intervalDays
+          ? calcNextDueByDays(lastDoneDate, intervalDays)
+          : null;
+
+    const chore = {
+        id: editingChoreId || undefined,
+        task_name: taskName,
+        last_done_date: lastDoneDate,
+        interval_days: intervalDays,
+        next_due_date: nextDueDate,
+    };
+
+    await saveChore(chore, !!editingChoreId);
+    closeModal("choreDetailModal");
+    editingChoreId = null;
+    choreNextDueManuallySet = false;
+}
+
+async function choreDeleteHandler() {
+    await deleteChore(editingChoreId);
+    closeModal("choreDetailModal");
+    editingChoreId = null;
+}
+
+// CHANGE LOG
+async function changelogFormHandler(e) {
+    e.preventDefault();
+    const itemName = document.getElementById("changeLogItemName").value.trim();
+    const lastChangedDate =
+        document.getElementById("changeLogLastChanged").value || null;
+    const intervalMonths =
+        parseInt(
+            document.getElementById("changeLogIntervalMonths").value,
+            10,
+        ) || null;
+    const nextChangeDue = changeLogNextDueManuallySet
+        ? document.getElementById("changeLogNextDueDate").value
+        : lastChangedDate && intervalMonths
+          ? calcNextDueByMonths(lastChangedDate, intervalMonths)
+          : null;
+
+    const cl = {
+        id: editingChangeLogId || undefined,
+        item_name: itemName,
+        last_changed_date: lastChangedDate,
+        interval_months: intervalMonths,
+        next_change_due: nextChangeDue,
+    };
+
+    await saveChangeLog(cl, !!editingChangeLogId);
+    closeModal("changeLogDetailModal");
+    editingChangeLogId = null;
+    changeLogNextDueManuallySet = false;
+}
+
+async function changelogDeleteHandler() {
+    await deleteChangeLog(editingChangeLogId);
+    closeModal("changeLogDetailModal");
+    editingChangeLogId = null;
+}
+
+// BILLS
+async function billFormHandler(e) {
+    e.preventDefault();
+    const billName = document.getElementById("billBillName").value.trim();
+    const lastBillDate =
+        document.getElementById("billLastBillDate").value || null;
+    const intervalMonths =
+        parseInt(document.getElementById("billIntervalMonths").value, 10) ||
+        null;
+    const nextBillDate = billNextDateManuallySet
+        ? document.getElementById("billNextBillDate").value
+        : lastBillDate && intervalMonths
+          ? calcNextDueByMonths(lastBillDate, intervalMonths)
+          : null;
+
+    const bill = {
+        id: editingBillId || undefined,
+        bill_name: billName,
+        last_bill_date: lastBillDate,
+        interval_months: intervalMonths,
+        next_bill_date: nextBillDate,
+    };
+
+    await saveBill(bill, !!editingBillId);
+    closeModal("billDetailModal");
+    editingBillId = null;
+    billNextDateManuallySet = false;
+}
+
+async function billDeleteHandler() {
+    await deleteBill(editingBillId);
+    closeModal("billDetailModal");
+    editingBillId = null;
+}
+
+// PLANTS
+async function addPlantFormHandler(e) {
+    e.preventDefault();
+    const name = document.getElementById("addPlantName").value.trim();
+    const startingDate = document.getElementById("addPlantStartingDate").value;
+    if (!name) return;
+
+    await savePlant({
+        plant_name: name,
+        starting_date: startingDate,
+        archived: false,
+    });
+    closeModal("plantAddModal");
+}
+
+async function plantEventFormHandler(e) {
+    e.preventDefault();
+    const plantId = document.getElementById("plantEventId").value;
+    const watered = document.getElementById("wateredCheck").checked;
+    const fertilised = document.getElementById("fertilisedCheck").checked;
+    const fertiliserUsed = fertilised
+        ? document.getElementById("fertiliserSelect")?.value || null
+        : null;
+    const potSizeVal = parseInt(
+        document.getElementById("plantEventPotSize").value,
+        10,
+    );
+    const notesVal = document.getElementById("plantEventNotes").value.trim();
+    const resolvedPotSize =
+        !isNaN(potSizeVal) && potSizeVal > 0 ? potSizeVal : null;
+
+    await savePlantHistory({
+        plant_id: plantId,
+        event_date: new Date().toISOString(),
+        pot_size: resolvedPotSize,
+        watered,
+        fertilised,
+        fertiliser_used: fertiliserUsed,
+        notes: notesVal || null,
+    });
+
+    const updates = {};
+    if (watered)
+        updates.last_watered_date = new Date().toISOString().slice(0, 10);
+    if (fertilised) {
+        updates.last_fertilised_date = new Date().toISOString().slice(0, 10);
+        updates.last_fertiliser_used = fertiliserUsed;
+    }
+    if (resolvedPotSize) updates.pot_size = resolvedPotSize;
+    if (Object.keys(updates).length > 0) await updatePlant(plantId, updates);
+
+    closeModal("plantEventModal");
+}
+
+// NOTES
+async function addNoteFormHandler(e) {
+    e.preventDefault();
+    const content = document.getElementById("addNoteContent").value.trim();
+    if (!content) return;
+    await saveNote(content);
+    closeModal("noteAddModal");
+}
+
+// BINDER
+function bindAllForms() {
+    document
+        .getElementById("fridgeForm")
+        ?.addEventListener("submit", fridgeFormHandler);
+    document
+        .getElementById("fridgeDeleteBtn")
+        ?.addEventListener("click", fridgeDeleteHandler);
+
+    document
+        .getElementById("choreForm")
+        ?.addEventListener("submit", choreFormHandler);
+    document
+        .getElementById("choreDeleteBtn")
+        ?.addEventListener("click", choreDeleteHandler);
+
+    document
+        .getElementById("changelogForm")
+        ?.addEventListener("submit", changelogFormHandler);
+    document
+        .getElementById("changelogDeleteBtn")
+        ?.addEventListener("click", changelogDeleteHandler);
+
+    document
+        .getElementById("billForm")
+        ?.addEventListener("submit", billFormHandler);
+    document
+        .getElementById("billDeleteBtn")
+        ?.addEventListener("click", billDeleteHandler);
+
+    document
+        .getElementById("addPlantForm")
+        ?.addEventListener("submit", addPlantFormHandler);
+    document
+        .getElementById("plantEventForm")
+        ?.addEventListener("submit", plantEventFormHandler);
+
+    document
+        .getElementById("addNoteForm")
+        ?.addEventListener("submit", addNoteFormHandler);
+
+    bindAutoCalculations();
+}
+
 // BUTTON ACTIONS
+// FRIDGE STOCK
 async function saveFridgeItem(item, isUpdate = false) {
     const sb = await ensureSupabaseReady();
     if (!sb) {
@@ -1279,6 +1659,7 @@ async function deleteFridgeItem(id) {
     }
 }
 
+// CHORES
 async function saveChore(chore, isUpdate = false) {
     const sb = await ensureSupabaseReady();
     if (!sb) {
@@ -1345,6 +1726,7 @@ async function deleteChore(id) {
     }
 }
 
+// CHANGE LOG
 async function saveChangeLog(cl, isUpdate = false) {
     const sb = await ensureSupabaseReady();
     if (!sb) {
@@ -1411,6 +1793,7 @@ async function deleteChangeLog(id) {
     }
 }
 
+// BILLS
 async function saveBill(bill, isUpdate = false) {
     const sb = await ensureSupabaseReady();
     if (!sb) {
@@ -1477,6 +1860,7 @@ async function deleteBill(id) {
     }
 }
 
+// PLANTS
 async function savePlant(plant) {
     const sb = await ensureSupabaseReady();
     if (!sb) {
@@ -1620,6 +2004,7 @@ async function deletePlantHistory(id, plantId) {
     }
 }
 
+// NOTES
 async function saveNote(content) {
     const sb = await ensureSupabaseReady();
     if (!sb) {
@@ -1648,6 +2033,7 @@ async function saveNote(content) {
     }
 }
 
+// FULL LIST
 async function touchMetadata(listName) {
     const ts = new Date().toISOString();
     listMetadata[listName] = ts;
@@ -1669,137 +2055,6 @@ async function touchMetadata(listName) {
         );
     } catch (err) {
         console.error("Metadata update failed:", err);
-    }
-}
-
-function bindAllForms() {
-    document
-        .getElementById("fridgeForm")
-        ?.addEventListener("submit", fridgeFormHandler);
-    document
-        .getElementById("fridgeDeleteBtn")
-        ?.addEventListener("click", fridgeDeleteHandler);
-
-    document
-        .getElementById("choreForm")
-        ?.addEventListener("submit", choreFormHandler);
-    document
-        .getElementById("choreDeleteBtn")
-        ?.addEventListener("click", choreDeleteHandler);
-
-    document
-        .getElementById("changelogForm")
-        ?.addEventListener("submit", changelogFormHandler);
-    document
-        .getElementById("changelogDeleteBtn")
-        ?.addEventListener("click", changelogDeleteHandler);
-
-    document
-        .getElementById("billForm")
-        ?.addEventListener("submit", billFormHandler);
-    document
-        .getElementById("billDeleteBtn")
-        ?.addEventListener("click", billDeleteHandler);
-
-    document
-        .getElementById("addPlantForm")
-        ?.addEventListener("submit", addPlantFormHandler);
-    document
-        .getElementById("plantEventForm")
-        ?.addEventListener("submit", plantEventFormHandler);
-
-    document
-        .getElementById("addNoteForm")
-        ?.addEventListener("submit", addNoteFormHandler);
-
-    bindAutoCalculations();
-}
-
-function bindAutoCalculations() {
-    ["fridgeStockCreatedAt", "fridgeStockShelfLife"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                fridgeStockExpiryManuallySet = false;
-                calcFridgeStockExpiry();
-            });
-        }
-    });
-    const fridgeExpiryEl = document.getElementById("fridgeStockExpiryDate");
-    if (fridgeExpiryEl) {
-        fridgeExpiryEl.addEventListener("input", () => {
-            fridgeStockExpiryManuallySet = true;
-            const autoLabel = document.getElementById("fridgeStockExpiryDateAutoLabel");
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    ["choreLastDoneDate", "choreIntervalDays"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                choreNextDueManuallySet = false;
-                refreshChoreNextDue();
-            });
-        }
-    });
-    const choreNextDueEl = document.getElementById("choreNextDueDate");
-    if (choreNextDueEl) {
-        choreNextDueEl.addEventListener("input", () => {
-            choreNextDueManuallySet = true;
-            const autoLabel = document.getElementById("choreNextDueDateAutoLabel");
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    ["changeLogLastChanged", "changeLogIntervalMonths"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                changeLogNextDueManuallySet = false;
-                refreshChangeLogNextDue();
-            });
-        }
-    });
-    const changelogNextDueEl = document.getElementById("changeLogNextDueDate");
-    if (changelogNextDueEl) {
-        changelogNextDueEl.addEventListener("input", () => {
-            changelogNextDueManuallySet = true;
-            const autoLabel = document.getElementById(
-                "changeLogNextDueDateAutoLabel",
-            );
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    ["billLastBillDate", "billIntervalMonths"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                billNextDateManuallySet = false;
-                refreshBillNextDate();
-            });
-        }
-    });
-    const billNextDateEl = document.getElementById("billNextBillDate");
-    if (billNextDateEl) {
-        billNextDateEl.addEventListener("input", () => {
-            billNextDateManuallySet = true;
-            const autoLabel = document.getElementById(
-                "billNextBillDateAutoLabel",
-            );
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    const fertilisedCheck = document.getElementById("fertilisedCheck");
-    if (fertilisedCheck) {
-        fertilisedCheck.addEventListener("change", (e) => {
-            document.getElementById("fertiliserSelectWrap").style.display = e
-                .target.checked
-                ? "block"
-                : "none";
-        });
     }
 }
 
@@ -1825,11 +2080,11 @@ document.addEventListener("click", async (e) => {
         try {
             if (action === "fridge-portions") {
                 const delta = parseInt(btn.dataset.delta, 10);
-                const item = fridgeItems.find((item) => item.id === id);
+                const item = fridgeStock.find((item) => item.id === id);
                 if (!item) return;
 
                 const newPortions = Math.max(0, item.portions + delta);
-                fridgeItems = fridgeItems.map((it) =>
+                fridgeStock = fridgeStock.map((it) =>
                     it.id === id
                         ? { ...it, portions: newPortions, last_updated: today }
                         : it,
@@ -2018,7 +2273,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "plantDetailModal",
         "plantAddModal",
         "plantEventModal",
-        "notesModal",
+        "noteAddModal",
     ].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.style.display = "none";
@@ -2033,7 +2288,95 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     setupPanelClicks();
 
-    bindAllForms();
+    //bindAllForms();
 
     setTimeout(setupRealtime, 500);
+
+    // --- Chores: add button ---
+    document
+        .querySelectorAll('.panel[data-section="chores"] .add-btn')
+        .forEach((btn) =>
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                editingChoreId = null;
+                choreNextDueManuallySet = false;
+                document.getElementById("choreEditId").value = "";
+                document.getElementById("choreTaskname").value = "";
+                document.getElementById("choreLastDoneDate").value = "";
+                document.getElementById("choreIntervalDays").value = "7";
+                document.getElementById("choreNextDueDate").value = "";
+                document.getElementById("choreDetailTitle").textContent =
+                    "ADD CHORE";
+                document.getElementById("choreDeleteBtn").style.display =
+                    "none";
+                openModal("choreDetailModal");
+            }),
+        );
+
+    ["choreLastDoneDate", "choreIntervalDays"].forEach((id) =>
+        document.getElementById(id)?.addEventListener("change", () => {
+            choreNextDueManuallySet = false;
+            refreshChoreNextDueIfNeeded();
+        }),
+    );
+    document
+        .getElementById("choreNextDueDate")
+        ?.addEventListener("input", () => {
+            choreNextDueManuallySet = true;
+            document.getElementById("choreNextDueDateAutoLabel").style.display =
+                "none";
+        });
+
+    // Chores form (add/edit shared)
+    document
+        .getElementById("choreForm")
+        ?.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const taskname = document
+                .getElementById("choreTaskname")
+                .value.trim();
+            const lastdone =
+                document.getElementById("choreLastDoneDate").value || null;
+            const interval =
+                parseInt(
+                    document.getElementById("choreIntervalDays").value,
+                    10,
+                ) || null;
+            const nextdue = choreNextDueManuallySet
+                ? document.getElementById("choreNextDueDate").value
+                : lastdone && interval
+                  ? calcNextDueByDays(lastdone, interval)
+                  : null;
+
+            const chore = {
+                id: editingChoreId || undefined,
+                taskname,
+                lastdone,
+                interval,
+                nextdue,
+            };
+            try {
+                await saveChore(chore, !!editingChoreId);
+                closeModal("choreDetailModal");
+                editingChoreId = null;
+                choreNextDueManuallySet = false;
+            } catch (err) {
+                alert("Save failed: " + err.message);
+            }
+        });
+
+    // Chore delete
+    document
+        .getElementById("choreDeleteBtn")
+        ?.addEventListener("click", async () => {
+            if (confirm("Delete this chore?")) {
+                try {
+                    await deleteChore(editingChoreId);
+                    closeModal("choreDetailModal");
+                    editingChoreId = null;
+                } catch (err) {
+                    alert("Delete failed: " + err.message);
+                }
+            }
+        });
 });
