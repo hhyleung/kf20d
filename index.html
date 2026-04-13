@@ -92,6 +92,14 @@
                     <h2 id="listTitle">List Title</h2>
                     <span id="listLastUpdated" class="list-last-updated"></span>
                     <button
+                        id="fullListAddBtn"
+                        class="add-btn"
+                        title="Add item"
+                        style="flex-shrink: 0; margin-right: 0.6rem"
+                    >
+                        +
+                    </button>
+                    <button
                         onclick="closeModal('fullListModal')"
                         style="flex-shrink: 0; margin-top: 0.2rem"
                     >
@@ -275,7 +283,7 @@
                         &times;
                     </button>
                 </header>
-                <form id="changelogForm">
+                <form id="changeLogForm">
                     <input type="hidden" id="changeLogEditId" />
                     <label class="form-label">Item Name</label>
                     <input type="text" id="changeLogItemName" required />
@@ -386,6 +394,13 @@
                     <input type="text" id="addPlantName" required />
                     <label class="form-label">Starting Date</label>
                     <input type="date" id="addPlantStartingDate" />
+                    <label class="form-label">Pot Size (cm)</label>
+                    <input
+                        type="number"
+                        name="pot_size"
+                        id="addPlantPotSize"
+                        min="1"
+                    />
                     <div class="modal-actions">
                         <button type="submit" class="save-btn">Save</button>
                         <button
@@ -415,7 +430,12 @@
                 />
                 <div class="plant-info-grid">
                     <span class="plant-info-label">Starting Date</span>
-                    <span class="plant-info-value" id="pdStartingDate"></span>
+                    <span class="plant-info-value"
+                        ><input
+                            type="date"
+                            id="pdStartingDate"
+                            class="plant-info-input"
+                    /></span>
                     <span class="plant-info-label">Pot Size</span>
                     <span class="plant-info-value" id="pdPotSize"></span>
                     <span class="plant-info-label">Last Watered</span>
@@ -427,6 +447,15 @@
                 </div>
                 <div class="plant-detail-history">
                     <h4 class="plant-history-title">History</h4>
+                    <button
+                        type="button"
+                        data-action="plant-log"
+                        data-id=""
+                        id="pdLogEventBtn"
+                        class="action-btn"
+                    >
+                        Log Event
+                    </button>
                     <div class="plant-history-table-wrap">
                         <table class="plant-history-table">
                             <thead>
@@ -493,6 +522,8 @@
                 </header>
                 <form id="plantEventForm">
                     <input type="hidden" name="plantId" id="plantEventId" />
+                    <label class="form-label">Event Date</label>
+                    <input type="date" name="eventdate" id="plantEventDate" />
                     <div class="form-check-row">
                         <label class="form-check-label">
                             <input

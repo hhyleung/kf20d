@@ -217,7 +217,7 @@ async function showDashboard() {
     document.getElementById("loginContainer").style.display = "none";
     const dash = document.querySelector(".dashboard");
     dash.style.removeProperty("display");
-    dash.style.display = "grid";
+    dash.style.display = "flex";
 
     [
         "fullListModal",
@@ -539,11 +539,7 @@ function groupByCategory(items) {
 
 function getExpiryClass(expiryDate) {
     if (!expiryDate) return "";
-    const [todayY, todayM, todayD] = new Date()
-        .toISOString()
-        .slice(0, 10)
-        .split("-")
-        .map(Number);
+    const [todayY, todayM, todayD] = getTodayHKT().split("-").map(Number);
     const [expiryY, expiryM, expiryD] = expiryDate.split("-").map(Number);
 
     const todayNum = todayY * 10000 + todayM * 100 + todayD;
@@ -585,15 +581,24 @@ function buildFridgeHTML(showZero) {
         const isForceFull = forceFullWidth.includes(cat);
         const wide = isForceFull || (!isAlwaysHalf && catItems.length >= 3);
         const cls = wide ? "col-full" : "col-half";
+        const totalPortions = catItems.reduce(
+            (sum, i) => sum + (i.portions || 0),
+            0,
+        );
 
         if (catItems.length === 0) {
             html += `<div class="fridge-group ${cls}">
-        <div class="fridge-group-title">${cat}</div>
-      </div>`;
+                <div class="fridge-group-title">
+                    <span>${cat}</span>
+                    <span class="fridge-cat-total">${totalPortions}</span>
+                </div>`;
         } else {
             html += `<div class="fridge-group ${cls}">
-        <div class="fridge-group-title">${cat}</div>
-        <ul class="item-list ${wide ? "two-col-list" : ""}">`;
+                <div class="fridge-group-title">
+                    <span>${cat}</span>
+                    <span class="fridge-cat-total">${totalPortions}</span>
+                </div>
+                <ul class="item-list ${wide ? "two-col-list" : ""}">`;
             catItems.forEach((item) => {
                 html += fridgeItemRow(item, showZero);
             });
@@ -616,11 +621,7 @@ function renderFridgeStock() {
 // CHORES
 function getDueClass(nextDueDate) {
     if (!nextDueDate) return "";
-    const [todayY, todayM, todayD] = new Date()
-        .toISOString()
-        .slice(0, 10)
-        .split("-")
-        .map(Number);
+    const [todayY, todayM, todayD] = getTodayHKT().split("-").map(Number);
     const [dueY, dueM, dueD] = nextDueDate.split("-").map(Number);
 
     const todayNum = todayY * 10000 + todayM * 100 + todayD;
@@ -812,9 +813,7 @@ function openFridgeStockDetail(itemId = null) {
     document.getElementById("fridgeStockCategory").value = "Carbs";
     document.getElementById("fridgeStockPortions").value = "1";
     document.getElementById("fridgeStockShelfLife").value = "";
-    document.getElementById("fridgeStockCreatedAt").value = new Date()
-        .toISOString()
-        .slice(0, 10);
+    document.getElementById("fridgeStockCreatedAt").value = getTodayHKT();
     document.getElementById("fridgeStockExpiryDate").value = "";
 
     document.getElementById("fridgeStockDetailTitle").textContent = isEditing
@@ -963,18 +962,18 @@ function openChangeLogDetail(clId = null) {
             cl.last_changed_date && cl.interval_months
                 ? calcNextDueByMonths(cl.last_changed_date, cl.interval_months)
                 : null;
-        changelogNextDueManuallySet = !!(
+        changeLogNextDueManuallySet = !!(
             cl.next_change_due && cl.next_change_due !== expectedNextDue
         );
     } else {
-        changelogNextDueManuallySet = false;
+        changeLogNextDueManuallySet = false;
     }
 
     document.getElementById("changeLogDeleteBtn").style.display = isEditing
         ? "block"
         : "none";
 
-    if (!changelogNextDueManuallySet) {
+    if (!changeLogNextDueManuallySet) {
         refreshChangeLogNextDue();
     }
 
@@ -982,7 +981,7 @@ function openChangeLogDetail(clId = null) {
 }
 
 function refreshChangeLogNextDue() {
-    if (changelogNextDueManuallySet) return;
+    if (changeLogNextDueManuallySet) return;
 
     const lastChangedEl = document.getElementById("changeLogLastChanged");
     const intervalEl = document.getElementById("changeLogIntervalMonths");
@@ -1077,9 +1076,8 @@ function refreshBillNextDate() {
 // PLANTS
 function openPlantAddModal() {
     document.getElementById("addPlantName").value = "";
-    document.getElementById("addPlantStartingDate").value = new Date()
-        .toISOString()
-        .slice(0, 10);
+    document.getElementById("addPlantStartingDate").value = getTodayHKT();
+    document.getElementById("addPlantPotSize").value = "";
     openModal("plantAddModal");
 }
 
@@ -1091,9 +1089,8 @@ function openPlantDetail(plantId) {
         plant.plant_name.toUpperCase();
     document.getElementById("pdPlantNameInput").value = plant.plant_name;
     document.getElementById("pdSaveNameBtn").dataset.id = plantId;
-
-    document.getElementById("pdStartingDate").textContent = plant.starting_date
-        ? formatShortDate(plant.starting_date)
+    document.getElementById("pdStartingDate").value = plant.starting_date
+        ? formatDateInput(plant.starting_date)
         : "";
     document.getElementById("pdPotSize").textContent = plant.pot_size
         ? `${plant.pot_size}cm`
@@ -1107,6 +1104,7 @@ function openPlantDetail(plantId) {
     document.getElementById("pdFertiliserUsed").textContent =
         plant.last_fertiliser_used || "";
 
+    document.getElementById("pdLogEventBtn").dataset.id = plantId;
     const history = plantHistory
         .filter((h) => h.plant_id === plantId)
         .sort((a, b) => new Date(b.event_date) - new Date(a.event_date));
@@ -1139,9 +1137,7 @@ function openPlantDetail(plantId) {
 
     const archiveBtn = document.getElementById("pdArchiveBtn");
     archiveBtn.dataset.id = plantId;
-    archiveBtn.textContent = plant.archived
-        ? "Unarchive"
-        : "Archive";
+    archiveBtn.textContent = plant.archived ? "Unarchive" : "Archive";
     archiveBtn.classList.toggle("is-archived", !!plant.archived);
 
     document.getElementById("pdDeleteBtn").dataset.id = plantId;
@@ -1155,6 +1151,7 @@ function openPlantEventModal(plantId) {
     document.getElementById("plantEventTitle").textContent =
         plant.plant_name.toUpperCase();
     document.getElementById("plantEventId").value = plantId;
+    document.getElementById("plantEventDate").value = getTodayHKT();
     document.getElementById("wateredCheck").checked = false;
     document.getElementById("fertilisedCheck").checked = false;
     document.getElementById("fertiliserSelectWrap").style.display = "none";
@@ -1175,15 +1172,15 @@ function setupPanelClicks() {
         notes: "notes",
     };
 
-    document.querySelectorAll(".panel-header h3").forEach((h3) => {
-        h3.addEventListener("click", (e) => {
+    document.querySelectorAll(".panel-header").forEach((header) => {
+        header.addEventListener("click", (e) => {
             const panel = e.target.closest(".panel");
             const section = panel.dataset.section;
-            const metaKey = listMetaKeyMap[section];
 
             if (section) {
-                document.getElementById("listTitle").textContent =
-                    h3.textContent.toUpperCase();
+                document.getElementById("listTitle").textContent = header
+                    .querySelector("h3")
+                    .textContent.toUpperCase();
                 currentFullList = section;
                 document.getElementById("fullListContent").innerHTML =
                     buildFullListHTML(section);
@@ -1219,6 +1216,29 @@ function setupPanelClicks() {
             }
         });
     });
+
+    document.getElementById("fullListAddBtn")?.addEventListener("click", () => {
+        switch (currentFullList) {
+            case "fridge_stock":
+                openFridgeStockDetail();
+                break;
+            case "chores":
+                openChoreDetail();
+                break;
+            case "change_log":
+                openChangeLogDetail();
+                break;
+            case "bills":
+                openBillDetail();
+                break;
+            case "plants":
+                openPlantAddModal();
+                break;
+            case "notes":
+                openModal("noteAddModal");
+                break;
+        }
+    });
 }
 
 function refreshListLastUpdated() {
@@ -1245,7 +1265,8 @@ function refreshListLastUpdated() {
 // DATE HANDLERS
 function formatShortDate(value) {
     if (!value) return "";
-    const date = new Date(value + "T00:00:00Z");
+    const date =
+        value.length > 10 ? new Date(value) : new Date(value + "T00:00:00Z");
     const day = date.toLocaleDateString("en-GB", {
         day: "2-digit",
         timeZone: "Asia/Hong_Kong",
@@ -1256,7 +1277,7 @@ function formatShortDate(value) {
             timeZone: "Asia/Hong_Kong",
         })
         .toUpperCase();
-    return day + " " + month;
+    return `${day} ${month}`;
 }
 
 function formatDateInput(value) {
@@ -1319,19 +1340,34 @@ function calcNextDueByMonths(lastDate, intervalMonths) {
 
 function formatMetaTimestamp(iso) {
     if (!iso) return "No recent activity";
-
-    const date = new Date(iso + "T00:00:00");
-
-    return `Last updated ${date.toLocaleString("en-GB", {
+    const date = new Date(iso);
+    const d = date.toLocaleDateString("en-GB", {
         day: "2-digit",
-        month: "short",
+        timeZone: "Asia/Hong_Kong",
+    });
+    const m = date
+        .toLocaleDateString("en-GB", {
+            month: "short",
+            timeZone: "Asia/Hong_Kong",
+        })
+        .toUpperCase();
+    const y = date.toLocaleDateString("en-GB", {
         year: "numeric",
+        timeZone: "Asia/Hong_Kong",
+    });
+    const t = date.toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
         timeZone: "Asia/Hong_Kong",
-        timeZoneName: "HKT",
-    })}`;
+    });
+    return `Last updated ${d} ${m} ${y}, ${t}`;
+}
+
+function getTodayHKT() {
+    return new Date().toLocaleDateString("en-CA", {
+        timeZone: "Asia/Hong_Kong",
+    });
 }
 
 // BUTTON ACTIONS
@@ -1529,7 +1565,7 @@ async function saveChangeLog(cl, isUpdate = false) {
 
         if (error) throw error;
 
-        changelogNextDueManuallySet = false;
+        changeLogNextDueManuallySet = false;
 
         await loadChangeLog();
         renderChangeLog();
@@ -1821,7 +1857,7 @@ async function saveNote(content) {
         const { error } = await sb.from("notes").insert({
             content: content.trim(),
             user_id: user.id,
-            created_at: new Date().toISOString().slice(0, 10),
+            created_at: getTodayHKT(),
         });
 
         if (error) throw error;
@@ -1840,6 +1876,7 @@ async function saveNote(content) {
 async function touchMetadata(listName) {
     const ts = new Date().toISOString();
     listMetadata[listName] = ts;
+    refreshListLastUpdated();
 
     try {
         const sb = await ensureSupabaseReady();
@@ -1914,10 +1951,10 @@ function bindAutoCalculations() {
             });
         }
     });
-    const changelogNextDueEl = document.getElementById("changeLogNextDueDate");
-    if (changelogNextDueEl) {
-        changelogNextDueEl.addEventListener("input", () => {
-            changelogNextDueManuallySet = true;
+    const changeLogNextDueEl = document.getElementById("changeLogNextDueDate");
+    if (changeLogNextDueEl) {
+        changeLogNextDueEl.addEventListener("input", () => {
+            changeLogNextDueManuallySet = true;
             const autoLabel = document.getElementById(
                 "changeLogNextDueDateAutoLabel",
             );
@@ -1992,7 +2029,7 @@ function bindAllForms() {
                 shelf_life_days: shelfLifeDays,
                 created_at: createdAt,
                 expiry_date: expiryDate,
-                last_updated: new Date().toISOString().slice(0, 10),
+                last_updated: getTodayHKT(),
             };
 
             await saveFridgeItem(item, isUpdate);
@@ -2057,7 +2094,7 @@ function bindAllForms() {
         });
 
     document
-        .getElementById("changelogForm")
+        .getElementById("changeLogForm")
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
             const editId = document.getElementById("changeLogEditId").value;
@@ -2152,11 +2189,17 @@ function bindAllForms() {
             const startingDate = document.getElementById(
                 "addPlantStartingDate",
             ).value;
+            const potSize =
+                parseInt(
+                    document.getElementById("addPlantPotSize").value,
+                    10,
+                ) || null;
             if (!name) return;
 
             await savePlant({
                 plant_name: name,
                 starting_date: startingDate,
+                pot_size: potSize,
                 archived: false,
             });
             closeModal("plantAddModal");
@@ -2167,6 +2210,12 @@ function bindAllForms() {
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
             const plantId = document.getElementById("plantEventId").value;
+            const pickedDate =
+                document.getElementById("plantEventDate").value ||
+                getTodayHKT();
+            const eventdate = new Date(
+                pickedDate + "T00:00:00+08:00",
+            ).toISOString();
             const watered = document.getElementById("wateredCheck").checked;
             const fertilised =
                 document.getElementById("fertilisedCheck").checked;
@@ -2185,7 +2234,7 @@ function bindAllForms() {
 
             await savePlantHistory({
                 plant_id: plantId,
-                event_date: new Date().toISOString(),
+                event_date: eventdate,
                 pot_size: resolvedPotSize,
                 watered,
                 fertilised,
@@ -2194,14 +2243,9 @@ function bindAllForms() {
             });
 
             const updates = {};
-            if (watered)
-                updates.last_watered_date = new Date()
-                    .toISOString()
-                    .slice(0, 10);
+            if (watered) updates.last_watered_date = getTodayHKT();
             if (fertilised) {
-                updates.last_fertilised_date = new Date()
-                    .toISOString()
-                    .slice(0, 10);
+                updates.last_fertilised_date = getTodayHKT();
                 updates.last_fertiliser_used = fertiliserUsed;
             }
             if (resolvedPotSize) updates.pot_size = resolvedPotSize;
@@ -2245,7 +2289,7 @@ document.addEventListener("click", async (e) => {
             return;
         }
 
-        const today = new Date().toISOString().slice(0, 10);
+        const today = getTodayHKT();
 
         try {
             if (action === "fridge-portions") {
@@ -2352,7 +2396,13 @@ document.addEventListener("click", async (e) => {
                     .getElementById("pdPlantNameInput")
                     .value.trim();
                 if (!newName) return;
-                await updatePlant(id, { plant_name: newName });
+                const newStart =
+                    document.getElementById("pdStartingDateInput").value ||
+                    null;
+                await updatePlant(id, {
+                    plant_name: newName,
+                    starting_date: newStart,
+                });
             } else if (action === "plant-archive") {
                 const plant = plants.find((p) => p.id === id);
                 const archived = !plant.archived;
@@ -2399,9 +2449,9 @@ document.addEventListener("click", async (e) => {
         return;
     }
 
-    const changelogRow = e.target.closest("[data-open-changelog]");
-    if (changelogRow) {
-        openChangeLogDetail(changelogRow.dataset.openChangelog);
+    const changeLogRow = e.target.closest("[data-open-changelog]");
+    if (changeLogRow) {
+        openChangeLogDetail(changeLogRow.dataset.openChangelog);
         return;
     }
 
