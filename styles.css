@@ -107,41 +107,51 @@ body {
 
 .grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    grid-template-rows: 1fr 1fr 1fr;
-    gap: 1rem;
-    padding: 1rem;
+    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-rows: 1fr 230px;
+    gap: 1.2rem;
+    padding: 1.2rem;
     height: 100%;
 }
 
-[data-section="fridge_stock"] {
-    grid-column: 1 / 3;
-    grid-row: 1 / 4;
+.panel[data-section="meal_prep"] {
+    grid-column: 1 / 2 !important;
+    grid-row: 1 / 3 !important;
+    height: 100%;
 }
 
-[data-section="chores"] {
-    grid-column: 3;
-    grid-row: 1 / 3;
+.panel[data-section="notes"] {
+    grid-column: 2 / 4 !important;
+    grid-row: 2 / 3 !important;
 }
 
-[data-section="change_log"] {
-    grid-column: 3;
-    grid-row: 3;
+.sub-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    min-height: 0;
+    grid-row: 1 / 2;
 }
 
-[data-section="bills"] {
-    grid-column: 4;
-    grid-row: 1;
+.sub-col:nth-of-type(2) {
+    grid-column: 2 / 3;
 }
 
-[data-section="plants"] {
-    grid-column: 4;
-    grid-row: 2;
+.sub-col:nth-of-type(3) {
+    grid-column: 3 / 4;
 }
 
-[data-section="notes"] {
-    grid-column: 4;
-    grid-row: 3;
+.panel.header-only {
+    min-height: auto;
+}
+
+.panel.header-only .panel-content {
+    display: none !important;
+}
+
+.panel.header-only .panel-header {
+    border-bottom: none;
+    height: 100%;
 }
 
 /* BUTTONS */
@@ -433,7 +443,7 @@ button[type="button"]:hover {
 }
 
 /* MODALS */
-#fridgeStockDetailModal,
+#mealPrepDetailModal,
 #choreDetailModal,
 #changeLogDetailModal,
 #billDetailModal,
@@ -642,20 +652,20 @@ form::-webkit-scrollbar-thumb {
     column-gap: 3.2rem;
 }
 
-.fridge-group {
+.meal-prep-group {
     min-width: 0;
     margin-bottom: 1.2rem;
 }
 
-.fridge-group.col-half {
+.meal-prep-group.col-half {
     grid-column: span 1;
 }
 
-.fridge-group.col-full {
+.meal-prep-group.col-full {
     grid-column: span 2;
 }
 
-.fridge-group-title {
+.meal-prep-group-title {
     font-size: 1rem;
     font-weight: 500;
     letter-spacing: 0.14em;
@@ -669,7 +679,7 @@ form::-webkit-scrollbar-thumb {
     align-items: center;
 }
 
-.fridge-cat-total {
+.meal-prep-cat-total {
     font-size: 1rem;
     color: var(--text-primary);
     font-weight: 500;
@@ -677,14 +687,14 @@ form::-webkit-scrollbar-thumb {
     padding-right: 8px;
 }
 
-.fridge-inner-grid {
+.meal-prep-inner-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.4rem 3.2rem;
     align-items: start;
 }
 
-.fridge-date {
+.meal-prep-date {
     color: var(--text-secondary);
 }
 
@@ -849,4 +859,51 @@ form::-webkit-scrollbar-thumb {
 }
 .plant-meta-pot {
     margin-right: 2rem;
+}
+
+#controlsContent {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.screen-off-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    font-size: 1.8rem;
+    background: var(--btn-bg);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s ease,
+        transform 0.1s ease;
+}
+
+.screen-off-btn:hover {
+    background: var(--btn-bg-hover);
+}
+
+.screen-off-btn:active {
+    transform: scale(0.95);
+}
+
+/* SCREEN BLANKER */
+#screenBlanker {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000000;
+    z-index: 9999;
+    cursor: pointer;
+}
+
+#screenBlanker.active {
+    display: block;
 }

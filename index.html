@@ -29,52 +29,76 @@
         <!-- DASHBOARD -->
         <div class="dashboard">
             <div class="grid">
-                <!-- FRIDGE STOCK: COL 1-2 ROW 1-3 -->
-                <div class="panel" data-section="fridge_stock">
+                <div class="panel" data-section="meal_prep">
                     <div class="panel-header">
-                        <h3>Fridge Stock</h3>
+                        <h3>Meal Prep</h3>
                         <button class="add-btn" title="Add item">+</button>
                     </div>
-                    <div class="panel-content" id="fridgeStockContent"></div>
+                    <div class="panel-content" id="mealPrepContent"></div>
                 </div>
 
-                <!-- CHORES: COL 3 ROW 1-2 -->
-                <div class="panel" data-section="chores">
-                    <div class="panel-header">
-                        <h3>Chores</h3>
-                        <button class="add-btn" title="Add chore">+</button>
+                <div class="sub-col">
+                    <div
+                        class="panel"
+                        data-section="fridge_stock"
+                        style="flex: 3"
+                    >
+                        <div class="panel-header">
+                            <h3>Fridge Stock</h3>
+                            <button class="add-btn" title="Add item">+</button>
+                        </div>
+                        <div class="panel-content" id="fridgeStockContent">
+                            TEMP
+                        </div>
                     </div>
-                    <div class="panel-content" id="choresContent"></div>
-                </div>
-
-                <!-- CHANGE LOG: COL 3 ROW 3 -->
-                <div class="panel" data-section="change_log">
-                    <div class="panel-header">
-                        <h3>Change Log</h3>
-                        <button class="add-btn" title="Add item">+</button>
+                    <div class="panel" data-section="chores" style="flex: 4">
+                        <div class="panel-header">
+                            <h3>Chores</h3>
+                            <button class="add-btn" title="Add chore">+</button>
+                        </div>
+                        <div class="panel-content" id="choresContent"></div>
                     </div>
-                    <div class="panel-content" id="changeLogContent"></div>
                 </div>
 
-                <!-- BILLS: COL 4 ROW 1 -->
-                <div class="panel" data-section="bills">
-                    <div class="panel-header">
-                        <h3>Bills</h3>
-                        <button class="add-btn" title="Add bill">+</button>
+                <div class="sub-col">
+                    <div class="panel" data-section="controls" style="flex: 1">
+                        <div class="panel-header">
+                            <h3>Controls</h3>
+                        </div>
+                        <div class="panel-content" id="controlsContent"></div>
                     </div>
-                    <div class="panel-content" id="billsContent"></div>
-                </div>
-
-                <!-- PLANTS: COL 4 ROW 2 -->
-                <div class="panel" data-section="plants">
-                    <div class="panel-header">
-                        <h3>Plants</h3>
-                        <button class="add-btn" title="Add plant">+</button>
+                    <div
+                        class="panel header-only"
+                        data-section="bills"
+                        style="flex: 0 0 auto"
+                    >
+                        <div class="panel-header">
+                            <h3>Bills</h3>
+                        </div>
+                        <div class="panel-content" id="billsContent"></div>
                     </div>
-                    <div class="panel-content" id="plantsContent"></div>
+                    <div
+                        class="panel header-only"
+                        data-section="change_log"
+                        style="flex: 0 0 auto"
+                    >
+                        <div class="panel-header">
+                            <h3>Change Log</h3>
+                        </div>
+                        <div class="panel-content" id="changeLogContent"></div>
+                    </div>
+                    <div
+                        class="panel header-only"
+                        data-section="plants"
+                        style="flex: 0 0 auto"
+                    >
+                        <div class="panel-header">
+                            <h3>Plants</h3>
+                        </div>
+                        <div class="panel-content" id="plantsContent"></div>
+                    </div>
                 </div>
 
-                <!-- NOTES COL 4 ROW 3 -->
                 <div class="panel" data-section="notes">
                     <div class="panel-header">
                         <h3>Notes</h3>
@@ -110,27 +134,27 @@
             </div>
         </div>
 
-        <!-- FRIDGE STOCK -->
-        <div class="modal" id="fridgeStockDetailModal">
+        <!--  MEAL PREP -->
+        <div class="modal" id="mealPrepDetailModal">
             <div class="modal-content modal-wide">
                 <header>
-                    <h2 id="fridgeStockDetailTitle">Fridge Item Details</h2>
+                    <h2 id="mealPrepDetailTitle">Meal Prep Details</h2>
                     <button
                         class="close-btn"
-                        onclick="closeModal('fridgeStockDetailModal')"
+                        onclick="closeModal('mealPrepDetailModal')"
                     >
                         &times;
                     </button>
                 </header>
 
-                <form id="fridgeStockForm">
-                    <input type="hidden" id="fridgeStockEditId" name="id" />
+                <form id="mealPrepForm">
+                    <input type="hidden" id="mealPrepEditId" name="id" />
 
                     <div>
                         <label>Item Name</label>
                         <input
                             type="text"
-                            id="fridgeStockItemName"
+                            id="mealPrepItemName"
                             name="item_name"
                             required
                         />
@@ -138,13 +162,14 @@
 
                     <div>
                         <label>Category</label>
-                        <select id="fridgeStockCategory" name="category">
+                        <select id="mealPrepCategory" name="category">
                             <option value="Carbs">Carbs</option>
                             <option value="Veggies">Veggies</option>
                             <option value="Proteins">Proteins</option>
                             <option value="Fruits">Fruits</option>
                             <option value="Others">Others</option>
-                            <option value="Raw Food">Raw Food</option>
+                            <option value="Fridge">Fridge</option>
+                            <option value="Freezer">Freezer</option>
                         </select>
                     </div>
 
@@ -153,7 +178,7 @@
                             <label>Portions</label>
                             <input
                                 type="number"
-                                id="fridgeStockPortions"
+                                id="mealPrepPortions"
                                 name="portions"
                                 min="0"
                                 value="5"
@@ -163,7 +188,7 @@
                             <label>Shelf Life (days)</label>
                             <input
                                 type="number"
-                                id="fridgeStockShelfLife"
+                                id="mealPrepShelfLife"
                                 name="shelf_life_days"
                                 min="0"
                             />
@@ -174,7 +199,7 @@
                             <label>Creation Date</label>
                             <input
                                 type="date"
-                                id="fridgeStockCreatedAt"
+                                id="mealPrepCreatedAt"
                                 name="created_at"
                                 required
                             />
@@ -182,7 +207,7 @@
                         <div>
                             <label
                                 >Expiry Date<span
-                                    id="fridgeStockExpiryDateAutoLabel"
+                                    id="mealPrepExpiryDateAutoLabel"
                                     class="field-auto-tag"
                                     style="display: none"
                                     >auto</span
@@ -190,28 +215,28 @@
                             >
                             <input
                                 type="date"
-                                id="fridgeStockExpiryDate"
+                                id="mealPrepExpiryDate"
                                 name="expiry_date"
                             />
                         </div>
                     </div>
 
                     <div class="form-meta">
-                        Last updated: <span id="fridgeStockLastUpdated"></span>
+                        Last updated: <span id="mealPrepLastUpdated"></span>
                     </div>
 
                     <div class="modal-actions">
                         <button type="submit" class="save-btn">Save</button>
                         <button
                             type="button"
-                            id="fridgeStockDeleteBtn"
+                            id="mealPrepDeleteBtn"
                             class="delete-btn"
                         >
                             Delete
                         </button>
                         <button
                             type="button"
-                            onclick="closeModal('fridgeStockDetailModal')"
+                            onclick="closeModal('mealPrepDetailModal')"
                             class="cancel-btn"
                         >
                             Cancel
@@ -605,6 +630,9 @@
                 </form>
             </div>
         </div>
+
+        <!-- SCREEN BLANKER -->
+        <div id="screenBlanker"></div>
 
         <script src="app.js"></script>
     </body>

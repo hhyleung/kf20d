@@ -7,15 +7,9 @@ let realtimeSetupDone = false;
 let subscriptions = [];
 
 // LISTS
-const fridgeCategoryOrder = [
-    "Carbs",
-    "Veggies",
-    "Proteins",
-    "Fruits",
-    "Others",
-    "Raw Food",
-];
-let fridgeStock = [];
+const mealPrepCategories = ["Carbs", "Veggies", "Proteins", "Fruits", "Others"];
+const fridgeStockCategories = ["Fridge", "Freezer"];
+let mealPrep = [];
 let chores = [];
 let changeLog = [];
 let bills = [];
@@ -43,8 +37,8 @@ let listMetadata = {
 LIST_META_KEYS.forEach((key) => (listMetadata[key] = null));
 
 // STATE FLAGS
-let editingFridgeStockId = null;
-let fridgeStockExpiryManuallySet = false;
+let editingMealPrepId = null;
+let mealPrepExpiryManuallySet = false;
 let editingChoreId = null;
 let choreNextDueManuallySet = false;
 let editingChangeLogId = null;
@@ -123,13 +117,13 @@ async function setupRealtime() {
     }
 
     subscribeToTable("fridge_stock", () => {
-        loadFridgeStock().then(renderFridgeStock);
+        loadMealPrep().then(renderMealPrep);
     });
     subscribeToTable("chores", () => {
         loadChores().then(renderChores);
     });
     subscribeToTable("change_log", () => {
-        loadChangeLog().then(renderChores);
+        loadChangeLog().then(renderChangeLog);
     });
     subscribeToTable("bills", () => {
         loadBills().then(renderBills);
@@ -214,6 +208,14 @@ function showLogin() {
 }
 
 async function showDashboard() {
+    const blanker = document.getElementById("screenBlanker");
+    if (blanker && !blanker.dataset.bound) {
+        blanker.dataset.bound = "1";
+        blanker.addEventListener("click", () => {
+            blanker.classList.remove("active");
+        });
+    }
+
     document.getElementById("loginContainer").style.display = "none";
     const dash = document.querySelector(".dashboard");
     dash.style.removeProperty("display");
@@ -221,7 +223,7 @@ async function showDashboard() {
 
     [
         "fullListModal",
-        "fridgeStockDetailModal",
+        "mealPrepDetailModal",
         "choreDetailModal",
         "changeLogDetailModal",
         "billDetailModal",
@@ -237,8 +239,8 @@ async function showDashboard() {
     setupPanelClicks();
     bindAllForms();
 
-    editingFridgeStockId = null;
-    fridgeStockExpiryManuallySet = false;
+    editingMealPrepId = null;
+    mealPrepExpiryManuallySet = false;
     editingChoreId = null;
     choreNextDueManuallySet = false;
     editingChangeLogId = null;
@@ -248,12 +250,13 @@ async function showDashboard() {
 
     await loadAllData();
 
-    renderFridgeStock();
+    renderMealPrep();
     renderChores();
     renderChangeLog();
     renderBills();
     renderPlants();
     renderNotes();
+    renderControls();
 
     if (!realtimeSetupDone) {
         realtimeSetupDone = true;
@@ -262,19 +265,19 @@ async function showDashboard() {
 }
 
 // DATA LOADERS
-async function loadFridgeStock() {
+async function loadMealPrep() {
     try {
         const sb = await ensureSupabaseReady();
         if (!sb) {
-            console.error("Supabase not ready for loadFridgeStock");
+            console.error("Supabase not ready for loadMealPrep");
             return;
         }
         const {
             data: { user },
         } = await sb.auth.getUser();
         if (!user?.id) {
-            console.error("No user for loadFridgeStock");
-            fridgeStock = [];
+            console.error("No user for loadMealPrep");
+            mealPrep = [];
             return;
         }
 
@@ -286,11 +289,11 @@ async function loadFridgeStock() {
             .order("last_updated", { ascending: false, nullsLast: true });
 
         if (error) throw error;
-        fridgeStock = data || [];
-        console.log("Fridge stock loaded:", fridgeStock.length, "items");
+        mealPrep = data || [];
+        console.log("Meal prep loaded:", mealPrep.length, "items");
     } catch (err) {
         console.error("Load fridge_stock error:", err);
-        fridgeStock = [];
+        mealPrep = [];
     }
 }
 
@@ -504,7 +507,7 @@ async function loadListMetadata() {
 async function loadAllData() {
     try {
         await Promise.all([
-            loadFridgeStock(),
+            loadMealPrep(),
             loadChores(),
             loadChangeLog(),
             loadBills(),
@@ -520,16 +523,16 @@ async function loadAllData() {
 }
 
 // PANEL BUILDERS
-// FRIDGE STOCK
+// MEAL PREP
 function getVisibleItems(showZero = false) {
-    return fridgeStock.filter((item) => showZero || item.portions > 0);
+    return mealPrep.filter((item) => showZero || item.portions > 0);
 }
 
 function groupByCategory(items) {
     const grouped = {};
-    fridgeCategoryOrder.forEach((cat) => (grouped[cat] = []));
+    mealPrepCategories.forEach((cat) => (grouped[cat] = []));
     items.forEach((item) => {
-        const cat = fridgeCategoryOrder.includes(item.category)
+        const cat = mealPrepCategories.includes(item.category)
             ? item.category
             : "Others";
         grouped[cat].push(item);
@@ -550,7 +553,7 @@ function getExpiryClass(expiryDate) {
     return "";
 }
 
-function fridgeItemRow(item, showZero = false) {
+function mealPrepItemRow(item, showZero = false) {
     const expiryClass = getExpiryClass(item.expiry_date);
     const portionsDisplay =
         item.portions === 0 && showZero
@@ -561,21 +564,21 @@ function fridgeItemRow(item, showZero = false) {
     return `<li class="item-row${zeroClass}" data-open-detail="${item.id}">
         <span class="item-key ${expiryClass}">${item.item_name}</span>
         <span class="item-value">
-            <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="1">+</button>
+            <button class="action-btn" data-action="meal-prep-portions" data-id="${item.id}" data-delta="1">+</button>
             ${portionsDisplay}
-            <button class="action-btn" data-action="fridge-portions" data-id="${item.id}" data-delta="-1">-</button>
+            <button class="action-btn" data-action="meal-prep-portions" data-id="${item.id}" data-delta="-1">-</button>
         </span>
     </li>`;
 }
 
-function buildFridgeHTML(showZero) {
+function buildMealPrepHTML(showZero) {
     const items = getVisibleItems(showZero);
     const grouped = groupByCategory(items);
-    const forceFullWidth = ["Proteins", "Raw Food"];
+    const forceFullWidth = ["Proteins"];
     const alwaysHalfWidth = ["Carbs", "Veggies", "Fruits", "Others"];
 
-    let html = '<div class="fridge-inner-grid">';
-    fridgeCategoryOrder.forEach((cat) => {
+    let html = '<div class="meal-prep-inner-grid">';
+    mealPrepCategories.forEach((cat) => {
         const catItems = grouped[cat];
         const isAlwaysHalf = alwaysHalfWidth.includes(cat);
         const isForceFull = forceFullWidth.includes(cat);
@@ -587,20 +590,20 @@ function buildFridgeHTML(showZero) {
         );
 
         if (catItems.length === 0) {
-            html += `<div class="fridge-group ${cls}">
-                <div class="fridge-group-title">
+            html += `<div class="meal-prep-group ${cls}">
+                <div class="meal-prep-group-title">
                     <span>${cat}</span>
-                    <span class="fridge-cat-total">${totalPortions}</span>
+                    <span class="meal-prep-cat-total">${totalPortions}</span>
                 </div>`;
         } else {
-            html += `<div class="fridge-group ${cls}">
-                <div class="fridge-group-title">
+            html += `<div class="meal-prep-group ${cls}">
+                <div class="meal-prep-group-title">
                     <span>${cat}</span>
-                    <span class="fridge-cat-total">${totalPortions}</span>
+                    <span class="meal-prep-cat-total">${totalPortions}</span>
                 </div>
                 <ul class="item-list ${wide ? "two-col-list" : ""}">`;
             catItems.forEach((item) => {
-                html += fridgeItemRow(item, showZero);
+                html += mealPrepItemRow(item, showZero);
             });
             html += "</ul></div>";
         }
@@ -609,12 +612,51 @@ function buildFridgeHTML(showZero) {
     return html;
 }
 
+function renderMealPrep() {
+    document.getElementById("mealPrepContent").innerHTML =
+        buildMealPrepHTML(false);
+    if (currentFullList === "meal_prep") {
+        document.getElementById("fullListContent").innerHTML =
+            buildMealPrepHTML(true);
+    }
+    renderFridgeStock();
+}
+
+function buildFridgeStockHTML(showZero = false) {
+    let html = "<div>";
+    fridgeStockCategories.forEach((cat) => {
+        const catItems = mealPrep.filter(
+            (i) => i.category === cat && (showZero || i.portions > 0),
+        );
+        if (!catItems.length && !showZero) return;
+        const totalPortions = catItems.reduce(
+            (sum, i) => sum + (i.portions || 0),
+            0,
+        );
+        html += `<div class="meal-prep-group">
+            <div class="meal-prep-group-title">
+                <span>${cat}</span>
+                <span class="meal-prep-cat-total">${totalPortions}</span>
+            </div>`;
+        if (catItems.length) {
+            html += '<ul class="item-list">';
+            catItems.forEach((item) => {
+                html += mealPrepItemRow(item, showZero);
+            });
+            html += "</ul>";
+        }
+        html += "</div>";
+    });
+    html += "</div>";
+    return html;
+}
+
 function renderFridgeStock() {
     document.getElementById("fridgeStockContent").innerHTML =
-        buildFridgeHTML(false);
+        buildFridgeStockHTML(false);
     if (currentFullList === "fridge_stock") {
         document.getElementById("fullListContent").innerHTML =
-            buildFridgeHTML(true);
+            buildFridgeStockHTML(true);
     }
 }
 
@@ -771,11 +813,22 @@ function renderNotes() {
     }
 }
 
+function renderControls() {
+    const content = document.getElementById("controlsContent");
+    if (!content) return;
+    content.innerHTML = `<button class="screen-off-btn" id="screenOffBtn" title="Screen off">🌙</button>`;
+    document.getElementById("screenOffBtn").addEventListener("click", () => {
+        document.getElementById("screenBlanker").classList.add("active");
+    });
+}
+
 // FULL LIST
 function buildFullListHTML(list) {
     switch (list) {
+        case "meal_prep":
+            return buildMealPrepHTML(true);
         case "fridge_stock":
-            return buildFridgeHTML(true);
+            return buildFridgeStockHTML(true);
         case "chores":
             return buildChoresHTML();
         case "change_log":
@@ -803,59 +856,59 @@ function closeModal(id) {
     }
 }
 
-// FRIDGE STOCK
-function openFridgeStockDetail(itemId = null) {
+// MEAL PREP
+function openMealPrepDetail(itemId = null) {
     const isEditing = !!itemId;
-    editingFridgeStockId = itemId;
+    editingMealPrepId = itemId;
 
-    document.getElementById("fridgeStockEditId").value = itemId || "";
-    document.getElementById("fridgeStockItemName").value = "";
-    document.getElementById("fridgeStockCategory").value = "Carbs";
-    document.getElementById("fridgeStockPortions").value = "1";
-    document.getElementById("fridgeStockShelfLife").value = "";
-    document.getElementById("fridgeStockCreatedAt").value = getTodayHKT();
-    document.getElementById("fridgeStockExpiryDate").value = "";
+    document.getElementById("mealPrepEditId").value = itemId || "";
+    document.getElementById("mealPrepItemName").value = "";
+    document.getElementById("mealPrepCategory").value = "Carbs";
+    document.getElementById("mealPrepPortions").value = "1";
+    document.getElementById("mealPrepShelfLife").value = "";
+    document.getElementById("mealPrepCreatedAt").value = getTodayHKT();
+    document.getElementById("mealPrepExpiryDate").value = "";
 
-    document.getElementById("fridgeStockDetailTitle").textContent = isEditing
-        ? "EDIT FRIDGE ITEM"
-        : "ADD FRIDGE ITEM";
+    document.getElementById("mealPrepDetailTitle").textContent = isEditing
+        ? "EDIT MEAL PREP ITEM"
+        : "ADD MEAL PREP ITEM";
 
     if (isEditing) {
-        const item = fridgeStock.find((i) => i.id === itemId);
+        const item = mealPrep.find((i) => i.id === itemId);
         if (!item) return;
 
-        document.getElementById("fridgeStockItemName").value = item.item_name;
-        document.getElementById("fridgeStockCategory").value =
+        document.getElementById("mealPrepItemName").value = item.item_name;
+        document.getElementById("mealPrepCategory").value =
             item.category || "Carbs";
-        document.getElementById("fridgeStockPortions").value =
-            item.portions || 0;
-        document.getElementById("fridgeStockShelfLife").value =
+        document.getElementById("mealPrepPortions").value = item.portions || 0;
+        document.getElementById("mealPrepShelfLife").value =
             item.shelf_life_days || "";
-        document.getElementById("fridgeStockCreatedAt").value = formatDateInput(
+        document.getElementById("mealPrepCreatedAt").value = formatDateInput(
             item.created_at,
         );
-        document.getElementById("fridgeStockExpiryDate").value =
-            formatDateInput(item.expiry_date);
+        document.getElementById("mealPrepExpiryDate").value = formatDateInput(
+            item.expiry_date,
+        );
 
         const expectedExpiry =
             item.created_at && item.shelf_life_days
                 ? addDays(item.created_at, item.shelf_life_days)
                 : null;
-        fridgeStockExpiryManuallySet = !!(
+        mealPrepExpiryManuallySet = !!(
             item.expiry_date && item.expiry_date !== expectedExpiry
         );
 
-        document.getElementById("fridgeStockLastUpdated").textContent =
+        document.getElementById("mealPrepLastUpdated").textContent =
             item.last_updated ? formatShortDate(item.last_updated) : "";
     } else {
-        fridgeStockExpiryManuallySet = false;
+        mealPrepExpiryManuallySet = false;
     }
 
-    document.getElementById("fridgeStockDeleteBtn").style.display = isEditing
+    document.getElementById("mealPrepDeleteBtn").style.display = isEditing
         ? "block"
         : "none";
-    calcFridgeStockExpiry();
-    openModal("fridgeStockDetailModal");
+    calcMealPrepExpiry();
+    openModal("mealPrepDetailModal");
 }
 
 // CHORES
@@ -1195,8 +1248,9 @@ function setupPanelClicks() {
             e.stopPropagation();
             const section = btn.closest(".panel").dataset.section;
             switch (section) {
+                case "meal_prep":
                 case "fridge_stock":
-                    openFridgeStockDetail();
+                    openMealPrepDetail();
                     break;
                 case "chores":
                     openChoreDetail();
@@ -1220,7 +1274,7 @@ function setupPanelClicks() {
     document.getElementById("fullListAddBtn")?.addEventListener("click", () => {
         switch (currentFullList) {
             case "fridge_stock":
-                openFridgeStockDetail();
+                openMealPrepDetail();
                 break;
             case "chores":
                 openChoreDetail();
@@ -1308,24 +1362,22 @@ function addMonths(dateStr, months) {
 }
 
 // DATE CALCULATORS
-function calcFridgeStockExpiry() {
-    if (fridgeStockExpiryManuallySet) return;
+function calcMealPrepExpiry() {
+    if (mealPrepExpiryManuallySet) return;
 
-    const createdAt = document.getElementById("fridgeStockCreatedAt")?.value;
+    const createdAt = document.getElementById("mealPrepCreatedAt")?.value;
     const shelfLifeDays = parseInt(
-        document.getElementById("fridgeStockShelfLife")?.value || "0",
+        document.getElementById("mealPrepShelfLife")?.value || "0",
         10,
     );
-    const expiryEl = document.getElementById("fridgeStockExpiryDate");
-    const autoLabelEl = document.getElementById(
-        "fridgeStockExpiryDateAutoLabel",
-    );
+    const expiryEl = document.getElementById("mealPrepExpiryDate");
+    const autoLabelEl = document.getElementById("mealPrepExpiryDateAutoLabel");
 
     if (createdAt && shelfLifeDays > 0) {
         expiryEl.value = addDays(createdAt, shelfLifeDays);
         if (autoLabelEl) autoLabelEl.style.display = "inline-block";
     } else {
-        if (expiryEl && !fridgeStockExpiryManuallySet) expiryEl.value = "";
+        if (expiryEl && !mealPrepExpiryManuallySet) expiryEl.value = "";
         if (autoLabelEl) autoLabelEl.style.display = "none";
     }
 }
@@ -1371,8 +1423,8 @@ function getTodayHKT() {
 }
 
 // BUTTON ACTIONS
-// FRIDGE STOCK
-async function saveFridgeItem(item, isUpdate = false) {
+// MEAL PREP
+async function saveMealPrepItem(item, isUpdate = false) {
     const sb = await ensureSupabaseReady();
     if (!sb) {
         alert("Supabase not ready");
@@ -1407,10 +1459,10 @@ async function saveFridgeItem(item, isUpdate = false) {
 
         if (error) throw error;
 
-        fridgeStockExpiryManuallySet = false;
+        mealPrepExpiryManuallySet = false;
 
-        await loadFridgeStock();
-        renderFridgeStock();
+        await loadMealPrep();
+        renderMealPrep();
         touchMetadata("fridge_stock");
     } catch (error) {
         console.error("Save fridge_stock failed:", error);
@@ -1418,8 +1470,8 @@ async function saveFridgeItem(item, isUpdate = false) {
     }
 }
 
-async function deleteFridgeItem(id) {
-    if (!confirm("Delete this fridge item permanently?")) return;
+async function deleteMealPrepItem(id) {
+    if (!confirm("Delete this meal prep item permanently?")) return;
 
     const sb = await ensureSupabaseReady();
     if (!sb) {
@@ -1441,8 +1493,8 @@ async function deleteFridgeItem(id) {
 
         if (error) throw error;
 
-        await loadFridgeStock();
-        renderFridgeStock();
+        await loadMealPrep();
+        renderMealPrep();
         touchMetadata("fridge_stock");
     } catch (err) {
         console.error("Delete fridge_stock failed:", err);
@@ -1902,21 +1954,21 @@ async function touchMetadata(listName) {
 
 // BINDERS
 function bindAutoCalculations() {
-    ["fridgeStockCreatedAt", "fridgeStockShelfLife"].forEach((id) => {
+    ["mealPrepCreatedAt", "mealPrepShelfLife"].forEach((id) => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener("change", () => {
-                fridgeStockExpiryManuallySet = false;
-                calcFridgeStockExpiry();
+                mealPrepExpiryManuallySet = false;
+                calcMealPrepExpiry();
             });
         }
     });
-    const fridgeExpiryEl = document.getElementById("fridgeStockExpiryDate");
-    if (fridgeExpiryEl) {
-        fridgeExpiryEl.addEventListener("input", () => {
-            fridgeStockExpiryManuallySet = true;
+    const mealPrepExpiryEl = document.getElementById("mealPrepExpiryDate");
+    if (mealPrepExpiryEl) {
+        mealPrepExpiryEl.addEventListener("input", () => {
+            mealPrepExpiryManuallySet = true;
             const autoLabel = document.getElementById(
-                "fridgeStockExpiryDateAutoLabel",
+                "mealPrepExpiryDateAutoLabel",
             );
             if (autoLabel) autoLabel.style.display = "none";
         });
@@ -1995,22 +2047,21 @@ function bindAutoCalculations() {
 
 function bindAllForms() {
     document
-        .getElementById("fridgeStockForm")
+        .getElementById("mealPrepForm")
         ?.addEventListener("submit", async (e) => {
             e.preventDefault();
-            const editId = document.getElementById("fridgeStockEditId").value;
+            const editId = document.getElementById("mealPrepEditId").value;
             const isUpdate =
                 !!editId && editId !== "undefined" && editId !== "";
             const shelfLifeDays =
                 parseInt(
-                    document.getElementById("fridgeStockShelfLife").value,
+                    document.getElementById("mealPrepShelfLife").value,
                     10,
                 ) || null;
-            const createdAt = document.getElementById(
-                "fridgeStockCreatedAt",
-            ).value;
-            const expiryDate = fridgeStockExpiryManuallySet
-                ? document.getElementById("fridgeStockExpiryDate").value
+            const createdAt =
+                document.getElementById("mealPrepCreatedAt").value;
+            const expiryDate = mealPrepExpiryManuallySet
+                ? document.getElementById("mealPrepExpiryDate").value
                 : createdAt && shelfLifeDays
                   ? addDays(createdAt, shelfLifeDays)
                   : null;
@@ -2018,12 +2069,12 @@ function bindAllForms() {
             const item = {
                 id: isUpdate ? editId : null,
                 item_name: document
-                    .getElementById("fridgeStockItemName")
+                    .getElementById("mealPrepItemName")
                     .value.trim(),
-                category: document.getElementById("fridgeStockCategory").value,
+                category: document.getElementById("mealPrepCategory").value,
                 portions:
                     parseInt(
-                        document.getElementById("fridgeStockPortions").value,
+                        document.getElementById("mealPrepPortions").value,
                         10,
                     ) || 0,
                 shelf_life_days: shelfLifeDays,
@@ -2032,19 +2083,19 @@ function bindAllForms() {
                 last_updated: getTodayHKT(),
             };
 
-            await saveFridgeItem(item, isUpdate);
-            closeModal("fridgeStockDetailModal");
-            editingFridgeStockId = null;
-            fridgeStockExpiryManuallySet = false;
+            await saveMealPrepItem(item, isUpdate);
+            closeModal("mealPrepDetailModal");
+            editingMealPrepId = null;
+            mealPrepExpiryManuallySet = false;
         });
 
     document
-        .getElementById("fridgeStockDeleteBtn")
+        .getElementById("mealPrepDeleteBtn")
         ?.addEventListener("click", async () => {
-            if (editingFridgeStockId) {
-                await deleteFridgeItem(editingFridgeStockId);
-                closeModal("fridgeStockDetailModal");
-                editingFridgeStockId = null;
+            if (editingMealPrepId) {
+                await deleteMealPrepItem(editingMealPrepId);
+                closeModal("mealPrepDetailModal");
+                editingMealPrepId = null;
             }
         });
 
@@ -2243,9 +2294,9 @@ function bindAllForms() {
             });
 
             const updates = {};
-            if (watered) updates.last_watered_date = getTodayHKT();
+            if (watered) updates.last_watered_date = eventdate.slice(0, 10);
             if (fertilised) {
-                updates.last_fertilised_date = getTodayHKT();
+                updates.last_fertilised_date = eventdate.slice(0, 10);
                 updates.last_fertiliser_used = fertiliserUsed;
             }
             if (resolvedPotSize) updates.pot_size = resolvedPotSize;
@@ -2292,13 +2343,13 @@ document.addEventListener("click", async (e) => {
         const today = getTodayHKT();
 
         try {
-            if (action === "fridge-portions") {
+            if (action === "meal-prep-portions") {
                 const delta = parseInt(btn.dataset.delta, 10);
-                const item = fridgeStock.find((item) => item.id === id);
+                const item = mealPrep.find((item) => item.id === id);
                 if (!item) return;
 
                 const newPortions = Math.max(0, item.portions + delta);
-                fridgeStock = fridgeStock.map((it) =>
+                mealPrep = mealPrep.map((it) =>
                     it.id === id
                         ? { ...it, portions: newPortions, last_updated: today }
                         : it,
@@ -2310,7 +2361,7 @@ document.addEventListener("click", async (e) => {
                     .eq("id", id)
                     .eq("user_id", user.id);
 
-                renderFridgeStock();
+                renderMealPrep();
                 touchMetadata("fridge_stock");
             } else if (action === "done") {
                 const chore = chores.find((c) => c.id === id);
@@ -2439,7 +2490,7 @@ document.addEventListener("click", async (e) => {
 
     const detailRow = e.target.closest("[data-open-detail]");
     if (detailRow) {
-        openFridgeStockDetail(detailRow.dataset.openDetail);
+        openMealPrepDetail(detailRow.dataset.openDetail);
         return;
     }
 
