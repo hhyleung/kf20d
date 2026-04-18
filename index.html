@@ -21,7 +21,7 @@
                     <input type="email" id="loginEmail" required />
                     <label>Password</label>
                     <input type="password" id="loginPassword" required />
-                    <button type="submit">Login</button>
+                    <button type="submit" class="submit-btn">Login</button>
                 </form>
             </div>
         </div>
@@ -47,9 +47,10 @@
                             <h3>Fridge Stock</h3>
                             <button class="add-btn" title="Add item">+</button>
                         </div>
-                        <div class="panel-content" id="fridgeStockContent">
-                            TEMP
-                        </div>
+                        <div
+                            class="panel-content"
+                            id="fridgeStockContent"
+                        ></div>
                     </div>
                     <div class="panel" data-section="chores" style="flex: 4">
                         <div class="panel-header">
@@ -139,10 +140,7 @@
             <div class="modal-content modal-wide">
                 <header>
                     <h2 id="mealPrepDetailTitle">Meal Prep Details</h2>
-                    <button
-                        class="close-btn"
-                        onclick="closeModal('mealPrepDetailModal')"
-                    >
+                    <button onclick="closeModal('mealPrepDetailModal')">
                         &times;
                     </button>
                 </header>
@@ -207,7 +205,7 @@
                         <div>
                             <label
                                 >Expiry Date<span
-                                    id="mealPrepExpiryDateAutoLabel"
+                                    id="expiryAutoLabel"
                                     class="field-auto-tag"
                                     style="display: none"
                                     >auto</span
@@ -221,16 +219,17 @@
                         </div>
                     </div>
 
-                    <div class="form-meta">
+                    <div>
                         Last updated: <span id="mealPrepLastUpdated"></span>
                     </div>
 
                     <div class="modal-actions">
-                        <button type="submit" class="save-btn">Save</button>
+                        <button type="submit" class="submit-btn">Save</button>
                         <button
                             type="button"
                             id="mealPrepDeleteBtn"
                             class="delete-btn"
+                            hidden
                         >
                             Delete
                         </button>
@@ -271,7 +270,7 @@
                     <label class="form-label">
                         Next Due Date
                         <span
-                            id="choreNextDueDateAutoLabel"
+                            id="nextDueAutoLabel"
                             class="field-auto-tag"
                             style="display: none"
                             >auto</span
@@ -279,11 +278,12 @@
                     </label>
                     <input type="date" id="choreNextDueDate" />
                     <div class="modal-actions">
-                        <button type="submit" class="save-btn">Save</button>
+                        <button type="submit" class="submit-btn">Save</button>
                         <button
                             type="button"
                             id="choreDeleteBtn"
                             class="delete-btn"
+                            hidden
                         >
                             Delete
                         </button>
@@ -322,21 +322,22 @@
                         value="6"
                     />
                     <label class="form-label">
-                        Next Due
+                        Next Change Date
                         <span
-                            id="changeLogNextDueDateAutoLabel"
+                            id="nextChangeAutoLabel"
                             class="field-auto-tag"
                             style="display: none"
                             >auto</span
                         >
                     </label>
-                    <input type="date" id="changeLogNextDueDate" />
+                    <input type="date" id="changeLogNextChangeDate" />
                     <div class="modal-actions">
-                        <button type="submit" class="save-btn">Save</button>
+                        <button type="submit" class="submit-btn">Save</button>
                         <button
                             type="button"
                             id="changeLogDeleteBtn"
                             class="delete-btn"
+                            hidden
                         >
                             Delete
                         </button>
@@ -377,7 +378,7 @@
                     <label class="form-label">
                         Next Bill Date
                         <span
-                            id="billNextBillDateAutoLabel"
+                            id="nextBillAutoLabel"
                             class="field-auto-tag"
                             style="display: none"
                             >auto</span
@@ -385,11 +386,12 @@
                     </label>
                     <input type="date" id="billNextBillDate" />
                     <div class="modal-actions">
-                        <button type="submit" class="save-btn">Save</button>
+                        <button type="submit" class="submit-btn">Save</button>
                         <button
                             type="button"
                             id="billDeleteBtn"
                             class="delete-btn"
+                            hidden
                         >
                             Delete
                         </button>
@@ -427,7 +429,7 @@
                         min="1"
                     />
                     <div class="modal-actions">
-                        <button type="submit" class="save-btn">Save</button>
+                        <button type="submit" class="submit-btn">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('plantAddModal')"
@@ -592,7 +594,7 @@
                         rows="3"
                     ></textarea>
                     <div class="modal-actions">
-                        <button type="submit" class="save-btn">Save</button>
+                        <button type="submit" class="submit-btn">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('plantEventModal')"
@@ -618,7 +620,7 @@
                     <label class="form-label">Note</label>
                     <textarea id="addNoteContent" rows="4" required></textarea>
                     <div class="modal-actions">
-                        <button type="submit" class="save-btn">Save</button>
+                        <button type="submit" class="submit-btn">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('noteAddModal')"

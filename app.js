@@ -16,36 +16,566 @@ let bills = [];
 let plants = [];
 let plantHistory = [];
 let notes = [];
+let currentFullList = null;
+const panelState = {
+    fridge_stock: { editingId: null, manualDate: false },
+    chores: { editingId: null, manualDate: false },
+    change_log: { editingId: null, manualDate: false },
+    bills: { editingId: null, manualDate: false },
+};
 
 // LIST METADATA
 const LIST_META_KEYS = [
     "fridge_stock",
     "chores",
-    "bills",
     "change_log",
+    "bills",
     "plants",
     "notes",
 ];
 let listMetadata = {
     fridge_stock: null,
     chores: null,
-    bills: null,
     change_log: null,
+    bills: null,
     plants: null,
     notes: null,
 };
 LIST_META_KEYS.forEach((key) => (listMetadata[key] = null));
 
-// STATE FLAGS
-let editingMealPrepId = null;
-let mealPrepExpiryManuallySet = false;
-let editingChoreId = null;
-let choreNextDueManuallySet = false;
-let editingChangeLogId = null;
-let changeLogNextDueManuallySet = false;
-let editingBillId = null;
-let billNextDateManuallySet = false;
-let currentFullList = null;
+// CONFIGS
+const PANEL_CONFIGS = {
+    meal_prep: {
+        contentId: "mealPrepContent",
+        buildFn: () => buildMealPrepHTML(false),
+        fullBuildFn: () => buildMealPrepHTML(true),
+        after: () => renderPanel("fridge_stock"),
+        addAction: () => openDetailModal("fridge_stock"),
+        fullListAddAction: () => openDetailModal("fridge_stock"),
+    },
+
+    fridge_stock: {
+        key: "fridge_stock",
+        renderKey: "meal_prep",
+        stateKey: "fridge_stock",
+
+        data: {
+            table: "fridge_stock",
+            store: (d) => {
+                mealPrep = d;
+            },
+            orderCol: "item_name",
+            extraOrder: {
+                col: "last_updated",
+                ascending: false,
+                nullsLast: true,
+            },
+            label: "mealPrep",
+        },
+
+        render: {
+            contentId: "fridgeStockContent",
+            buildFn: () => buildFridgeStockHTML(false),
+            fullBuildFn: () => buildFridgeStockHTML(true),
+        },
+
+        rowOpen: {
+            enabled: true,
+            open: (id) => openDetailModal("fridge_stock", id),
+        },
+
+        detailModal: {
+            modalId: "mealPrepDetailModal",
+            titleId: "mealPrepDetailTitle",
+            editIdInput: "mealPrepEditId",
+            deleteBtnId: "mealPrepDeleteBtn",
+            addTitle: "ADD MEAL PREP ITEM",
+            editTitle: "EDIT MEAL PREP ITEM",
+
+            resetFields: () => {
+                document.getElementById("mealPrepItemName").value = "";
+                document.getElementById("mealPrepCategory").value = "Carbs";
+                document.getElementById("mealPrepPortions").value = "1";
+                document.getElementById("mealPrepShelfLife").value = "";
+                document.getElementById("mealPrepCreatedAt").value =
+                    getTodayHKT();
+                document.getElementById("mealPrepExpiryDate").value = "";
+                document.getElementById("mealPrepLastUpdated").textContent = "";
+            },
+
+            findItem: (id) => mealPrep.find((i) => i.id === id),
+
+            populateFields: (item) => {
+                document.getElementById("mealPrepItemName").value =
+                    item.item_name;
+                document.getElementById("mealPrepCategory").value =
+                    item.category || "Carbs";
+                document.getElementById("mealPrepPortions").value =
+                    item.portions || 0;
+                document.getElementById("mealPrepShelfLife").value =
+                    item.shelf_life_days || "";
+                document.getElementById("mealPrepCreatedAt").value =
+                    formatDateInput(item.created_at);
+                document.getElementById("mealPrepExpiryDate").value =
+                    formatDateInput(item.expiry_date);
+                document.getElementById("mealPrepLastUpdated").textContent =
+                    item.last_updated ? formatShortDate(item.last_updated) : "";
+            },
+
+            getExpectedAutoDate: (item) =>
+                item.created_at && item.shelf_life_days
+                    ? addDays(item.created_at, item.shelf_life_days)
+                    : null,
+
+            getActualAutoDate: (item) => item.expiry_date || null,
+        },
+
+        autoDate: {
+            fromId: "mealPrepCreatedAt",
+            intervalId: "mealPrepShelfLife",
+            resultId: "mealPrepExpiryDate",
+            autoLabelId: "expiryAutoLabel",
+            unit: "days",
+            manualFlag: () => panelState.fridge_stock.manualDate,
+            setManual: (v) => {
+                panelState.fridge_stock.manualDate = v;
+            },
+            clearResult: () => {
+                document.getElementById("mealPrepExpiryDate").value = "";
+            },
+        },
+
+        form: {
+            formId: "mealPrepForm",
+            buildRecord: (isUpdate) => {
+                const shelfLifeDays =
+                    parseInt(
+                        document.getElementById("mealPrepShelfLife").value,
+                        10,
+                    ) || null;
+                const createdAt =
+                    document.getElementById("mealPrepCreatedAt").value || null;
+                const expiryDate = panelState.fridge_stock.manualDate
+                    ? document.getElementById("mealPrepExpiryDate").value ||
+                      null
+                    : createdAt && shelfLifeDays
+                      ? addDays(createdAt, shelfLifeDays)
+                      : null;
+
+                return {
+                    id: isUpdate ? panelState.fridge_stock.editingId : null,
+                    item_name: document
+                        .getElementById("mealPrepItemName")
+                        .value.trim(),
+                    category: document.getElementById("mealPrepCategory").value,
+                    portions:
+                        parseInt(
+                            document.getElementById("mealPrepPortions").value,
+                            10,
+                        ) || 0,
+                    shelf_life_days: shelfLifeDays,
+                    created_at: createdAt,
+                    expiry_date: expiryDate,
+                    last_updated: getTodayHKT(),
+                };
+            },
+        },
+
+        deleteConfig: {
+            confirmMsg: "Delete this meal prep item permanently?",
+        },
+    },
+
+    chores: {
+        key: "chores",
+        stateKey: "chores",
+
+        data: {
+            table: "chores",
+            store: (d) => {
+                chores = d;
+            },
+            orderCol: "task_name",
+            label: "chores",
+        },
+
+        render: {
+            contentId: "choresContent",
+            buildFn: buildChoresHTML,
+            fullBuildFn: buildChoresHTML,
+        },
+
+        rowOpen: {
+            enabled: true,
+            open: (id) => openDetailModal("chores", id),
+        },
+
+        detailModal: {
+            modalId: "choreDetailModal",
+            titleId: "choreDetailTitle",
+            editIdInput: "choreEditId",
+            deleteBtnId: "choreDeleteBtn",
+            addTitle: "ADD CHORE",
+            editTitle: "EDIT CHORE",
+
+            resetFields: () => {
+                document.getElementById("choreTaskName").value = "";
+                document.getElementById("choreLastDoneDate").value = "";
+                document.getElementById("choreIntervalDays").value = "7";
+                document.getElementById("choreNextDueDate").value = "";
+            },
+
+            findItem: (id) => chores.find((c) => c.id === id),
+
+            populateFields: (item) => {
+                document.getElementById("choreTaskName").value = item.task_name;
+                document.getElementById("choreLastDoneDate").value =
+                    formatDateInput(item.last_done_date);
+                document.getElementById("choreIntervalDays").value =
+                    item.interval_days || "7";
+                document.getElementById("choreNextDueDate").value =
+                    formatDateInput(item.next_due_date);
+            },
+
+            getExpectedAutoDate: (item) =>
+                item.last_done_date && item.interval_days
+                    ? addDays(item.last_done_date, item.interval_days)
+                    : null,
+
+            getActualAutoDate: (item) => item.next_due_date || null,
+        },
+
+        autoDate: {
+            fromId: "choreLastDoneDate",
+            intervalId: "choreIntervalDays",
+            resultId: "choreNextDueDate",
+            autoLabelId: "nextDueAutoLabel",
+            unit: "days",
+            manualFlag: () => panelState.chores.manualDate,
+            setManual: (v) => {
+                panelState.chores.manualDate = v;
+            },
+            clearResult: () => {
+                document.getElementById("choreNextDueDate").value = "";
+            },
+        },
+
+        form: {
+            formId: "choreForm",
+            buildRecord: (isUpdate) => {
+                const lastDoneDate =
+                    document.getElementById("choreLastDoneDate").value || null;
+                const intervalDays =
+                    parseInt(
+                        document.getElementById("choreIntervalDays").value,
+                        10,
+                    ) || null;
+                const nextDueDate = panelState.chores.manualDate
+                    ? document.getElementById("choreNextDueDate").value || null
+                    : lastDoneDate && intervalDays
+                      ? addDays(lastDoneDate, intervalDays)
+                      : null;
+
+                return {
+                    id: isUpdate ? panelState.chores.editingId : null,
+                    task_name: document
+                        .getElementById("choreTaskName")
+                        .value.trim(),
+                    last_done_date: lastDoneDate,
+                    interval_days: intervalDays,
+                    next_due_date: nextDueDate,
+                };
+            },
+        },
+
+        deleteConfig: {
+            confirmMsg: "Delete this chore?",
+        },
+    },
+
+    change_log: {
+        key: "change_log",
+        stateKey: "change_log",
+
+        data: {
+            table: "change_log",
+            store: (d) => {
+                changeLog = d;
+            },
+            orderCol: "item_name",
+            label: "changeLog",
+        },
+
+        render: {
+            contentId: "changeLogContent",
+            buildFn: buildChangeLogHTML,
+            fullBuildFn: buildChangeLogHTML,
+        },
+
+        rowOpen: {
+            enabled: true,
+            open: (id) => openDetailModal("change_log", id),
+        },
+
+        detailModal: {
+            modalId: "changeLogDetailModal",
+            titleId: "changeLogDetailTitle",
+            editIdInput: "changeLogEditId",
+            deleteBtnId: "changeLogDeleteBtn",
+            addTitle: "ADD CHANGE LOG",
+            editTitle: "EDIT CHANGE LOG",
+
+            resetFields: () => {
+                document.getElementById("changeLogItemName").value = "";
+                document.getElementById("changeLogLastChanged").value = "";
+                document.getElementById("changeLogIntervalMonths").value = "3";
+                document.getElementById("changeLogNextChangeDate").value = "";
+            },
+
+            findItem: (id) => changeLog.find((c) => c.id === id),
+
+            populateFields: (item) => {
+                document.getElementById("changeLogItemName").value =
+                    item.item_name;
+                document.getElementById("changeLogLastChanged").value =
+                    formatDateInput(item.last_changed_date);
+                document.getElementById("changeLogIntervalMonths").value =
+                    item.interval_months || "6";
+                document.getElementById("changeLogNextChangeDate").value =
+                    formatDateInput(item.next_change_due);
+            },
+
+            getExpectedAutoDate: (item) =>
+                item.last_changed_date && item.interval_months
+                    ? addMonths(item.last_changed_date, item.interval_months)
+                    : null,
+
+            getActualAutoDate: (item) => item.next_change_due || null,
+        },
+
+        autoDate: {
+            fromId: "changeLogLastChanged",
+            intervalId: "changeLogIntervalMonths",
+            resultId: "changeLogNextChangeDate",
+            autoLabelId: "nextChangeAutoLabel",
+            unit: "months",
+            manualFlag: () => panelState.change_log.manualDate,
+            setManual: (v) => {
+                panelState.change_log.manualDate = v;
+            },
+            clearResult: () => {
+                document.getElementById("changeLogNextChangeDate").value = "";
+            },
+        },
+
+        form: {
+            formId: "changeLogForm",
+            buildRecord: (isUpdate) => {
+                const lastChangedDate =
+                    document.getElementById("changeLogLastChanged").value ||
+                    null;
+                const intervalMonths =
+                    parseInt(
+                        document.getElementById("changeLogIntervalMonths")
+                            .value,
+                        10,
+                    ) || null;
+                const nextChangeDue = panelState.change_log.manualDate
+                    ? document.getElementById("changeLogNextChangeDate")
+                          .value || null
+                    : lastChangedDate && intervalMonths
+                      ? addMonths(lastChangedDate, intervalMonths)
+                      : null;
+
+                return {
+                    id: isUpdate ? panelState.change_log.editingId : null,
+                    item_name: document
+                        .getElementById("changeLogItemName")
+                        .value.trim(),
+                    last_changed_date: lastChangedDate,
+                    interval_months: intervalMonths,
+                    next_change_due: nextChangeDue,
+                };
+            },
+        },
+
+        deleteConfig: {
+            confirmMsg: "Delete this change item?",
+        },
+    },
+
+    bills: {
+        key: "bills",
+        stateKey: "bills",
+
+        data: {
+            table: "bills",
+            store: (d) => {
+                bills = d;
+            },
+            orderCol: "bill_name",
+            label: "bills",
+        },
+
+        render: {
+            contentId: "billsContent",
+            buildFn: buildBillsHTML,
+            fullBuildFn: buildBillsHTML,
+        },
+
+        rowOpen: {
+            enabled: true,
+            open: (id) => openDetailModal("bills", id),
+        },
+
+        detailModal: {
+            modalId: "billDetailModal",
+            titleId: "billDetailTitle",
+            editIdInput: "billEditId",
+            deleteBtnId: "billDeleteBtn",
+            addTitle: "ADD BILL",
+            editTitle: "EDIT BILL",
+
+            resetFields: () => {
+                document.getElementById("billBillName").value = "";
+                document.getElementById("billLastBillDate").value = "";
+                document.getElementById("billIntervalMonths").value = "1";
+                document.getElementById("billNextBillDate").value = "";
+            },
+
+            findItem: (id) => bills.find((b) => b.id === id),
+
+            populateFields: (item) => {
+                document.getElementById("billBillName").value = item.bill_name;
+                document.getElementById("billLastBillDate").value =
+                    formatDateInput(item.last_bill_date);
+                document.getElementById("billIntervalMonths").value =
+                    item.interval_months || "1";
+                document.getElementById("billNextBillDate").value =
+                    formatDateInput(item.next_bill_date);
+            },
+
+            getExpectedAutoDate: (item) =>
+                item.last_bill_date && item.interval_months
+                    ? addMonths(item.last_bill_date, item.interval_months)
+                    : null,
+
+            getActualAutoDate: (item) => item.next_bill_date || null,
+        },
+
+        autoDate: {
+            fromId: "billLastBillDate",
+            intervalId: "billIntervalMonths",
+            resultId: "billNextBillDate",
+            autoLabelId: "nextBillAutoLabel",
+            unit: "months",
+            manualFlag: () => panelState.bills.manualDate,
+            setManual: (v) => {
+                panelState.bills.manualDate = v;
+            },
+            clearResult: () => {
+                document.getElementById("billNextBillDate").value = "";
+            },
+        },
+
+        form: {
+            formId: "billForm",
+            buildRecord: (isUpdate) => {
+                const lastBillDate =
+                    document.getElementById("billLastBillDate").value || null;
+                const intervalMonths =
+                    parseInt(
+                        document.getElementById("billIntervalMonths").value,
+                        10,
+                    ) || null;
+                const nextBillDate = panelState.bills.manualDate
+                    ? document.getElementById("billNextBillDate").value || null
+                    : lastBillDate && intervalMonths
+                      ? addMonths(lastBillDate, intervalMonths)
+                      : null;
+
+                return {
+                    id: isUpdate ? panelState.bills.editingId : null,
+                    bill_name: document
+                        .getElementById("billBillName")
+                        .value.trim(),
+                    last_bill_date: lastBillDate,
+                    interval_months: intervalMonths,
+                    next_bill_date: nextBillDate,
+                };
+            },
+        },
+
+        deleteConfig: {
+            confirmMsg: "Delete this bill?",
+        },
+    },
+
+    plants: {
+        key: "plants",
+
+        data: {
+            table: "plants",
+            store: (d) => {
+                plants = d;
+            },
+            orderCol: "plant_name",
+            label: "plants",
+        },
+
+        render: {
+            contentId: "plantsContent",
+            buildFn: () => buildPlantsHTML(false),
+            fullBuildFn: () => buildPlantsHTML(true),
+        },
+
+        rowOpen: {
+            enabled: true,
+            open: (id) => openPlantDetail(id),
+        },
+
+        addAction: () => openPlantAddModal(),
+        fullListAddAction: () => openPlantAddModal(),
+    },
+
+    notes: {
+        key: "notes",
+
+        data: {
+            table: "notes",
+            store: (d) => {
+                notes = d;
+            },
+            orderCol: "created_at",
+            label: "notes",
+        },
+
+        render: {
+            contentId: "notesContent",
+            buildFn: buildNotesHTML,
+            fullBuildFn: buildNotesHTML,
+        },
+
+        addAction: () => openModal("noteAddModal"),
+        fullListAddAction: () => openModal("noteAddModal"),
+    },
+
+    plant_history: {
+        key: "plant_history",
+
+        data: {
+            table: "plant_history",
+            store: (d) => {
+                plantHistory = d;
+            },
+            orderCol: "event_date",
+            orderAscending: false,
+            orderNulls: { nullsLast: true },
+            noUserFilter: true,
+            label: "plantHistory",
+        },
+    },
+};
 
 // SUPABASE CONNECTION
 async function initSupabase() {
@@ -99,11 +629,94 @@ function subscribeToTable(tableName, renderFunc) {
         .catch(console.error);
 }
 
+function getDataConfigs() {
+    return Object.values(PANEL_CONFIGS)
+        .map((cfg) => cfg.data)
+        .filter(Boolean);
+}
+
+async function loadSupabaseData(configs = getDataConfigs()) {
+    const sb = await ensureSupabaseReady();
+    if (!sb) {
+        console.error("Supabase not ready");
+        return;
+    }
+
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+
+    if (!user?.id) {
+        console.error("Not authenticated");
+        return;
+    }
+
+    await Promise.all([
+        ...configs.map(async (cfg) => {
+            try {
+                let query = sb.from(cfg.table).select("*");
+
+                if (!cfg.noUserFilter) {
+                    if (!user?.id) {
+                        cfg.store([]);
+                        return;
+                    }
+                    query = query.eq("user_id", user.id);
+                }
+
+                query = query.order(cfg.orderCol, {
+                    ascending: cfg.orderAscending ?? true,
+                    ...(cfg.orderNulls ?? { nullsFirst: true }),
+                });
+
+                if (cfg.extraOrder) {
+                    query = query.order(cfg.extraOrder.col, {
+                        ascending: cfg.extraOrder.ascending,
+                        nullsLast: cfg.extraOrder.nullsLast,
+                    });
+                }
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                cfg.store(data || []);
+                console.log(`${cfg.label} loaded:`, (data || []).length);
+            } catch (err) {
+                console.error(`Load ${cfg.table} error:`, err);
+                cfg.store([]);
+            }
+        }),
+
+        (async () => {
+            try {
+                if (!user?.id) return;
+
+                const { data, error } = await sb
+                    .from("list_metadata")
+                    .select("list_name, last_updated")
+                    .eq("user_id", user.id);
+
+                if (error) throw error;
+
+                data.forEach((row) => {
+                    listMetadata[row.list_name] = row.last_updated;
+                });
+
+                console.log("listMetadata loaded");
+            } catch (err) {
+                console.error("Load list_metadata error:", err);
+            }
+        })(),
+    ]);
+
+    console.log("All data loaded");
+}
+
 async function setupRealtime() {
     cleanupSubscriptions();
 
     const sb = await ensureSupabaseReady();
-    if (!sb || !sb.auth.getSession()) {
+    if (!sb) {
         console.log("Skipping realtime - not ready");
         return;
     }
@@ -112,30 +725,32 @@ async function setupRealtime() {
         data: { user },
     } = await sb.auth.getUser();
     if (!user?.id) {
-        console.log("Skipping realtime - no user");
+        console.log("Skipping realtime - not authenticated");
         return;
     }
 
-    subscribeToTable("fridge_stock", () => {
-        loadMealPrep().then(renderMealPrep);
-    });
-    subscribeToTable("chores", () => {
-        loadChores().then(renderChores);
-    });
-    subscribeToTable("change_log", () => {
-        loadChangeLog().then(renderChangeLog);
-    });
-    subscribeToTable("bills", () => {
-        loadBills().then(renderBills);
-    });
-    subscribeToTable("plants", () => {
-        loadPlants().then(renderPlants);
-    });
-    subscribeToTable("plant_history", () => {
-        loadPlantHistory().then(renderPlants);
-    });
-    subscribeToTable("notes", () => {
-        loadNotes().then(renderNotes);
+    const watchedTables = [
+        "fridge_stock",
+        "chores",
+        "change_log",
+        "bills",
+        "plants",
+        "plant_history",
+        "notes",
+    ];
+
+    watchedTables.forEach((tableName) => {
+        subscribeToTable(tableName, async () => {
+            await loadSupabaseData();
+            [
+                "meal_prep",
+                "chores",
+                "change_log",
+                "bills",
+                "plants",
+                "notes",
+            ].forEach(renderPanel);
+        });
     });
 }
 
@@ -239,23 +854,16 @@ async function showDashboard() {
     setupPanelClicks();
     bindAllForms();
 
-    editingMealPrepId = null;
-    mealPrepExpiryManuallySet = false;
-    editingChoreId = null;
-    choreNextDueManuallySet = false;
-    editingChangeLogId = null;
-    changeLogNextDueManuallySet = false;
-    editingBillId = null;
-    billNextDateManuallySet = false;
+    Object.keys(panelState).forEach((key) => {
+        panelState[key].editingId = null;
+        panelState[key].manualDate = false;
+    });
 
-    await loadAllData();
+    await loadSupabaseData();
 
-    renderMealPrep();
-    renderChores();
-    renderChangeLog();
-    renderBills();
-    renderPlants();
-    renderNotes();
+    ["meal_prep", "chores", "change_log", "bills", "plants", "notes"].forEach(
+        renderPanel,
+    );
     renderControls();
 
     if (!realtimeSetupDone) {
@@ -264,265 +872,29 @@ async function showDashboard() {
     }
 }
 
-// DATA LOADERS
-async function loadMealPrep() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadMealPrep");
-            return;
-        }
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            console.error("No user for loadMealPrep");
-            mealPrep = [];
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("fridge_stock")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("item_name", { ascending: true, nullsFirst: true })
-            .order("last_updated", { ascending: false, nullsLast: true });
-
-        if (error) throw error;
-        mealPrep = data || [];
-        console.log("Meal prep loaded:", mealPrep.length, "items");
-    } catch (err) {
-        console.error("Load fridge_stock error:", err);
-        mealPrep = [];
-    }
-}
-
-async function loadChores() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadChores");
-            return;
-        }
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            console.error("No user for loadChores");
-            chores = [];
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("chores")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("task_name", { ascending: true, nullsFirst: true });
-
-        if (error) throw error;
-        chores = data || [];
-        console.log("Chores loaded:", chores.length);
-    } catch (err) {
-        console.error("Load chores error:", err);
-        chores = [];
-    }
-}
-
-async function loadChangeLog() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadChangeLog");
-            return;
-        }
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            console.error("No user for loadChangeLog");
-            changeLog = [];
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("change_log")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("item_name", { ascending: true, nullsFirst: true });
-
-        if (error) throw error;
-        changeLog = data || [];
-        console.log("Change Log loaded:", changeLog.length);
-    } catch (err) {
-        console.error("Load change_log error:", err);
-        changeLog = [];
-    }
-}
-
-async function loadBills() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadBills");
-            return;
-        }
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            console.error("No user for loadBills");
-            bills = [];
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("bills")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("bill_name", { ascending: true, nullsFirst: true });
-
-        if (error) throw error;
-        bills = data || [];
-        console.log("Bills loaded:", bills.length);
-    } catch (err) {
-        console.error("Load bills error:", err);
-        bills = [];
-    }
-}
-
-async function loadPlants() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadPlants");
-            return;
-        }
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            console.error("No user for loadPlants");
-            plants = [];
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("plants")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("plant_name", { ascending: true, nullsFirst: true });
-
-        if (error) throw error;
-        plants = data || [];
-        console.log("Plants loaded:", plants.length);
-    } catch (err) {
-        console.error("Load plants error:", err);
-        plants = [];
-    }
-}
-
-async function loadPlantHistory() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadPlantHistory");
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("plant_history")
-            .select("*")
-            .order("event_date", { ascending: false, nullsLast: true });
-
-        if (error) throw error;
-        plantHistory = data || [];
-        console.log("Plant history loaded:", plantHistory.length);
-    } catch (err) {
-        console.error("Load plant_history error:", err);
-        plantHistory = [];
-    }
-}
-
-async function loadNotes() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadNotes");
-            return;
-        }
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            console.error("No user for loadNotes");
-            notes = [];
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("notes")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: true, nullsFirst: true });
-
-        if (error) throw error;
-        notes = data || [];
-        console.log("Notes loaded:", notes.length);
-    } catch (err) {
-        console.error("Load notes error:", err);
-        notes = [];
-    }
-}
-
-async function loadListMetadata() {
-    try {
-        const sb = await ensureSupabaseReady();
-        if (!sb) {
-            console.error("Supabase not ready for loadListMetadata");
-            return;
-        }
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            console.error("No user for loadListMetadata");
-            return;
-        }
-
-        const { data, error } = await sb
-            .from("list_metadata")
-            .select("list_name, last_updated")
-            .eq("user_id", user.id);
-
-        if (error) throw error;
-        data.forEach((row) => {
-            listMetadata[row.list_name] = row.last_updated;
-        });
-    } catch (err) {
-        console.error("Load list metadata error:", err);
-        notes = [];
-    }
-}
-
-async function loadAllData() {
-    try {
-        await Promise.all([
-            loadMealPrep(),
-            loadChores(),
-            loadChangeLog(),
-            loadBills(),
-            loadPlants(),
-            loadPlantHistory(),
-            loadNotes(),
-            loadListMetadata(),
-        ]);
-        console.log("All data loaded");
-    } catch (err) {
-        console.error("loadAllData failed:", err);
-    }
-}
-
 // PANEL BUILDERS
+function renderPanel(section) {
+    const cfg = PANEL_CONFIGS[section];
+    if (!cfg) return;
+
+    const renderCfg = cfg.render || cfg;
+    if (!renderCfg.contentId || !renderCfg.buildFn) return;
+
+    const contentEl = document.getElementById(renderCfg.contentId);
+    if (contentEl) {
+        contentEl.innerHTML = renderCfg.buildFn();
+    }
+
+    if (currentFullList === section) {
+        const fullListEl = document.getElementById("fullListContent");
+        if (fullListEl && renderCfg.fullBuildFn) {
+            fullListEl.innerHTML = renderCfg.fullBuildFn();
+        }
+    }
+
+    if (cfg.after) cfg.after();
+}
+
 // MEAL PREP
 function getVisibleItems(showZero = false) {
     return mealPrep.filter((item) => showZero || item.portions > 0);
@@ -540,28 +912,15 @@ function groupByCategory(items) {
     return grouped;
 }
 
-function getExpiryClass(expiryDate) {
-    if (!expiryDate) return "";
-    const [todayY, todayM, todayD] = getTodayHKT().split("-").map(Number);
-    const [expiryY, expiryM, expiryD] = expiryDate.split("-").map(Number);
-
-    const todayNum = todayY * 10000 + todayM * 100 + todayD;
-    const expiryNum = expiryY * 10000 + expiryM * 100 + expiryD;
-
-    if (expiryNum < todayNum) return "danger";
-    if (expiryNum - todayNum <= 7) return "warning";
-    return "";
-}
-
 function mealPrepItemRow(item, showZero = false) {
-    const expiryClass = getExpiryClass(item.expiry_date);
+    const expiryClass = getUrgencyClass(item.expiry_date, 7);
     const portionsDisplay =
         item.portions === 0 && showZero
             ? `<span class="portion-zero">${item.portions}</span>`
             : `<span class="portion-number">${item.portions}</span>`;
     const zeroClass = item.portions === 0 ? " zero-portions" : "";
 
-    return `<li class="item-row${zeroClass}" data-open-detail="${item.id}">
+    return `<li class="item-row${zeroClass}" data-open-type="fridge_stock" data-id="${item.id}">
         <span class="item-key ${expiryClass}">${item.item_name}</span>
         <span class="item-value">
             <button class="action-btn" data-action="meal-prep-portions" data-id="${item.id}" data-delta="1">+</button>
@@ -612,16 +971,6 @@ function buildMealPrepHTML(showZero) {
     return html;
 }
 
-function renderMealPrep() {
-    document.getElementById("mealPrepContent").innerHTML =
-        buildMealPrepHTML(false);
-    if (currentFullList === "meal_prep") {
-        document.getElementById("fullListContent").innerHTML =
-            buildMealPrepHTML(true);
-    }
-    renderFridgeStock();
-}
-
 function buildFridgeStockHTML(showZero = false) {
     let html = "<div>";
     fridgeStockCategories.forEach((cat) => {
@@ -651,37 +1000,15 @@ function buildFridgeStockHTML(showZero = false) {
     return html;
 }
 
-function renderFridgeStock() {
-    document.getElementById("fridgeStockContent").innerHTML =
-        buildFridgeStockHTML(false);
-    if (currentFullList === "fridge_stock") {
-        document.getElementById("fullListContent").innerHTML =
-            buildFridgeStockHTML(true);
-    }
-}
-
 // CHORES
-function getDueClass(nextDueDate) {
-    if (!nextDueDate) return "";
-    const [todayY, todayM, todayD] = getTodayHKT().split("-").map(Number);
-    const [dueY, dueM, dueD] = nextDueDate.split("-").map(Number);
-
-    const todayNum = todayY * 10000 + todayM * 100 + todayD;
-    const dueNum = dueY * 10000 + dueM * 100 + dueD;
-
-    if (dueNum < todayNum) return "danger";
-    if (dueNum - todayNum <= 3) return "warning";
-    return "";
-}
-
 function buildChoresHTML() {
     let html = '<ul class="item-list">';
     chores.forEach((chore) => {
-        const dueClass = getDueClass(chore.next_due_date);
+        const dueClass = getUrgencyClass(chore.next_due_date);
         const lastDoneText = chore.last_done_date
             ? formatShortDate(chore.last_done_date)
             : "Never";
-        html += `<li class="item-row" data-open-chore="${chore.id}">
+        html += `<li class="item-row" data-open-type="chores" data-id="${chore.id}">
             <span class="item-key ${dueClass}">${chore.task_name}</span>
             <span class="item-value">
                 <span class="item-meta">${lastDoneText}</span>
@@ -693,23 +1020,15 @@ function buildChoresHTML() {
     return html;
 }
 
-function renderChores() {
-    document.getElementById("choresContent").innerHTML = buildChoresHTML();
-    if (currentFullList === "chores") {
-        document.getElementById("fullListContent").innerHTML =
-            buildChoresHTML();
-    }
-}
-
 // CHANGE LOG
 function buildChangeLogHTML() {
     let html = '<ul class="item-list">';
     changeLog.forEach((cl) => {
-        const dueClass = getDueClass(cl.next_change_due);
+        const dueClass = getUrgencyClass(cl.next_change_due);
         const lastChangedText = cl.last_changed_date
             ? formatShortDate(cl.last_changed_date)
             : "Never";
-        html += `<li class="item-row" data-open-changelog="${cl.id}">
+        html += `<li class="item-row" data-open-type="change_log" data-id="${cl.id}">
             <span class="item-key ${dueClass}">${cl.item_name}</span>
             <span class="item-value">
                 <span class="item-meta">${lastChangedText}</span>
@@ -721,24 +1040,15 @@ function buildChangeLogHTML() {
     return html;
 }
 
-function renderChangeLog() {
-    document.getElementById("changeLogContent").innerHTML =
-        buildChangeLogHTML();
-    if (currentFullList === "change_log") {
-        document.getElementById("fullListContent").innerHTML =
-            buildChangeLogHTML();
-    }
-}
-
 // BILLS
 function buildBillsHTML() {
     let html = '<ul class="item-list">';
     bills.forEach((bill) => {
-        const dueClass = getDueClass(bill.next_bill_date);
+        const dueClass = getUrgencyClass(bill.next_bill_date);
         const nextDueText = bill.next_bill_date
             ? formatShortDate(bill.next_bill_date)
             : "";
-        html += `<li class="item-row" data-open-bill="${bill.id}">
+        html += `<li class="item-row" data-open-type="bills" data-id="${bill.id}">
             <span class="item-key ${dueClass}">${bill.bill_name}</span>
             <span class="item-value">
                 <span class="item-meta">${nextDueText}</span>
@@ -748,13 +1058,6 @@ function buildBillsHTML() {
     });
     html += "</ul>";
     return html;
-}
-
-function renderBills() {
-    document.getElementById("billsContent").innerHTML = buildBillsHTML();
-    if (currentFullList === "bills") {
-        document.getElementById("fullListContent").innerHTML = buildBillsHTML();
-    }
 }
 
 // PLANTS
@@ -767,7 +1070,7 @@ function buildPlantsHTML(showArchived = false) {
     visible.forEach((p) => {
         const lastEvent = p.last_watered_date || p.last_fertilised_date;
         const lastEventText = lastEvent ? formatShortDate(lastEvent) : "";
-        html += `<li class="item-row" data-open-plant="${p.id}">
+        html += `<li class="item-row" data-open-type="plants" data-id="${p.id}">
             <span class="item-key">${p.plant_name}${p.archived ? ' <span class="plant-archived-tag">archived</span>' : ""}</span>
             <span class="item-value">
                 <span class="item-meta plant-meta">
@@ -780,14 +1083,6 @@ function buildPlantsHTML(showArchived = false) {
     });
     html += "</ul>";
     return html;
-}
-
-function renderPlants() {
-    document.getElementById("plantsContent").innerHTML = buildPlantsHTML(false);
-    if (currentFullList === "plants") {
-        document.getElementById("fullListContent").innerHTML =
-            buildPlantsHTML(true);
-    }
 }
 
 // NOTES
@@ -804,13 +1099,6 @@ function buildNotesHTML() {
     });
     html += "</ul>";
     return html;
-}
-
-function renderNotes() {
-    document.getElementById("notesContent").innerHTML = buildNotesHTML();
-    if (currentFullList === "notes") {
-        document.getElementById("fullListContent").innerHTML = buildNotesHTML();
-    }
 }
 
 function renderControls() {
@@ -856,274 +1144,77 @@ function closeModal(id) {
     }
 }
 
-// MEAL PREP
-function openMealPrepDetail(itemId = null) {
+function openRowItem(type, id) {
+    const cfg = PANEL_CONFIGS[type];
+    if (!cfg?.rowOpen?.open) return;
+    cfg.rowOpen.open(id);
+}
+
+function openDetailModal(panelKey, itemId = null) {
+    const panelCfg = PANEL_CONFIGS[panelKey];
+    const cfg = panelCfg?.detailModal;
+    if (!cfg) return;
+
     const isEditing = !!itemId;
-    editingMealPrepId = itemId;
+    const stateKey = panelCfg.stateKey;
+    const deleteBtn = cfg.deleteBtnId
+        ? document.getElementById(cfg.deleteBtnId)
+        : null;
 
-    document.getElementById("mealPrepEditId").value = itemId || "";
-    document.getElementById("mealPrepItemName").value = "";
-    document.getElementById("mealPrepCategory").value = "Carbs";
-    document.getElementById("mealPrepPortions").value = "1";
-    document.getElementById("mealPrepShelfLife").value = "";
-    document.getElementById("mealPrepCreatedAt").value = getTodayHKT();
-    document.getElementById("mealPrepExpiryDate").value = "";
+    if (stateKey && panelState[stateKey]) {
+        panelState[stateKey].editingId = itemId;
+    }
 
-    document.getElementById("mealPrepDetailTitle").textContent = isEditing
-        ? "EDIT MEAL PREP ITEM"
-        : "ADD MEAL PREP ITEM";
+    if (cfg.editIdInput) {
+        const editInput = document.getElementById(cfg.editIdInput);
+        if (editInput) editInput.value = itemId || "";
+    }
+
+    if (cfg.titleId) {
+        const titleEl = document.getElementById(cfg.titleId);
+        if (titleEl) {
+            titleEl.textContent = isEditing ? cfg.editTitle : cfg.addTitle;
+        }
+    }
+
+    if (deleteBtn) {
+        deleteBtn.hidden = true;
+        deleteBtn.style.display = "none";
+    }
+
+    if (cfg.resetFields) cfg.resetFields();
 
     if (isEditing) {
-        const item = mealPrep.find((i) => i.id === itemId);
+        const item = cfg.findItem ? cfg.findItem(itemId) : null;
         if (!item) return;
 
-        document.getElementById("mealPrepItemName").value = item.item_name;
-        document.getElementById("mealPrepCategory").value =
-            item.category || "Carbs";
-        document.getElementById("mealPrepPortions").value = item.portions || 0;
-        document.getElementById("mealPrepShelfLife").value =
-            item.shelf_life_days || "";
-        document.getElementById("mealPrepCreatedAt").value = formatDateInput(
-            item.created_at,
-        );
-        document.getElementById("mealPrepExpiryDate").value = formatDateInput(
-            item.expiry_date,
-        );
+        if (cfg.populateFields) cfg.populateFields(item);
 
-        const expectedExpiry =
-            item.created_at && item.shelf_life_days
-                ? addDays(item.created_at, item.shelf_life_days)
+        if (stateKey && panelState[stateKey]) {
+            const actualDate = cfg.getActualAutoDate
+                ? cfg.getActualAutoDate(item)
                 : null;
-        mealPrepExpiryManuallySet = !!(
-            item.expiry_date && item.expiry_date !== expectedExpiry
-        );
-
-        document.getElementById("mealPrepLastUpdated").textContent =
-            item.last_updated ? formatShortDate(item.last_updated) : "";
-    } else {
-        mealPrepExpiryManuallySet = false;
-    }
-
-    document.getElementById("mealPrepDeleteBtn").style.display = isEditing
-        ? "block"
-        : "none";
-    calcMealPrepExpiry();
-    openModal("mealPrepDetailModal");
-}
-
-// CHORES
-function openChoreDetail(choreId = null) {
-    const isEditing = !!choreId;
-    editingChoreId = choreId;
-
-    document.getElementById("choreEditId").value = choreId || "";
-    document.getElementById("choreTaskName").value = "";
-    document.getElementById("choreLastDoneDate").value = "";
-    document.getElementById("choreIntervalDays").value = "7";
-    document.getElementById("choreNextDueDate").value = "";
-
-    document.getElementById("choreDetailTitle").textContent = isEditing
-        ? "EDIT CHORE"
-        : "ADD CHORE";
-
-    if (isEditing) {
-        const chore = chores.find((c) => c.id === choreId);
-        if (!chore) return;
-
-        document.getElementById("choreTaskName").value = chore.task_name;
-        document.getElementById("choreLastDoneDate").value = formatDateInput(
-            chore.last_done_date,
-        );
-        document.getElementById("choreIntervalDays").value =
-            chore.interval_days || "7";
-        document.getElementById("choreNextDueDate").value = formatDateInput(
-            chore.next_due_date,
-        );
-
-        const expectedNextDue =
-            chore.last_done_date && chore.interval_days
-                ? calcNextDueByDays(chore.last_done_date, chore.interval_days)
+            const expectedDate = cfg.getExpectedAutoDate
+                ? cfg.getExpectedAutoDate(item)
                 : null;
-        choreNextDueManuallySet = !!(
-            chore.next_due_date && chore.next_due_date !== expectedNextDue
-        );
-    } else {
-        choreNextDueManuallySet = false;
+            panelState[stateKey].manualDate = !!(
+                actualDate && actualDate !== expectedDate
+            );
+        }
+    } else if (stateKey && panelState[stateKey]) {
+        panelState[stateKey].manualDate = false;
     }
 
-    document.getElementById("choreDeleteBtn").style.display = isEditing
-        ? "block"
-        : "none";
-
-    if (!choreNextDueManuallySet) {
-        refreshChoreNextDue();
+    if (deleteBtn) {
+        deleteBtn.hidden = !isEditing;
+        deleteBtn.style.display = isEditing ? "" : "none";
     }
 
-    openModal("choreDetailModal");
-}
-
-function refreshChoreNextDue() {
-    if (choreNextDueManuallySet) return;
-
-    const lastDoneEl = document.getElementById("choreLastDoneDate");
-    const intervalEl = document.getElementById("choreIntervalDays");
-    const nextDueEl = document.getElementById("choreNextDueDate");
-    const autoLabelEl = document.getElementById("choreNextDueDateAutoLabel");
-
-    const lastDone = lastDoneEl?.value;
-    const interval = parseInt(intervalEl?.value || "0", 10);
-
-    if (lastDone && interval > 0) {
-        nextDueEl.value = calcNextDueByDays(lastDone, interval);
-        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
-    } else {
-        nextDueEl.value = "";
-        if (autoLabelEl) autoLabelEl.style.display = "none";
-    }
-}
-
-// CHANGE LOG
-function openChangeLogDetail(clId = null) {
-    const isEditing = !!clId;
-    editingChangeLogId = clId;
-
-    document.getElementById("changeLogEditId").value = clId || "";
-    document.getElementById("changeLogItemName").value = "";
-    document.getElementById("changeLogLastChanged").value = "";
-    document.getElementById("changeLogIntervalMonths").value = "3";
-    document.getElementById("changeLogNextDueDate").value = "";
-
-    document.getElementById("changeLogDetailTitle").textContent = isEditing
-        ? "EDIT CHANGE LOG"
-        : "ADD CHANGE LOG";
-
-    if (isEditing) {
-        const cl = changeLog.find((c) => c.id === clId);
-        if (!cl) return;
-
-        document.getElementById("changeLogItemName").value = cl.item_name;
-        document.getElementById("changeLogLastChanged").value = formatDateInput(
-            cl.last_changed_date,
-        );
-        document.getElementById("changeLogIntervalMonths").value =
-            cl.interval_months || "6";
-        document.getElementById("changeLogNextDueDate").value = formatDateInput(
-            cl.next_change_due,
-        );
-
-        const expectedNextDue =
-            cl.last_changed_date && cl.interval_months
-                ? calcNextDueByMonths(cl.last_changed_date, cl.interval_months)
-                : null;
-        changeLogNextDueManuallySet = !!(
-            cl.next_change_due && cl.next_change_due !== expectedNextDue
-        );
-    } else {
-        changeLogNextDueManuallySet = false;
+    if (panelCfg.autoDate) {
+        refreshAutoDate(panelCfg.autoDate);
     }
 
-    document.getElementById("changeLogDeleteBtn").style.display = isEditing
-        ? "block"
-        : "none";
-
-    if (!changeLogNextDueManuallySet) {
-        refreshChangeLogNextDue();
-    }
-
-    openModal("changeLogDetailModal");
-}
-
-function refreshChangeLogNextDue() {
-    if (changeLogNextDueManuallySet) return;
-
-    const lastChangedEl = document.getElementById("changeLogLastChanged");
-    const intervalEl = document.getElementById("changeLogIntervalMonths");
-    const nextDueEl = document.getElementById("changeLogNextDueDate");
-    const autoLabelEl = document.getElementById(
-        "changeLogNextDueDateAutoLabel",
-    );
-
-    const lastChanged = lastChangedEl?.value;
-    const intervalMonths = parseInt(intervalEl?.value || "0", 10);
-
-    if (lastChanged && intervalMonths > 0) {
-        nextDueEl.value = calcNextDueByMonths(lastChanged, intervalMonths);
-        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
-    } else {
-        nextDueEl.value = "";
-        if (autoLabelEl) autoLabelEl.style.display = "none";
-    }
-}
-
-// BILLS
-function openBillDetail(billId = null) {
-    const isEditing = !!billId;
-    editingBillId = billId;
-
-    document.getElementById("billEditId").value = billId || "";
-    document.getElementById("billBillName").value = "";
-    document.getElementById("billLastBillDate").value = "";
-    document.getElementById("billIntervalMonths").value = "1";
-    document.getElementById("billNextBillDate").value = "";
-
-    document.getElementById("billDetailTitle").textContent = isEditing
-        ? "EDIT BILL"
-        : "ADD BILL";
-
-    if (isEditing) {
-        const bill = bills.find((b) => b.id === billId);
-        if (!bill) return;
-
-        document.getElementById("billBillName").value = bill.bill_name;
-        document.getElementById("billLastBillDate").value = formatDateInput(
-            bill.last_bill_date,
-        );
-        document.getElementById("billIntervalMonths").value =
-            bill.interval_months || "1";
-        document.getElementById("billNextBillDate").value = formatDateInput(
-            bill.next_bill_date,
-        );
-
-        const expectedNextDate =
-            bill.last_bill_date && bill.interval_months
-                ? calcNextDueByMonths(bill.last_bill_date, bill.interval_months)
-                : null;
-        billNextDateManuallySet = !!(
-            bill.next_bill_date && bill.next_bill_date !== expectedNextDate
-        );
-    } else {
-        billNextDateManuallySet = false;
-    }
-
-    document.getElementById("billDeleteBtn").style.display = isEditing
-        ? "block"
-        : "none";
-
-    if (!billNextDateManuallySet) {
-        refreshBillNextDate();
-    }
-
-    openModal("billDetailModal");
-}
-
-function refreshBillNextDate() {
-    if (billNextDateManuallySet) return;
-
-    const lastDateEl = document.getElementById("billLastBillDate");
-    const intervalEl = document.getElementById("billIntervalMonths");
-    const nextDateEl = document.getElementById("billNextBillDate");
-    const autoLabelEl = document.getElementById("billNextBillDateAutoLabel");
-
-    const lastDate = lastDateEl?.value;
-    const intervalMonths = parseInt(intervalEl?.value || "0", 10);
-
-    if (lastDate && intervalMonths > 0) {
-        nextDateEl.value = calcNextDueByMonths(lastDate, intervalMonths);
-        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
-    } else {
-        nextDateEl.value = "";
-        if (autoLabelEl) autoLabelEl.style.display = "none";
-    }
+    openModal(cfg.modalId);
 }
 
 // PLANTS
@@ -1208,23 +1299,16 @@ function openPlantEventModal(plantId) {
     document.getElementById("wateredCheck").checked = false;
     document.getElementById("fertilisedCheck").checked = false;
     document.getElementById("fertiliserSelectWrap").style.display = "none";
+    document.getElementById("fertiliserSelect").value = "20-20-20";
     document.getElementById("plantEventPotSize").value = plant.pot_size || "";
     document.getElementById("plantEventNotes").value = "";
 
     openModal("plantEventModal");
 }
 
-// FULL LIST
 function setupPanelClicks() {
-    const listMetaKeyMap = {
-        fridge_stock: "fridge_stock",
-        chores: "chores",
-        bills: "bills",
-        change_log: "change_log",
-        plants: "plants",
-        notes: "notes",
-    };
-
+    if (setupPanelClicks.bound) return;
+    setupPanelClicks.bound = true;
     document.querySelectorAll(".panel-header").forEach((header) => {
         header.addEventListener("click", (e) => {
             const panel = e.target.closest(".panel");
@@ -1250,16 +1334,10 @@ function setupPanelClicks() {
             switch (section) {
                 case "meal_prep":
                 case "fridge_stock":
-                    openMealPrepDetail();
-                    break;
                 case "chores":
-                    openChoreDetail();
-                    break;
                 case "change_log":
-                    openChangeLogDetail();
-                    break;
                 case "bills":
-                    openBillDetail();
+                    openDetailModal(section);
                     break;
                 case "plants":
                     openPlantAddModal();
@@ -1274,16 +1352,10 @@ function setupPanelClicks() {
     document.getElementById("fullListAddBtn")?.addEventListener("click", () => {
         switch (currentFullList) {
             case "fridge_stock":
-                openMealPrepDetail();
-                break;
             case "chores":
-                openChoreDetail();
-                break;
             case "change_log":
-                openChangeLogDetail();
-                break;
             case "bills":
-                openBillDetail();
+                openDetailModal(currentFullList);
                 break;
             case "plants":
                 openPlantAddModal();
@@ -1298,21 +1370,9 @@ function setupPanelClicks() {
 function refreshListLastUpdated() {
     if (!currentFullList) return;
 
-    const metaToList = {
-        fridge_stock: "fridge_stock",
-        chores: "chores",
-        bills: "bills",
-        change_log: "change_log",
-        plants: "plants",
-        notes: "notes",
-    };
-
-    const listName = metaToList[currentFullList];
-    if (!listName) return;
-
     const el = document.getElementById("listLastUpdated");
     if (el) {
-        el.textContent = formatMetaTimestamp(listMetadata[listName]);
+        el.textContent = formatMetaTimestamp(listMetadata[currentFullList]);
     }
 }
 
@@ -1361,33 +1421,50 @@ function addMonths(dateStr, months) {
     return d.toISOString().slice(0, 10);
 }
 
-// DATE CALCULATORS
-function calcMealPrepExpiry() {
-    if (mealPrepExpiryManuallySet) return;
+function getTodayHKT() {
+    return new Date().toLocaleDateString("en-CA", {
+        timeZone: "Asia/Hong_Kong",
+    });
+}
 
-    const createdAt = document.getElementById("mealPrepCreatedAt")?.value;
-    const shelfLifeDays = parseInt(
-        document.getElementById("mealPrepShelfLife")?.value || "0",
-        10,
-    );
-    const expiryEl = document.getElementById("mealPrepExpiryDate");
-    const autoLabelEl = document.getElementById("mealPrepExpiryDateAutoLabel");
+function refreshAutoDate(cfg) {
+    const fromEl = document.getElementById(cfg.fromId);
+    const intervalEl = document.getElementById(cfg.intervalId);
+    const resultEl = document.getElementById(cfg.resultId);
+    const labelEl = cfg.autoLabelId
+        ? document.getElementById(cfg.autoLabelId)
+        : null;
+    if (!fromEl || !intervalEl || !resultEl) return;
 
-    if (createdAt && shelfLifeDays > 0) {
-        expiryEl.value = addDays(createdAt, shelfLifeDays);
-        if (autoLabelEl) autoLabelEl.style.display = "inline-block";
-    } else {
-        if (expiryEl && !mealPrepExpiryManuallySet) expiryEl.value = "";
-        if (autoLabelEl) autoLabelEl.style.display = "none";
+    const isManual = cfg.manualFlag();
+    if (labelEl) labelEl.style.display = isManual ? "none" : "inline";
+    if (isManual) return;
+
+    const fromVal = fromEl.value;
+    const intervalVal = parseFloat(intervalEl.value);
+    if (!fromVal || !intervalVal) {
+        if (cfg.clearResult) cfg.clearResult();
+        else resultEl.value = "";
+        return;
     }
+
+    const computed =
+        cfg.unit === "months"
+            ? addMonths(fromVal, intervalVal)
+            : addDays(fromVal, intervalVal);
+
+    resultEl.value = computed || "";
 }
 
-function calcNextDueByDays(lastDate, intervalDays) {
-    return addDays(lastDate, intervalDays);
-}
-
-function calcNextDueByMonths(lastDate, intervalMonths) {
-    return addMonths(lastDate, intervalMonths);
+function getUrgencyClass(dateStr, warningDays = 3) {
+    if (!dateStr) return "";
+    const [todayY, todayM, todayD] = getTodayHKT().split("-").map(Number);
+    const [dY, dM, dD] = dateStr.split("-").map(Number);
+    const todayNum = todayY * 10000 + todayM * 100 + todayD;
+    const dateNum = dY * 10000 + dM * 100 + dD;
+    if (dateNum < todayNum) return "danger";
+    if (dateNum - todayNum <= warningDays) return "warning";
+    return "";
 }
 
 function formatMetaTimestamp(iso) {
@@ -1416,512 +1493,129 @@ function formatMetaTimestamp(iso) {
     return `Last updated ${d} ${m} ${y}, ${t}`;
 }
 
-function getTodayHKT() {
-    return new Date().toLocaleDateString("en-CA", {
-        timeZone: "Asia/Hong_Kong",
+// SUPABASE SYNCHRONISE
+async function runMutation(label, fn) {
+    try {
+        const sb = await ensureSupabaseReady();
+        if (!sb) throw new Error("Supabase not ready");
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
+        if (!user?.id) throw new Error("Not authenticated");
+        await fn(sb, user.id);
+    } catch (err) {
+        console.error(`${label} failed:`, err);
+        alert(`${label} failed: ${err.message}`);
+    }
+}
+
+async function saveRecord(
+    table,
+    render,
+    record,
+    isUpdate = false,
+    resetFn = null,
+) {
+    await runMutation(`Save ${table}`, async (sb, userId) => {
+        const data = { ...record, user_id: userId };
+        let error;
+        if (isUpdate) {
+            if (!record.id || record.id === "undefined" || record.id === "")
+                throw new Error("Invalid item ID for update");
+            ({ error } = await sb
+                .from(table)
+                .update(data)
+                .eq("id", record.id)
+                .eq("user_id", userId));
+        } else {
+            delete data.id;
+            ({ error } = await sb.from(table).insert(data));
+        }
+        if (error) throw error;
+        if (resetFn) resetFn();
+        await loadSupabaseData();
+        renderPanel(render);
+        touchMetadata(table);
     });
 }
 
-// BUTTON ACTIONS
-// MEAL PREP
-async function saveMealPrepItem(item, isUpdate = false) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const data = {
-            ...item,
-            user_id: user.id,
-        };
-
-        let error;
-        if (isUpdate) {
-            if (!item.id || item.id === "undefined" || item.id === "") {
-                throw new Error("Invalid item ID for update");
-            }
-            ({ error } = await sb
-                .from("fridge_stock")
-                .update(data)
-                .eq("id", item.id)
-                .eq("user_id", user.id));
-        } else {
-            delete data.id;
-            ({ error } = await sb.from("fridge_stock").insert(data));
-        }
-
-        if (error) throw error;
-
-        mealPrepExpiryManuallySet = false;
-
-        await loadMealPrep();
-        renderMealPrep();
-        touchMetadata("fridge_stock");
-    } catch (error) {
-        console.error("Save fridge_stock failed:", error);
-        alert(`Save failed: ${error.message}`);
-    }
-}
-
-async function deleteMealPrepItem(id) {
-    if (!confirm("Delete this meal prep item permanently?")) return;
-
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
+async function deleteRecord(table, render, id, confirmMsg) {
+    if (!confirm(confirmMsg)) return;
+    await runMutation(`Delete ${table}`, async (sb, userId) => {
         const { error } = await sb
-            .from("fridge_stock")
+            .from(table)
             .delete()
             .eq("id", id)
-            .eq("user_id", user.id);
-
+            .eq("user_id", userId);
         if (error) throw error;
-
-        await loadMealPrep();
-        renderMealPrep();
-        touchMetadata("fridge_stock");
-    } catch (err) {
-        console.error("Delete fridge_stock failed:", err);
-        alert(`Delete failed: ${err.message}`);
-    }
-}
-
-// CHORES
-async function saveChore(chore, isUpdate = false) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const data = {
-            ...chore,
-            user_id: user.id,
-        };
-
-        let error;
-        if (isUpdate) {
-            if (!chore.id || chore.id === "undefined" || chore.id === "") {
-                throw new Error("Invalid item ID for update");
-            }
-            ({ error } = await sb
-                .from("chores")
-                .update(data)
-                .eq("id", chore.id)
-                .eq("user_id", user.id));
-        } else {
-            delete data.id;
-            ({ error } = await sb.from("chores").insert(data));
-        }
-
-        if (error) throw error;
-
-        choreNextDueManuallySet = false;
-
-        await loadChores();
-        renderChores();
-        touchMetadata("chores");
-    } catch (error) {
-        console.error("Save chore failed:", error);
-        alert(`Save failed: ${error.message}`);
-    }
-}
-
-async function deleteChore(id) {
-    if (!confirm("Delete this chore?")) return;
-
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const { error } = await sb
-            .from("chores")
-            .delete()
-            .eq("id", id)
-            .eq("user_id", user.id);
-
-        if (error) throw error;
-
-        await loadChores();
-        renderChores();
-        touchMetadata("chores");
-    } catch (err) {
-        console.error("Delete chore failed:", err);
-        alert(`Delete failed: ${err.message}`);
-    }
-}
-
-// CHANGE LOG
-async function saveChangeLog(cl, isUpdate = false) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const data = {
-            ...cl,
-            user_id: user.id,
-        };
-
-        let error;
-        if (isUpdate) {
-            if (!cl.id || cl.id === "undefined" || cl.id === "") {
-                throw new Error("Invalid item ID for update");
-            }
-            ({ error } = await sb
-                .from("change_log")
-                .update(data)
-                .eq("id", cl.id)
-                .eq("user_id", user.id));
-        } else {
-            delete data.id;
-            ({ error } = await sb.from("change_log").insert(data));
-        }
-
-        if (error) throw error;
-
-        changeLogNextDueManuallySet = false;
-
-        await loadChangeLog();
-        renderChangeLog();
-        touchMetadata("change_log");
-    } catch (error) {
-        console.error("Save change_log failed:", error);
-        alert(`Save failed: ${error.message}`);
-    }
-}
-
-async function deleteChangeLog(id) {
-    if (!confirm("Delete this item?")) return;
-
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const { error } = await sb
-            .from("change_log")
-            .delete()
-            .eq("id", id)
-            .eq("user_id", user.id);
-
-        if (error) throw error;
-
-        await loadChangeLog();
-        renderChangeLog();
-        touchMetadata("change_log");
-    } catch (err) {
-        console.error("Delete change_log failed:", err);
-        alert(`Delete failed: ${err.message}`);
-    }
-}
-
-// BILLS
-async function saveBill(bill, isUpdate = false) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const data = {
-            ...bill,
-            user_id: user.id,
-        };
-
-        let error;
-        if (isUpdate) {
-            if (!bill.id || bill.id === "undefined" || bill.id === "") {
-                throw new Error("Invalid item ID for update");
-            }
-            ({ error } = await sb
-                .from("bills")
-                .update(data)
-                .eq("id", bill.id)
-                .eq("user_id", user.id));
-        } else {
-            delete data.id;
-            ({ error } = await sb.from("bills").insert(data));
-        }
-
-        if (error) throw error;
-
-        billNextDateManuallySet = false;
-
-        await loadBills();
-        renderBills();
-        touchMetadata("bills");
-    } catch (error) {
-        console.error("Save bill failed:", error);
-        alert(`Save failed: ${error.message}`);
-    }
-}
-
-async function deleteBill(id) {
-    if (!confirm("Delete this bill?")) return;
-
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const { error } = await sb
-            .from("bills")
-            .delete()
-            .eq("id", id)
-            .eq("user_id", user.id);
-
-        if (error) throw error;
-
-        await loadBills();
-        renderBills();
-        touchMetadata("bills");
-    } catch (err) {
-        console.error("Delete bill failed:", err);
-        alert(`Delete failed: ${err.message}`);
-    }
-}
-
-// PLANTS
-async function savePlant(plant) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const data = {
-            ...plant,
-            user_id: user.id,
-        };
-
-        const { error } = await sb.from("plants").insert(data);
-        if (error) throw error;
-
-        await loadPlants();
-        await loadPlantHistory();
-        renderPlants();
-        touchMetadata("plants");
-    } catch (err) {
-        console.error("Save plant failed:", err);
-        alert(`Save failed: ${err.message}`);
-    }
-}
-
-async function updatePlant(plantId, updates) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const data = {
-            ...updates,
-            user_id: user.id,
-        };
-
-        const { error } = await sb
-            .from("plants")
-            .update(data)
-            .eq("id", plantId)
-            .eq("user_id", user.id);
-
-        if (error) throw error;
-
-        await loadPlants();
-        await loadPlantHistory();
-        renderPlants();
-        touchMetadata("plants");
-    } catch (err) {
-        console.error("Update plant failed:", err);
-        alert(`Update failed: ${err.message}`);
-    }
+        await loadSupabaseData();
+        renderPanel(render);
+        touchMetadata(table);
+    });
 }
 
 async function deletePlant(plantId) {
     if (!confirm("Delete this plant and all its history permanently?")) return;
-
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) throw new Error("Not authenticated");
-
-        const { error: error1 } = await sb
+    await runMutation("Delete plant", async (sb, userId) => {
+        const { error: e1 } = await sb
             .from("plant_history")
             .delete()
             .eq("plant_id", plantId);
-
-        const { error: error2 } = await sb
+        const { error: e2 } = await sb
             .from("plants")
             .delete()
             .eq("id", plantId)
-            .eq("user_id", user.id);
-
-        if (error1 || error2) throw error1 || error2;
-
-        await loadPlants();
-        await loadPlantHistory();
-        renderPlants();
+            .eq("user_id", userId);
+        if (e1 || e2) throw e1 || e2;
+        await loadSupabaseData();
+        renderPanel("plants");
         touchMetadata("plants");
-    } catch (err) {
-        console.error("Delete plant failed:", err);
-        alert(`Delete failed: ${err.message}`);
-    }
+    });
 }
 
 async function savePlantHistory(historyItem) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const data = {
+    await runMutation("Save plant_history", async (sb) => {
+        const { error } = await sb.from("plant_history").insert({
             ...historyItem,
             plant_id: historyItem.plant_id,
-        };
-
-        const { error } = await sb.from("plant_history").insert(data);
+        });
         if (error) throw error;
-
-        await loadPlantHistory();
+        await loadSupabaseData();
         touchMetadata("plants");
-    } catch (err) {
-        console.error("Save plant_history failed:", err);
-        alert(`Save failed: ${err.message}`);
-    }
+    });
 }
 
 async function deletePlantHistory(id, plantId) {
     if (!confirm("Delete this history entry?")) return;
-
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
+    await runMutation("Delete plant history", async (sb) => {
         const { error } = await sb.from("plant_history").delete().eq("id", id);
-
         if (error) throw error;
-
-        await loadPlantHistory();
+        await loadSupabaseData();
         touchMetadata("plants");
         openPlantDetail(plantId);
-    } catch (err) {
-        console.error("Delete plant_history failed:", err);
-        alert(`Delete failed: ${err.message}`);
-    }
+    });
 }
 
-// NOTES
 async function saveNote(content) {
-    const sb = await ensureSupabaseReady();
-    if (!sb) {
-        alert("Supabase not ready");
-        return;
-    }
-
-    try {
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id || !content.trim()) return;
-
+    if (!content?.trim()) return;
+    await runMutation("Save note", async (sb, userId) => {
         const { error } = await sb.from("notes").insert({
             content: content.trim(),
-            user_id: user.id,
+            user_id: userId,
             created_at: getTodayHKT(),
         });
-
         if (error) throw error;
-
-        await loadNotes();
-        renderNotes();
+        await loadSupabaseData();
+        renderPanel("notes");
         touchMetadata("notes");
         document.getElementById("addNoteContent").value = "";
-    } catch (err) {
-        console.error("Save note failed:", err);
-        alert(`Save failed: ${err.message}`);
-    }
+    });
+}
+
+async function deleteNote(id) {
+    await deleteRecord("notes", "notes", id, "Delete this note?");
+    renderPanel("notes");
+    touchMetadata("notes");
 }
 
 // FULL LIST
@@ -1953,293 +1647,140 @@ async function touchMetadata(listName) {
 }
 
 // BINDERS
-function bindAutoCalculations() {
-    ["mealPrepCreatedAt", "mealPrepShelfLife"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                mealPrepExpiryManuallySet = false;
-                calcMealPrepExpiry();
-            });
+function bindAutoDate(cfg) {
+    const fromEl = document.getElementById(cfg.fromId);
+    const intervalEl = document.getElementById(cfg.intervalId);
+    const resultEl = document.getElementById(cfg.resultId);
+    if (!fromEl || !intervalEl || !resultEl) return;
+
+    const onSourceChange = () => {
+        if (!cfg.manualFlag()) {
+            refreshAutoDate(cfg);
+        }
+    };
+    fromEl.addEventListener("change", onSourceChange);
+    intervalEl.addEventListener("input", onSourceChange);
+
+    resultEl.addEventListener("change", (e) => {
+        const fromVal = fromEl.value;
+        const intervalVal = parseFloat(intervalEl.value);
+        const expected =
+            fromVal && intervalVal
+                ? cfg.unit === "months"
+                    ? addMonths(fromVal, intervalVal)
+                    : addDays(fromVal, intervalVal)
+                : null;
+        const isNowManual = !!(e.target.value && e.target.value !== expected);
+        cfg.setManual(isNowManual);
+        refreshAutoDate(cfg);
+    });
+
+    resultEl.addEventListener("input", (e) => {
+        if (e.target.value === "") {
+            cfg.setManual(false);
+            refreshAutoDate(cfg);
         }
     });
-    const mealPrepExpiryEl = document.getElementById("mealPrepExpiryDate");
-    if (mealPrepExpiryEl) {
-        mealPrepExpiryEl.addEventListener("input", () => {
-            mealPrepExpiryManuallySet = true;
-            const autoLabel = document.getElementById(
-                "mealPrepExpiryDateAutoLabel",
-            );
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    ["choreLastDoneDate", "choreIntervalDays"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                choreNextDueManuallySet = false;
-                refreshChoreNextDue();
-            });
-        }
-    });
-    const choreNextDueEl = document.getElementById("choreNextDueDate");
-    if (choreNextDueEl) {
-        choreNextDueEl.addEventListener("input", () => {
-            choreNextDueManuallySet = true;
-            const autoLabel = document.getElementById(
-                "choreNextDueDateAutoLabel",
-            );
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    ["changeLogLastChanged", "changeLogIntervalMonths"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                changeLogNextDueManuallySet = false;
-                refreshChangeLogNextDue();
-            });
-        }
-    });
-    const changeLogNextDueEl = document.getElementById("changeLogNextDueDate");
-    if (changeLogNextDueEl) {
-        changeLogNextDueEl.addEventListener("input", () => {
-            changeLogNextDueManuallySet = true;
-            const autoLabel = document.getElementById(
-                "changeLogNextDueDateAutoLabel",
-            );
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    ["billLastBillDate", "billIntervalMonths"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("change", () => {
-                billNextDateManuallySet = false;
-                refreshBillNextDate();
-            });
-        }
-    });
-    const billNextDateEl = document.getElementById("billNextBillDate");
-    if (billNextDateEl) {
-        billNextDateEl.addEventListener("input", () => {
-            billNextDateManuallySet = true;
-            const autoLabel = document.getElementById(
-                "billNextBillDateAutoLabel",
-            );
-            if (autoLabel) autoLabel.style.display = "none";
-        });
-    }
-
-    const fertilisedCheck = document.getElementById("fertilisedCheck");
-    if (fertilisedCheck) {
-        fertilisedCheck.addEventListener("change", (e) => {
-            document.getElementById("fertiliserSelectWrap").style.display = e
-                .target.checked
-                ? "block"
-                : "none";
-        });
-    }
 }
 
 function bindAllForms() {
-    document
-        .getElementById("mealPrepForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const editId = document.getElementById("mealPrepEditId").value;
-            const isUpdate =
-                !!editId && editId !== "undefined" && editId !== "";
-            const shelfLifeDays =
-                parseInt(
-                    document.getElementById("mealPrepShelfLife").value,
-                    10,
-                ) || null;
-            const createdAt =
-                document.getElementById("mealPrepCreatedAt").value;
-            const expiryDate = mealPrepExpiryManuallySet
-                ? document.getElementById("mealPrepExpiryDate").value
-                : createdAt && shelfLifeDays
-                  ? addDays(createdAt, shelfLifeDays)
-                  : null;
+    if (bindAllForms.bound) return;
+    bindAllForms.bound = true;
 
-            const item = {
-                id: isUpdate ? editId : null,
-                item_name: document
-                    .getElementById("mealPrepItemName")
-                    .value.trim(),
-                category: document.getElementById("mealPrepCategory").value,
-                portions:
-                    parseInt(
-                        document.getElementById("mealPrepPortions").value,
-                        10,
-                    ) || 0,
-                shelf_life_days: shelfLifeDays,
-                created_at: createdAt,
-                expiry_date: expiryDate,
-                last_updated: getTodayHKT(),
-            };
+    Object.values(PANEL_CONFIGS)
+        .filter((cfg) => cfg.autoDate)
+        .forEach((cfg) => bindAutoDate(cfg.autoDate));
 
-            await saveMealPrepItem(item, isUpdate);
-            closeModal("mealPrepDetailModal");
-            editingMealPrepId = null;
-            mealPrepExpiryManuallySet = false;
+    Object.values(PANEL_CONFIGS)
+        .filter((cfg) => cfg.form && cfg.detailModal)
+        .forEach((panelCfg) => {
+            const formCfg = panelCfg.form;
+            const modalCfg = panelCfg.detailModal;
+            const stateKey = panelCfg.stateKey;
+            const renderKey = panelCfg.renderKey ?? panelCfg.key;
+
+            const formEl = document.getElementById(formCfg.formId);
+            if (!formEl) return;
+
+            formEl.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const isUpdate = !!(
+                    stateKey && panelState[stateKey]?.editingId
+                );
+                const record = formCfg.buildRecord(isUpdate);
+
+                await saveRecord(
+                    panelCfg.data.table,
+                    renderKey,
+                    record,
+                    isUpdate,
+                    () => {
+                        if (stateKey && panelState[stateKey]) {
+                            panelState[stateKey].manualDate = false;
+                        }
+                    },
+                );
+
+                closeModal(modalCfg.modalId);
+
+                if (stateKey && panelState[stateKey]) {
+                    panelState[stateKey].editingId = null;
+                    panelState[stateKey].manualDate = false;
+                }
+            });
         });
 
-    document
-        .getElementById("mealPrepDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (editingMealPrepId) {
-                await deleteMealPrepItem(editingMealPrepId);
-                closeModal("mealPrepDetailModal");
-                editingMealPrepId = null;
-            }
+    Object.values(PANEL_CONFIGS)
+        .filter((cfg) => cfg.detailModal?.deleteBtnId && cfg.deleteConfig)
+        .forEach((panelCfg) => {
+            const modalCfg = panelCfg.detailModal;
+            const delCfg = panelCfg.deleteConfig;
+            const stateKey = panelCfg.stateKey;
+            const panelKey = panelCfg.key;
+
+            const btn = document.getElementById(modalCfg.deleteBtnId);
+            if (!btn) return;
+
+            btn.addEventListener("click", async () => {
+                if (!confirm(delCfg.confirmMsg)) return;
+
+                const itemId = stateKey
+                    ? panelState[stateKey]?.editingId
+                    : null;
+                if (!itemId) return;
+
+                await runMutation(
+                    `Delete ${panelCfg.data.table}`,
+                    async (sb, userId) => {
+                        const { error } = await sb
+                            .from(panelCfg.data.table)
+                            .delete()
+                            .eq("id", itemId)
+                            .eq("user_id", userId);
+                        if (error) throw error;
+
+                        closeModal(modalCfg.modalId);
+
+                        if (stateKey && panelState[stateKey]) {
+                            panelState[stateKey].editingId = null;
+                            panelState[stateKey].manualDate = false;
+                        }
+
+                        await loadSupabaseData();
+                        touchMetadata(panelCfg.data.table);
+                        renderPanel(panelKey);
+                    },
+                );
+            });
         });
 
-    document
-        .getElementById("choreForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const editId = document.getElementById("choreEditId").value;
-            const isUpdate = !!editId && editId !== "undefined";
-            const lastDoneDate =
-                document.getElementById("choreLastDoneDate").value || null;
-            const intervalDays =
-                parseInt(
-                    document.getElementById("choreIntervalDays").value,
-                    10,
-                ) || null;
-            const nextDueDate = choreNextDueManuallySet
-                ? document.getElementById("choreNextDueDate").value
-                : lastDoneDate && intervalDays
-                  ? calcNextDueByDays(lastDoneDate, intervalDays)
-                  : null;
-
-            const chore = {
-                id: isUpdate ? editId : null,
-                task_name: document
-                    .getElementById("choreTaskName")
-                    .value.trim(),
-                last_done_date: lastDoneDate,
-                interval_days: intervalDays,
-                next_due_date: nextDueDate,
-            };
-
-            await saveChore(chore, isUpdate);
-            closeModal("choreDetailModal");
-            editingChoreId = null;
-            choreNextDueManuallySet = false;
-        });
-
-    document
-        .getElementById("choreDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (editingChoreId) {
-                await deleteChore(editingChoreId);
-                closeModal("choreDetailModal");
-                editingChoreId = null;
-            }
-        });
-
-    document
-        .getElementById("changeLogForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const editId = document.getElementById("changeLogEditId").value;
-            const isUpdate = !!editId && editId !== "undefined";
-            const lastChangedDate =
-                document.getElementById("changeLogLastChanged").value || null;
-            const intervalMonths =
-                parseInt(
-                    document.getElementById("changeLogIntervalMonths").value,
-                    10,
-                ) || null;
-            const nextChangeDue = changeLogNextDueManuallySet
-                ? document.getElementById("changeLogNextDueDate").value
-                : lastChangedDate && intervalMonths
-                  ? calcNextDueByMonths(lastChangedDate, intervalMonths)
-                  : null;
-
-            const cl = {
-                id: isUpdate ? editId : null,
-                item_name: document
-                    .getElementById("changeLogItemName")
-                    .value.trim(),
-                last_changed_date: lastChangedDate,
-                interval_months: intervalMonths,
-                next_change_due: nextChangeDue,
-            };
-
-            await saveChangeLog(cl, isUpdate);
-            closeModal("changeLogDetailModal");
-            editingChangeLogId = null;
-            changeLogNextDueManuallySet = false;
-        });
-
-    document
-        .getElementById("changeLogDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (editingChangeLogId) {
-                await deleteChangeLog(editingChangeLogId);
-                closeModal("changeLogDetailModal");
-                editingChangeLogId = null;
-            }
-        });
-
-    document
-        .getElementById("billForm")
-        ?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const editId = document.getElementById("billEditId").value;
-            const isUpdate = !!editId && editId !== "undefined";
-            const lastBillDate =
-                document.getElementById("billLastBillDate").value || null;
-            const intervalMonths =
-                parseInt(
-                    document.getElementById("billIntervalMonths").value,
-                    10,
-                ) || null;
-            const nextBillDate = billNextDateManuallySet
-                ? document.getElementById("billNextBillDate").value
-                : lastBillDate && intervalMonths
-                  ? calcNextDueByMonths(lastBillDate, intervalMonths)
-                  : null;
-
-            const bill = {
-                id: isUpdate ? editId : null,
-                bill_name: document.getElementById("billBillName").value.trim(),
-                last_bill_date: lastBillDate,
-                interval_months: intervalMonths,
-                next_bill_date: nextBillDate,
-            };
-
-            await saveBill(bill, isUpdate);
-            closeModal("billDetailModal");
-            editingBillId = null;
-            billNextDateManuallySet = false;
-        });
-
-    document
-        .getElementById("billDeleteBtn")
-        ?.addEventListener("click", async () => {
-            if (editingBillId) {
-                await deleteBill(editingBillId);
-                closeModal("billDetailModal");
-                editingBillId = null;
-            }
-        });
-
-    document
-        .getElementById("addPlantForm")
-        ?.addEventListener("submit", async (e) => {
+    const addPlantForm = document.getElementById("addPlantForm");
+    if (addPlantForm) {
+        addPlantForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const name = document.getElementById("addPlantName").value.trim();
-            const startingDate = document.getElementById(
-                "addPlantStartingDate",
-            ).value;
+            const startingDate =
+                document.getElementById("addPlantStartingDate").value || null;
             const potSize =
                 parseInt(
                     document.getElementById("addPlantPotSize").value,
@@ -2247,275 +1788,369 @@ function bindAllForms() {
                 ) || null;
             if (!name) return;
 
-            await savePlant({
-                plant_name: name,
-                starting_date: startingDate,
-                pot_size: potSize,
-                archived: false,
-            });
+            await saveRecord(
+                "plants",
+                "plants",
+                {
+                    plant_name: name,
+                    starting_date: startingDate,
+                    pot_size: potSize,
+                    archived: false,
+                },
+                false,
+            );
             closeModal("plantAddModal");
         });
+    }
 
-    document
-        .getElementById("plantEventForm")
-        ?.addEventListener("submit", async (e) => {
+    const plantEventForm = document.getElementById("plantEventForm");
+    if (plantEventForm && !plantEventForm.dataset.bound) {
+        plantEventForm.dataset.bound = "1";
+
+        const fertilisedCheck = document.getElementById("fertilisedCheck");
+        const fertiliserWrap = document.getElementById("fertiliserSelectWrap");
+        const fertiliserSelect = document.getElementById("fertiliserSelect");
+
+        if (fertilisedCheck && fertiliserWrap) {
+            fertilisedCheck.addEventListener("change", () => {
+                const show = fertilisedCheck.checked;
+                fertiliserWrap.style.display = show ? "" : "none";
+                if (!show && fertiliserSelect) {
+                    fertiliserSelect.value = "20-20-20";
+                }
+            });
+        }
+
+        plantEventForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            const plantId = document.getElementById("plantEventId").value;
-            const pickedDate =
-                document.getElementById("plantEventDate").value ||
-                getTodayHKT();
-            const eventdate = new Date(
-                pickedDate + "T00:00:00+08:00",
-            ).toISOString();
-            const watered = document.getElementById("wateredCheck").checked;
+
+            const plantId =
+                document.getElementById("plantEventId")?.value || "";
+            const eventDate =
+                document.getElementById("plantEventDate")?.value || null;
+            const watered = !!document.getElementById("wateredCheck")?.checked;
             const fertilised =
-                document.getElementById("fertilisedCheck").checked;
+                !!document.getElementById("fertilisedCheck")?.checked;
             const fertiliserUsed = fertilised
                 ? document.getElementById("fertiliserSelect")?.value || null
                 : null;
-            const potSizeVal = parseInt(
-                document.getElementById("plantEventPotSize").value,
-                10,
-            );
-            const notesVal =
+
+            const potSizeRaw =
+                document.getElementById("plantEventPotSize")?.value || "";
+            const potSize = potSizeRaw === "" ? null : parseInt(potSizeRaw, 10);
+
+            const notes =
                 document.getElementById("plantEventNotes")?.value.trim() ||
                 null;
-            const resolvedPotSize =
-                !isNaN(potSizeVal) && potSizeVal > 0 ? potSizeVal : null;
 
-            await savePlantHistory({
-                plant_id: plantId,
-                event_date: eventdate,
-                pot_size: resolvedPotSize,
-                watered,
-                fertilised,
-                fertiliser_used: fertiliserUsed,
-                notes: notesVal,
-            });
-
-            const updates = {};
-            if (watered) updates.last_watered_date = eventdate.slice(0, 10);
-            if (fertilised) {
-                updates.last_fertilised_date = eventdate.slice(0, 10);
-                updates.last_fertiliser_used = fertiliserUsed;
+            if (!plantId) {
+                alert("Missing plant id");
+                return;
             }
-            if (resolvedPotSize) updates.pot_size = resolvedPotSize;
-            if (Object.keys(updates).length > 0)
-                await updatePlant(plantId, updates);
+
+            if (!eventDate) {
+                alert("Please choose an event date");
+                return;
+            }
+
+            if (!watered && !fertilised && potSize === null && !notes) {
+                alert("Please log at least one event detail");
+                return;
+            }
+
+            const plant = plants.find((p) => p.id === plantId);
+            if (!plant) {
+                alert("Plant not found");
+                return;
+            }
+
+            const plantUpdates = {
+                id: plantId,
+                plant_name: plant.plant_name,
+                starting_date: plant.starting_date,
+                archived: !!plant.archived,
+                pot_size: potSize !== null ? potSize : (plant.pot_size ?? null),
+            };
+
+            if (watered) {
+                plantUpdates.last_watered_date = eventDate;
+            } else {
+                plantUpdates.last_watered_date =
+                    plant.last_watered_date || null;
+            }
+
+            if (fertilised) {
+                plantUpdates.last_fertilised_date = eventDate;
+                plantUpdates.last_fertiliser_used = fertiliserUsed;
+            } else {
+                plantUpdates.last_fertilised_date =
+                    plant.last_fertilised_date || null;
+                plantUpdates.last_fertiliser_used =
+                    plant.last_fertiliser_used || null;
+            }
+
+            await saveRecord("plants", "plants", plantUpdates, true);
+
+            await saveRecord(
+                "plant_history",
+                "plants",
+                {
+                    plant_id: plantId,
+                    event_date: eventDate,
+                    watered,
+                    fertilised,
+                    fertiliser_used: fertiliserUsed,
+                    pot_size: potSize,
+                    notes,
+                },
+                false,
+            );
 
             closeModal("plantEventModal");
+            await loadSupabaseData();
+            renderPanel("plants");
+            openPlantDetail(plantId);
         });
+    }
 
-    document
-        .getElementById("addNoteForm")
-        ?.addEventListener("submit", async (e) => {
+    const noteForm = document.getElementById("addNoteForm");
+    if (noteForm && !noteForm.dataset.bound) {
+        noteForm.dataset.bound = "1";
+        noteForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const content = document
                 .getElementById("addNoteContent")
                 .value.trim();
             if (!content) return;
-            await saveNote(content);
+
+            await saveRecord("notes", "notes", { content }, false);
+            document.getElementById("addNoteContent").value = "";
             closeModal("noteAddModal");
         });
-
-    bindAutoCalculations();
+    }
 }
+
+const ACTION_HANDLERS = {
+    "meal-prep-portions": async (btn) => {
+        const id = btn.dataset.id;
+        const delta = parseInt(btn.dataset.delta, 10) || 0;
+        if (!id || !delta) return;
+
+        const item = mealPrep.find((i) => i.id === id);
+        if (!item) return;
+
+        const newPortions = Math.max(0, (item.portions || 0) + delta);
+
+        await saveRecord(
+            "fridge_stock",
+            "meal_prep",
+            {
+                id,
+                item_name: item.item_name,
+                category: item.category,
+                portions: newPortions,
+                shelf_life_days: item.shelf_life_days,
+                created_at: item.created_at,
+                expiry_date: item.expiry_date,
+                last_updated: getTodayHKT(),
+            },
+            true,
+        );
+    },
+
+    done: async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const chore = chores.find((c) => c.id === id);
+        if (!chore) return;
+
+        const today = getTodayHKT();
+
+        await saveRecord(
+            "chores",
+            "chores",
+            {
+                id,
+                task_name: chore.task_name,
+                last_done_date: today,
+                interval_days: chore.interval_days,
+                next_due_date: chore.interval_days
+                    ? addDays(today, chore.interval_days)
+                    : null,
+            },
+            true,
+        );
+    },
+
+    changed: async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const cl = changeLog.find((c) => c.id === id);
+        if (!cl) return;
+
+        const today = getTodayHKT();
+
+        await saveRecord(
+            "change_log",
+            "change_log",
+            {
+                id,
+                item_name: cl.item_name,
+                last_changed_date: today,
+                interval_months: cl.interval_months,
+                next_change_due: cl.interval_months
+                    ? addMonths(today, cl.interval_months)
+                    : null,
+            },
+            true,
+        );
+    },
+
+    paid: async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const bill = bills.find((b) => b.id === id);
+        if (!bill) return;
+
+        const today = getTodayHKT();
+
+        await saveRecord(
+            "bills",
+            "bills",
+            {
+                id,
+                bill_name: bill.bill_name,
+                last_bill_date: today,
+                interval_months: bill.interval_months,
+                next_bill_date: bill.interval_months
+                    ? addMonths(today, bill.interval_months)
+                    : null,
+            },
+            true,
+        );
+    },
+
+    "plant-log": async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+        openPlantEventModal(id);
+    },
+
+    "plant-save-name": async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const plant = plants.find((p) => p.id === id);
+        if (!plant) return;
+
+        const newName = document
+            .getElementById("pdPlantNameInput")
+            .value.trim();
+        const newStart =
+            document.getElementById("pdStartingDate").value || null;
+
+        if (!newName) {
+            alert("Plant name cannot be empty");
+            return;
+        }
+
+        await saveRecord(
+            "plants",
+            "plants",
+            {
+                id,
+                plant_name: newName,
+                starting_date: newStart,
+            },
+            true,
+        );
+
+        openPlantDetail(id);
+    },
+
+    "plant-archive": async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const plant = plants.find((p) => p.id === id);
+        if (!plant) return;
+
+        const archiveNow = !plant.archived;
+        const ok = confirm(
+            archiveNow
+                ? `Archive "${plant.plant_name}"?`
+                : `Unarchive "${plant.plant_name}"?`,
+        );
+        if (!ok) return;
+
+        await runMutation("Toggle plant archive", async (sb, userId) => {
+            const { error } = await sb
+                .from("plants")
+                .update({ archived: archiveNow })
+                .eq("id", id)
+                .eq("user_id", userId);
+
+            if (error) throw error;
+
+            await loadSupabaseData();
+            renderPanel("plants");
+            touchMetadata("plants");
+            openPlantDetail(id);
+        });
+    },
+
+    "plant-delete": async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+        await deletePlant(id);
+        closeModal("plantDetailModal");
+    },
+
+    "plant-history-delete": async (btn) => {
+        const id = btn.dataset.id;
+        const plantId = btn.dataset.plantid;
+        if (!id) return;
+        await deletePlantHistory(id, plantId);
+    },
+
+    "note-delete": async (btn) => {
+        const id = btn.dataset.id;
+        if (!id) return;
+        await deleteNote(id);
+    },
+};
 
 // GLOBAL CLICK DELEGATION
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
     if (btn) {
-        e.stopPropagation();
         const action = btn.dataset.action;
-        const id = btn.dataset.id;
+        const handler = ACTION_HANDLERS[action];
 
-        const sb = await ensureSupabaseReady();
-        if (!sb) return;
-
-        const {
-            data: { user },
-        } = await sb.auth.getUser();
-        if (!user?.id) {
-            alert("Not authenticated");
+        if (handler) {
+            try {
+                await handler(btn);
+            } catch (err) {
+                console.error(`Action "${action}" failed:`, err);
+                alert(err.message || "Action failed");
+            }
             return;
         }
+    }
 
-        const today = getTodayHKT();
-
-        try {
-            if (action === "meal-prep-portions") {
-                const delta = parseInt(btn.dataset.delta, 10);
-                const item = mealPrep.find((item) => item.id === id);
-                if (!item) return;
-
-                const newPortions = Math.max(0, item.portions + delta);
-                mealPrep = mealPrep.map((it) =>
-                    it.id === id
-                        ? { ...it, portions: newPortions, last_updated: today }
-                        : it,
-                );
-
-                await sb
-                    .from("fridge_stock")
-                    .update({ portions: newPortions, last_updated: today })
-                    .eq("id", id)
-                    .eq("user_id", user.id);
-
-                renderMealPrep();
-                touchMetadata("fridge_stock");
-            } else if (action === "done") {
-                const chore = chores.find((c) => c.id === id);
-                if (!chore) return;
-                const nextDue = calcNextDueByDays(today, chore.interval_days);
-
-                await sb
-                    .from("chores")
-                    .update({ last_done_date: today, next_due_date: nextDue })
-                    .eq("id", id)
-                    .eq("user_id", user.id);
-
-                chores = chores.map((c) =>
-                    c.id === id
-                        ? {
-                              ...c,
-                              last_done_date: today,
-                              next_due_date: nextDue,
-                          }
-                        : c,
-                );
-                renderChores();
-                touchMetadata("chores");
-            } else if (action === "changed") {
-                const cl = changeLog.find((c) => c.id === id);
-                if (!cl) return;
-                const nextDue = calcNextDueByMonths(today, cl.interval_months);
-
-                await sb
-                    .from("change_log")
-                    .update({
-                        last_changed_date: today,
-                        next_change_due: nextDue,
-                    })
-                    .eq("id", id)
-                    .eq("user_id", user.id);
-
-                changeLog = changeLog.map((c) =>
-                    c.id === id
-                        ? {
-                              ...c,
-                              last_changed_date: today,
-                              next_change_due: nextDue,
-                          }
-                        : c,
-                );
-                renderChangeLog();
-                touchMetadata("change_log");
-            } else if (action === "paid") {
-                const bill = bills.find((b) => b.id === id);
-                if (!bill) return;
-                const newLast = bill.next_bill_date;
-                const newNext = calcNextDueByMonths(
-                    newLast,
-                    bill.interval_months,
-                );
-
-                await sb
-                    .from("bills")
-                    .update({
-                        last_bill_date: newLast,
-                        next_bill_date: newNext,
-                    })
-                    .eq("id", id)
-                    .eq("user_id", user.id);
-
-                bills = bills.map((b) =>
-                    b.id === id
-                        ? {
-                              ...b,
-                              last_bill_date: newLast,
-                              next_bill_date: newNext,
-                          }
-                        : b,
-                );
-                renderBills();
-                touchMetadata("bills");
-            } else if (action === "plant-log") {
-                openPlantEventModal(id);
-                return;
-            } else if (action === "plant-save-name") {
-                const newName = document
-                    .getElementById("pdPlantNameInput")
-                    .value.trim();
-                if (!newName) return;
-                const newStart =
-                    document.getElementById("pdStartingDateInput").value ||
-                    null;
-                await updatePlant(id, {
-                    plant_name: newName,
-                    starting_date: newStart,
-                });
-            } else if (action === "plant-archive") {
-                const plant = plants.find((p) => p.id === id);
-                const archived = !plant.archived;
-                await sb
-                    .from("plants")
-                    .update({ archived })
-                    .eq("id", id)
-                    .eq("user_id", user.id);
-                await loadPlants();
-                touchMetadata("plants");
-                closeModal("plantDetailModal");
-            } else if (action === "plant-delete") {
-                await deletePlant(id);
-                closeModal("plantDetailModal");
-            } else if (action === "plant-history-delete") {
-                const plantId = btn.dataset.plantid;
-                await deletePlantHistory(id, plantId);
-            } else if (action === "note-delete") {
-                await sb
-                    .from("notes")
-                    .delete()
-                    .eq("id", id)
-                    .eq("user_id", user.id);
-                await loadNotes();
-                renderNotes();
-                touchMetadata("notes");
+    const row = e.target.closest("[data-open-type][data-id]");
+    if (row) {
+        const openType = row.dataset.openType;
+        const id = row.dataset.id;
+        if (openType && id) {
+            const panelCfg = PANEL_CONFIGS[openType];
+            if (panelCfg?.rowOpen?.open) {
+                panelCfg.rowOpen.open(id);
             }
-        } catch (err) {
-            console.error(`${action} failed:`, err);
-            alert(`${action} failed: ${err.message}`);
         }
-        return;
-    }
-
-    const detailRow = e.target.closest("[data-open-detail]");
-    if (detailRow) {
-        openMealPrepDetail(detailRow.dataset.openDetail);
-        return;
-    }
-
-    const choreRow = e.target.closest("[data-open-chore]");
-    if (choreRow) {
-        openChoreDetail(choreRow.dataset.openChore);
-        return;
-    }
-
-    const changeLogRow = e.target.closest("[data-open-changelog]");
-    if (changeLogRow) {
-        openChangeLogDetail(changeLogRow.dataset.openChangelog);
-        return;
-    }
-
-    const billRow = e.target.closest("[data-open-bill]");
-    if (billRow) {
-        openBillDetail(billRow.dataset.openBill);
-        return;
-    }
-
-    const plantRow = e.target.closest("[data-open-plant]");
-    if (plantRow) {
-        openPlantDetail(plantRow.dataset.openPlant);
-        return;
     }
 });
 
