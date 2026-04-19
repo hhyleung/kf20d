@@ -1104,6 +1104,9 @@ function buildNotesHTML() {
 function renderControls() {
     const content = document.getElementById("controlsContent");
     if (!content) return;
+    document.getElementById("screenOffBtn").addEventListener("click", () => {
+        document.getElementById("screenBlanker").classList.add("active");
+    });
 
     content.innerHTML = `
     <div class="controls-spotify-panel">
