@@ -1093,13 +1093,71 @@ function buildNotesHTML() {
     return html;
 }
 
+// function renderControls() {
+//     const content = document.getElementById("controlsContent");
+//     if (!content) return;
+//     document.getElementById("screenOffBtn").addEventListener("click", () => {
+//         document.getElementById("screenBlanker").classList.add("active");
+//     });
+// }
+
 function renderControls() {
     const content = document.getElementById("controlsContent");
     if (!content) return;
-    content.innerHTML = `<button class="screen-off-btn" id="screenOffBtn" title="Screen off">🌙</button>`;
-    document.getElementById("screenOffBtn").addEventListener("click", () => {
-        document.getElementById("screenBlanker").classList.add("active");
-    });
+
+    content.innerHTML = `
+    <div class="controls-spotify-panel">
+      <div class="controls-nowplaying">
+        <div class="controls-art">
+          <div class="controls-art-placeholder">♪</div>
+        </div>
+
+        <div class="controls-track">
+          <div class="controls-track-title">Morning Chill Vibes</div>
+          <div class="controls-track-artist">Spotify Radio</div>
+
+          <div class="controls-playback-row">
+            <button class="controls-btn" type="button">⏮</button>
+            <button class="controls-btn controls-btn-play" type="button">▶</button>
+            <button class="controls-btn" type="button">⏭</button>
+          </div>
+
+          <div class="controls-volume-row">
+            <span class="controls-vol-icon">-</span>
+            <input class="controls-volume" type="range" min="0" max="100" value="65">
+            <span class="controls-vol-icon">+</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-shortcuts">
+        <button class="controls-slot-btn active" type="button">1</button>
+        <button class="controls-slot-btn" type="button">2</button>
+        <button class="controls-slot-btn" type="button">3</button>
+        <button class="controls-slot-btn" type="button">4</button>
+        <button class="controls-slot-btn controls-slot-settings" type="button">⚙</button>
+      </div>
+
+      <div class="controls-schedule">
+        <div class="controls-schedule-header">
+          <div class="controls-schedule-title">NEXT SCHEDULE</div>
+          <button class="controls-schedule-all" type="button">ALL</button>
+        </div>
+
+        <div class="controls-schedule-row">
+          <span class="controls-schedule-date">19 APR</span>
+          <span class="controls-schedule-time">07:00</span>
+          <span class="controls-schedule-playlist">Morning Chill</span>
+        </div>
+
+        <div class="controls-schedule-actions">
+          <button class="controls-schedule-action add" type="button">Add</button>
+          <button class="controls-schedule-action edit" type="button">Edit</button>
+          <button class="controls-schedule-action skip" type="button">Skip</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // FULL LIST
