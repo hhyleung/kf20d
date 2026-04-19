@@ -931,7 +931,9 @@ function mealPrepItemRow(item, showZero = false) {
 }
 
 function buildMealPrepHTML(showZero) {
-    const items = getVisibleItems(showZero);
+    const items = getVisibleItems(showZero).filter(
+        (i) => !fridgeStockCategories.includes(i.category),
+    );
     const grouped = groupByCategory(items);
     const forceFullWidth = ["Proteins"];
     const alwaysHalfWidth = ["Carbs", "Veggies", "Fruits", "Others"];
@@ -972,31 +974,21 @@ function buildMealPrepHTML(showZero) {
 }
 
 function buildFridgeStockHTML(showZero = false) {
-    let html = "<div>";
-    fridgeStockCategories.forEach((cat) => {
-        const catItems = mealPrep.filter(
-            (i) => i.category === cat && (showZero || i.portions > 0),
-        );
-        if (!catItems.length && !showZero) return;
-        const totalPortions = catItems.reduce(
-            (sum, i) => sum + (i.portions || 0),
-            0,
-        );
-        html += `<div class="meal-prep-group">
-            <div class="meal-prep-group-title">
-                <span>${cat}</span>
-                <span class="meal-prep-cat-total">${totalPortions}</span>
-            </div>`;
-        if (catItems.length) {
-            html += '<ul class="item-list">';
-            catItems.forEach((item) => {
-                html += mealPrepItemRow(item, showZero);
-            });
-            html += "</ul>";
-        }
-        html += "</div>";
+    const items = mealPrep
+        .filter(
+            (i) =>
+                fridgeStockCategories.includes(i.category) &&
+                (showZero || i.portions > 0),
+        )
+        .sort((a, b) => a.item_name.localeCompare(b.item_name));
+
+    if (!items.length) return "";
+
+    let html = '<ul class="item-list">';
+    items.forEach((item) => {
+        html += mealPrepItemRow(item, showZero);
     });
-    html += "</div>";
+    html += "</ul>";
     return html;
 }
 
@@ -1533,7 +1525,10 @@ async function saveRecord(
         }
         if (error) throw error;
         if (resetFn) resetFn();
-        await loadSupabaseData();
+        const cfg = Object.values(PANEL_CONFIGS).find(
+            (c) => c.data?.table === table,
+        );
+        if (cfg?.data) await loadSupabaseData([cfg.data]);
         renderPanel(render);
         touchMetadata(table);
     });
@@ -1548,7 +1543,10 @@ async function deleteRecord(table, render, id, confirmMsg) {
             .eq("id", id)
             .eq("user_id", userId);
         if (error) throw error;
-        await loadSupabaseData();
+        const cfg = Object.values(PANEL_CONFIGS).find(
+            (c) => c.data?.table === table,
+        );
+        if (cfg?.data) await loadSupabaseData([cfg.data]);
         renderPanel(render);
         touchMetadata(table);
     });
@@ -1567,7 +1565,9 @@ async function deletePlant(plantId) {
             .eq("id", plantId)
             .eq("user_id", userId);
         if (e1 || e2) throw e1 || e2;
-        await loadSupabaseData();
+        const plantCfg = PANEL_CONFIGS.plants.data;
+        const historyCfg = PANEL_CONFIGS.plant_history.data;
+        await loadSupabaseData([plantCfg, historyCfg]);
         renderPanel("plants");
         touchMetadata("plants");
     });
@@ -1580,7 +1580,9 @@ async function savePlantHistory(historyItem) {
             plant_id: historyItem.plant_id,
         });
         if (error) throw error;
-        await loadSupabaseData();
+        const plantCfg = PANEL_CONFIGS.plants.data;
+        const historyCfg = PANEL_CONFIGS.plant_history.data;
+        await loadSupabaseData([plantCfg, historyCfg]);
         touchMetadata("plants");
     });
 }
@@ -1590,6 +1592,9 @@ async function deletePlantHistory(id, plantId) {
     await runMutation("Delete plant history", async (sb) => {
         const { error } = await sb.from("plant_history").delete().eq("id", id);
         if (error) throw error;
+        const plantCfg = PANEL_CONFIGS.plants.data;
+        const historyCfg = PANEL_CONFIGS.plant_history.data;
+        await loadSupabaseData([plantCfg, historyCfg]);
         await loadSupabaseData();
         touchMetadata("plants");
         openPlantDetail(plantId);
@@ -1605,7 +1610,7 @@ async function saveNote(content) {
             created_at: getTodayHKT(),
         });
         if (error) throw error;
-        await loadSupabaseData();
+        await loadSupabaseData([PANEL_CONFIGS.notes.data]);
         renderPanel("notes");
         touchMetadata("notes");
         document.getElementById("addNoteContent").value = "";
@@ -1766,9 +1771,12 @@ function bindAllForms() {
                             panelState[stateKey].manualDate = false;
                         }
 
-                        await loadSupabaseData();
-                        touchMetadata(panelCfg.data.table);
+                        const cfg = Object.values(PANEL_CONFIGS).find(
+                            (c) => c.data?.table === panelCfg.data.table,
+                        );
+                        if (cfg?.data) await loadSupabaseData([cfg.data]);
                         renderPanel(panelKey);
+                        touchMetadata(panelCfg.data.table);
                     },
                 );
             });
@@ -1907,7 +1915,10 @@ function bindAllForms() {
             );
 
             closeModal("plantEventModal");
-            await loadSupabaseData();
+            await loadSupabaseData([
+                PANEL_CONFIGS.plants.data,
+                PANEL_CONFIGS.plant_history.data,
+            ]);
             renderPanel("plants");
             openPlantDetail(plantId);
         });
@@ -2095,7 +2106,7 @@ const ACTION_HANDLERS = {
 
             if (error) throw error;
 
-            await loadSupabaseData();
+            await loadSupabaseData([PANEL_CONFIGS.plants.data]);
             renderPanel("plants");
             touchMetadata("plants");
             openPlantDetail(id);

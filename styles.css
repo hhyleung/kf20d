@@ -36,7 +36,7 @@
 
 body {
     font-family: "Roboto", sans-serif;
-    background: var(--bg-primary);
+    background: var(--bg-secondary);
     color: var(--text-primary);
     line-height: 1.4;
     font-size: 24px;
@@ -93,6 +93,7 @@ body {
 .dashboard {
     display: none;
     height: 100vh;
+    width: 100%;
     padding: var(--gap) 1.8rem;
     box-sizing: border-box;
 }
@@ -104,6 +105,7 @@ body {
     gap: 1.2rem;
     padding: 1.2rem;
     height: 100%;
+    width: 100%;
 }
 
 .panel[data-section="meal_prep"] {
@@ -542,21 +544,37 @@ textarea {
     flex-shrink: 0;
 }
 
+.panel-content,
+#fullListContent,
+form {
+    scrollbar-width: thin;
+    scrollbar-color: #d0d3d9 transparent;
+}
+
+/* WebKit fallback (Chrome/Edge 等) */
 .panel-content::-webkit-scrollbar,
 #fullListContent::-webkit-scrollbar,
 form::-webkit-scrollbar {
-    width: 6px;
+    width: 4px;
 }
 
 .panel-content::-webkit-scrollbar-track,
+#fullListContent::-webkit-scrollbar-track,
 form::-webkit-scrollbar-track {
     background: transparent;
 }
 
 .panel-content::-webkit-scrollbar-thumb,
+#fullListContent::-webkit-scrollbar-thumb,
 form::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 3px;
+    background: #d0d3d9;
+    border-radius: 2px;
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover,
+#fullListContent::-webkit-scrollbar-thumb:hover,
+form::-webkit-scrollbar-thumb:hover {
+    background: #b0b3b9;
 }
 
 /* OVERALL */
