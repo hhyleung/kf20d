@@ -62,18 +62,33 @@
                 </div>
 
                 <div class="sub-col">
-                    <div class="panel" data-section="controls" style="flex: 1">
-                        <div class="panel-header">
-                            <h3>Controls</h3>
-                            <button
-                                class="add-btn"
-                                id="screenOffBtn"
-                                title="Screen off"
-                            >
-                                ⏻
-                            </button>
+                    <div
+                        class="panel header-only"
+                        data-section="datetime"
+                        style="flex: 0 0 auto"
+                    >
+                        <div class="panel-header" id="datetimeHeader">
+                            <span id="clockDisplay">--</span>
                         </div>
-                        <div class="panel-content" id="controlsContent"></div>
+                    </div>
+                    <div class="panel" data-section="spotify" style="flex: 1">
+                        <div class="panel-header">
+                            <h3>Spotify</h3>
+                            <div class="spotify-vol-header">
+                                <button class="action-btn" id="volUpBtn">
+                                    +
+                                </button>
+                                <span
+                                    class="spotify-vol-display"
+                                    id="volDisplay"
+                                    >65</span
+                                >
+                                <button class="action-btn" id="volDownBtn">
+                                    -
+                                </button>
+                            </div>
+                        </div>
+                        <div class="panel-content" id="spotifyContent"></div>
                     </div>
                     <div
                         class="panel header-only"

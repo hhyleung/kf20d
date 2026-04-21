@@ -864,12 +864,60 @@ async function showDashboard() {
     ["meal_prep", "chores", "change_log", "bills", "plants", "notes"].forEach(
         renderPanel,
     );
-    renderControls();
+    renderSpotify();
+
+    startClock();
 
     if (!realtimeSetupDone) {
         realtimeSetupDone = true;
         setTimeout(setupRealtime, 500);
     }
+}
+
+let clockInterval = null;
+
+function startClock() {
+    const datetimeHeader = document.getElementById("datetimeHeader");
+    if (datetimeHeader && !datetimeHeader.dataset.bound) {
+        datetimeHeader.dataset.bound = "1";
+        datetimeHeader.addEventListener("click", () =>
+            document.getElementById("screenBlanker").classList.add("active"),
+        );
+    }
+
+    function tick() {
+        const el = document.getElementById("clockDisplay");
+        if (!el) return;
+
+        const now = new Date();
+        const hkt = new Intl.DateTimeFormat("en-GB", {
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+            timeZone: "Asia/Hong_Kong",
+        }).formatToParts(now);
+
+        const get = (type) => hkt.find((p) => p.type === type)?.value ?? "";
+
+        const weekday = get("weekday").toUpperCase();
+        const day = get("day");
+        const month = get("month").toUpperCase();
+        const year = get("year");
+        const hour = get("hour");
+        const minute = get("minute");
+
+        el.textContent = `${weekday}\u00A0\u00A0${day} ${month} ${year}\u00A0\u00A0${hour}:${minute}`;
+    }
+
+    if (clockInterval) clearInterval(clockInterval);
+    setTimeout(() => {
+        tick();
+        clockInterval = setInterval(tick, 1000);
+    }, 100);
 }
 
 // PANEL BUILDERS
@@ -1093,74 +1141,75 @@ function buildNotesHTML() {
     return html;
 }
 
-// function renderControls() {
-//     const content = document.getElementById("controlsContent");
-//     if (!content) return;
-//     document.getElementById("screenOffBtn").addEventListener("click", () => {
-//         document.getElementById("screenBlanker").classList.add("active");
-//     });
-// }
-
-function renderControls() {
-    const content = document.getElementById("controlsContent");
-    if (!content) return;
-    document.getElementById("screenOffBtn").addEventListener("click", () => {
-        document.getElementById("screenBlanker").classList.add("active");
-    });
+function renderSpotify() {
+    const content = document.getElementById("spotifyContent");
 
     content.innerHTML = `
-    <div class="controls-spotify-panel">
-      <div class="controls-nowplaying">
-        <div class="controls-art">
-          <div class="controls-art-placeholder">♪</div>
+    <div class="spotify-panel">
+      <div class="spotify-nowplaying">
+        <div class="spotify-art">
+          <div class="spotify-art-placeholder">♪</div>
         </div>
 
-        <div class="controls-track">
-          <div class="controls-track-title">Morning Chill Vibes</div>
-          <div class="controls-track-artist">Spotify Radio</div>
+        <div class="spotify-track">
+          <div class="spotify-track-title">Morning Chill Vibes</div>
+          <div class="spotify-track-artist">Spotify Radio</div>
 
-          <div class="controls-playback-row">
-            <button class="controls-btn" type="button">⏮</button>
-            <button class="controls-btn controls-btn-play" type="button">▶</button>
-            <button class="controls-btn" type="button">⏭</button>
-          </div>
-
-          <div class="controls-volume-row">
-            <span class="controls-vol-icon">-</span>
-            <input class="controls-volume" type="range" min="0" max="100" value="65">
-            <span class="controls-vol-icon">+</span>
+          <div class="spotify-playback-row">
+            <button class="spotify-btn" type="button">⏮</button>
+            <button class="spotify-btn spotify-btn-play" type="button">▶</button>
+            <button class="spotify-btn" type="button">⏭</button>
           </div>
         </div>
       </div>
 
-      <div class="controls-shortcuts">
-        <button class="controls-slot-btn active" type="button">1</button>
-        <button class="controls-slot-btn" type="button">2</button>
-        <button class="controls-slot-btn" type="button">3</button>
-        <button class="controls-slot-btn" type="button">4</button>
-        <button class="controls-slot-btn controls-slot-settings" type="button">⚙</button>
+      <div class="spotify-shortcuts">
+        <span>Playlists</span>
+        <button class="spotify-slot-btn active" type="button">1</button>
+        <button class="spotify-slot-btn" type="button">2</button>
+        <button class="spotify-slot-btn" type="button">3</button>
+        <button class="spotify-slot-btn" type="button">4</button>
+        <button class="spotify-slot-btn" type="button">5</button>
       </div>
 
-      <div class="controls-schedule">
-        <div class="controls-schedule-header">
-          <div class="controls-schedule-title">NEXT SCHEDULE</div>
-          <button class="controls-schedule-all" type="button">ALL</button>
+      <div class="spotify-schedule">
+        <div class="spotify-schedule-title">NEXT SCHEDULE</div>
+        <div class="spotify-schedule-row">
+          <span class="spotify-schedule-date">19 APR</span>
+          <span class="spotify-schedule-time">07:00</span>
+          <span class="spotify-schedule-playlist">Morning Chill</span>
         </div>
-
-        <div class="controls-schedule-row">
-          <span class="controls-schedule-date">19 APR</span>
-          <span class="controls-schedule-time">07:00</span>
-          <span class="controls-schedule-playlist">Morning Chill</span>
-        </div>
-
-        <div class="controls-schedule-actions">
-          <button class="controls-schedule-action add" type="button">Add</button>
-          <button class="controls-schedule-action edit" type="button">Edit</button>
-          <button class="controls-schedule-action skip" type="button">Skip</button>
+        <div class="spotify-schedule-actions">
+          <button class="spotify-schedule-action add" type="button">Add</button>
+          <button class="spotify-schedule-action edit" type="button">Edit</button>
+          <button class="spotify-schedule-action skip" type="button">Skip</button>
+          <button class="spotify-schedule-action all" type="button">ALL</button>
         </div>
       </div>
     </div>
   `;
+    bindVolButtons();
+}
+
+let currentVolume = 65;
+
+function bindVolButtons() {
+    const volUp = document.getElementById("volUpBtn");
+    const volDown = document.getElementById("volDownBtn");
+    const volDisplay = document.getElementById("volDisplay");
+    if (!volUp || !volDown || !volDisplay) return;
+
+    volUp.addEventListener("click", (e) => {
+        e.stopPropagation();
+        currentVolume = Math.min(100, currentVolume + 5);
+        volDisplay.textContent = currentVolume;
+    });
+
+    volDown.addEventListener("click", (e) => {
+        e.stopPropagation();
+        currentVolume = Math.max(0, currentVolume - 5);
+        volDisplay.textContent = currentVolume;
+    });
 }
 
 // FULL LIST
@@ -1366,11 +1415,10 @@ function setupPanelClicks() {
         header.addEventListener("click", (e) => {
             const panel = e.target.closest(".panel");
             const section = panel.dataset.section;
-
-            if (section) {
-                document.getElementById("listTitle").textContent = header
-                    .querySelector("h3")
-                    .textContent.toUpperCase();
+            const h3 = header.querySelector("h3");
+            if (section && h3) {
+                document.getElementById("listTitle").textContent =
+                    h3.textContent.toUpperCase();
                 currentFullList = section;
                 document.getElementById("fullListContent").innerHTML =
                     buildFullListHTML(section);
@@ -1960,26 +2008,17 @@ function bindAllForms() {
 
             await saveRecord("plants", "plants", plantUpdates, true);
 
-            await saveRecord(
-                "plant_history",
-                "plants",
-                {
-                    plant_id: plantId,
-                    event_date: eventDate,
-                    watered,
-                    fertilised,
-                    fertiliser_used: fertiliserUsed,
-                    pot_size: potSize,
-                    notes,
-                },
-                false,
-            );
+            await savePlantHistory({
+                plant_id: plantId,
+                event_date: eventDate,
+                watered,
+                fertilised,
+                fertiliser_used: fertiliserUsed,
+                pot_size: potSize,
+                notes,
+            });
 
             closeModal("plantEventModal");
-            await loadSupabaseData([
-                PANEL_CONFIGS.plants.data,
-                PANEL_CONFIGS.plant_history.data,
-            ]);
             renderPanel("plants");
             openPlantDetail(plantId);
         });
