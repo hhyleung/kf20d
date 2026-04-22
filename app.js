@@ -1409,27 +1409,6 @@ function bindSpotifyAuth() {
     });
 }
 
-let currentVolume = 65;
-
-function bindVolButtons() {
-    const volUp = document.getElementById("volUpBtn");
-    const volDown = document.getElementById("volDownBtn");
-    const volDisplay = document.getElementById("volDisplay");
-    if (!volUp || !volDown || !volDisplay) return;
-
-    volUp.addEventListener("click", (e) => {
-        e.stopPropagation();
-        currentVolume = Math.min(100, currentVolume + 5);
-        volDisplay.textContent = currentVolume;
-    });
-
-    volDown.addEventListener("click", (e) => {
-        e.stopPropagation();
-        currentVolume = Math.max(0, currentVolume - 5);
-        volDisplay.textContent = currentVolume;
-    });
-}
-
 // ─── SPOTIFY WEB PLAYBACK SDK ────────────────────────────────────────
 
 let spotifyPlayer = null;
