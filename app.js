@@ -880,6 +880,7 @@ async function showDashboard() {
         renderPanel,
     );
     renderSpotify();
+    await refreshSpotifyPlaylistSlots();
 
     startClock();
 
@@ -1191,10 +1192,7 @@ function renderSpotify() {
       </div>
 
       <div class="spotify-schedule">
-        <div class="spotify-schedule-header">
-          <div class="spotify-schedule-title">NEXT SCHEDULE</div>
-          <button class="spotify-schedule-action all" type="button" id="spotifySchedAllBtn">ALL</button>
-        </div>
+        <div class="spotify-schedule-title">NEXT SCHEDULE</div>
         <div class="spotify-schedule-row" id="spotifySchedRow">
           <span class="spotify-schedule-date" id="spotifySchedDate">—</span>
           <span class="spotify-schedule-time" id="spotifySchedTime"></span>
@@ -1204,6 +1202,7 @@ function renderSpotify() {
           <button class="spotify-schedule-action add"  type="button" id="spotifySchedAddBtn">Add</button>
           <button class="spotify-schedule-action edit" type="button" id="spotifySchedEditBtn">Edit</button>
           <button class="spotify-schedule-action skip" type="button" id="spotifySchedSkipBtn">Skip</button>
+          <button class="spotify-schedule-action all" type="button" id="spotifySchedAllBtn">ALL</button>
         </div>
       </div>
     </div>
@@ -1211,6 +1210,8 @@ function renderSpotify() {
 
     bindPlaybackControls();
     bindVolButtons();
+    bindSpotifyPlaylistUI();
+    refreshSpotifyPlaylistSlots();
 }
 
 // ─── SPOTIFY AUTH ────────────────────────────────────────────────────
@@ -1555,6 +1556,28 @@ function bindPlaybackControls() {
     }
 }
 
+function bindSpotifyPlaylistUI() {
+    const label = document.getElementById("spotifyPlaylistsLabel");
+    if (label && !label.dataset.bound) {
+        label.dataset.bound = "1";
+        label.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openSpotifyPlaylistModal();
+        });
+    }
+
+    document.querySelectorAll(".spotify-slot-btn").forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const playlistId = btn.dataset.playlistId;
+            if (!playlistId) return;
+            await playSpotifyPlaylist(playlistId);
+        });
+    });
+}
+
 // ─── VOLUME CONTROL ──────────────────────────────────────────────────
 
 let currentVolume = 65;
@@ -1580,6 +1603,164 @@ function bindVolButtons() {
         volDisplay.textContent = currentVolume;
         if (spotifyPlayer) await spotifyPlayer.setVolume(currentVolume / 100);
     });
+}
+
+// ─── SPOTIFY PLAYLISTS / SLOTS ──────────────────────────────────────
+
+let spotifyPlaylistCache = [];
+
+async function fetchSpotifyPlaylists() {
+    const token = spotifyAccessTokenCache || (await getValidSpotifyToken());
+    if (!token) return [];
+
+    let url = "https://api.spotify.com/v1/me/playlists?limit=50";
+    const all = [];
+
+    while (url) {
+        const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) break;
+        const data = await res.json();
+        all.push(...(data.items || []));
+        url = data.next;
+    }
+
+    spotifyPlaylistCache = all;
+    return all;
+}
+
+async function loadSpotifyPlaylistsFromDB() {
+    const sb = await ensureSupabaseReady();
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb
+        .from("spotify_playlists")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("slot_number", { ascending: true });
+
+    if (error) {
+        console.error("Load spotify_playlists failed:", error);
+        return [];
+    }
+
+    return data || [];
+}
+
+async function saveSpotifyPlaylistSlot(slotNumber, playlist) {
+    const sb = await ensureSupabaseReady();
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return;
+
+    const payload = {
+        user_id: user.id,
+        slot_number: slotNumber,
+        playlist_id: playlist.id,
+        playlist_name: playlist.name,
+        playlist_icon: playlist.images?.[0]?.url ? "🎵" : "🎵",
+    };
+
+    const { error } = await sb
+        .from("spotify_playlists")
+        .upsert(payload, { onConflict: "user_id,slot_number" });
+
+    if (error) {
+        console.error("Save spotify playlist slot failed:", error);
+        return;
+    }
+
+    await refreshSpotifyPlaylistSlots();
+}
+
+async function refreshSpotifyPlaylistSlots() {
+    const rows = await loadSpotifyPlaylistsFromDB();
+    const slotButtons = document.querySelectorAll(".spotify-slot-btn");
+    slotButtons.forEach((btn) => {
+        const slot = Number(btn.dataset.slot);
+        const row = rows.find((r) => r.slot_number === slot);
+        btn.textContent = row
+            ? `${row.playlist_icon || "🎵"} ${slot}`
+            : String(slot);
+        btn.dataset.playlistId = row?.playlist_id || "";
+        btn.dataset.playlistName = row?.playlist_name || "";
+    });
+}
+
+async function openSpotifyPlaylistModal() {
+    const body = document.getElementById("spotifyPlaylistModalBody");
+    if (!body) return;
+
+    body.innerHTML =
+        '<div style="padding:1rem;color:var(--text-secondary);">Loading playlists...</div>';
+    openModal("spotifyPlaylistModal");
+
+    const playlists = await fetchSpotifyPlaylists();
+    const html = playlists
+        .map((pl) => {
+            const art = pl.images?.[0]?.url
+                ? `<img src="${pl.images[0].url}" style="width:48px;height:48px;border-radius:10px;object-fit:cover;" />`
+                : `<div class="spotify-playlist-item-art">🎵</div>`;
+
+            return `
+      <div class="spotify-playlist-item">
+        <div>${art}</div>
+        <div>
+          <div class="spotify-playlist-item-title">${pl.name}</div>
+          <div class="spotify-playlist-item-meta">${pl.tracks?.total || 0} tracks</div>
+        </div>
+        <button class="submit-btn" type="button" data-playlist-id="${pl.id}" data-playlist-name="${pl.name}">Assign</button>
+      </div>
+    `;
+        })
+        .join("");
+
+    body.innerHTML =
+        html ||
+        '<div style="padding:1rem;color:var(--text-secondary);">No playlists found.</div>';
+
+    body.querySelectorAll("button[data-playlist-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const playlist = {
+                id: btn.dataset.playlistId,
+                name: btn.dataset.playlistName,
+                images: [],
+            };
+
+            const slot = prompt("Assign to slot number 1–5?");
+            const slotNumber = Number(slot);
+            if (![1, 2, 3, 4, 5].includes(slotNumber)) return;
+
+            await saveSpotifyPlaylistSlot(slotNumber, playlist);
+            closeModal("spotifyPlaylistModal");
+        });
+    });
+}
+
+async function playSpotifyPlaylist(playlistId) {
+    if (!spotifyDeviceId) return;
+
+    const token = spotifyAccessTokenCache || (await getValidSpotifyToken());
+    if (!token) return;
+
+    await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                context_uri: `spotify:playlist:${playlistId}`,
+            }),
+        },
+    );
 }
 
 // FULL LIST

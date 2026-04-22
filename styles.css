@@ -1111,5 +1111,61 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-header-error h3 {
-  color: var(--btn-red-color) !important;
+    color: var(--btn-red-color) !important;
+}
+
+.spotify-playlists-label {
+    cursor: pointer;
+    user-select: none;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.spotify-playlists-label:hover {
+    color: var(--spotify);
+}
+
+.spotify-playlist-modal-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    max-height: 60vh;
+    overflow: auto;
+}
+
+.spotify-playlist-item {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 0.85rem;
+    align-items: center;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+}
+
+.spotify-playlist-item-art {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.spotify-playlist-item-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.spotify-playlist-item-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.spotify-playlist-item button {
+    min-width: 88px;
 }
