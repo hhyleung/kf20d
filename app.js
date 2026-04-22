@@ -883,6 +883,7 @@ async function showDashboard() {
 
     bindSpotifyAuth();
     await initSpotify();
+    await initSpotifyPlayer();
 
     if (!realtimeSetupDone) {
         realtimeSetupDone = true;
@@ -1302,9 +1303,12 @@ async function loadSpotifyToken() {
         .from("spotify_tokens")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
-    if (error || !data) return null;
+    if (error) {
+        console.error("loadSpotifyToken error:", error);
+        return null;
+    }
     return data;
 }
 
@@ -1423,6 +1427,172 @@ function bindVolButtons() {
         e.stopPropagation();
         currentVolume = Math.max(0, currentVolume - 5);
         volDisplay.textContent = currentVolume;
+    });
+}
+
+// ─── SPOTIFY WEB PLAYBACK SDK ────────────────────────────────────────
+
+let spotifyPlayer = null;
+let spotifyDeviceId = null;
+let spotifyPlayerReady = false;
+
+window.onSpotifyWebPlaybackSDKReady = function () {
+    console.log("Spotify SDK loaded and ready");
+    initSpotifyPlayer();
+};
+
+async function initSpotifyPlayer() {
+    const token = await getValidSpotifyToken();
+    if (!token) return;
+
+    spotifyPlayer = new Spotify.Player({
+        name: "kf20d",
+        getOAuthToken: async (cb) => {
+            const t = await getValidSpotifyToken();
+            cb(t);
+        },
+        volume: 0.65,
+    });
+
+    spotifyPlayer.addListener("ready", ({ device_id }) => {
+        spotifyDeviceId = device_id;
+        spotifyPlayerReady = true;
+        console.log("Spotify player ready, device:", device_id);
+        transferPlaybackToDevice(device_id);
+    });
+
+    spotifyPlayer.addListener("not_ready", ({ device_id }) => {
+        console.warn("Spotify player not ready:", device_id);
+        spotifyPlayerReady = false;
+    });
+
+    spotifyPlayer.addListener("player_state_changed", (state) => {
+        updateNowPlaying(state);
+    });
+
+    spotifyPlayer.addListener("initialization_error", ({ message }) => {
+        console.error("SDK init error:", message);
+        setSpotifyHeaderError(true);
+    });
+
+    spotifyPlayer.addListener("authentication_error", ({ message }) => {
+        console.error("SDK auth error:", message);
+        setSpotifyHeaderError(true);
+    });
+
+    spotifyPlayer.addListener("account_error", ({ message }) => {
+        console.error("SDK account error:", message);
+        setSpotifyHeaderError(true);
+    });
+
+    await spotifyPlayer.connect();
+}
+
+async function transferPlaybackToDevice(deviceId) {
+    const token = await getValidSpotifyToken();
+    if (!token || !deviceId) return;
+    try {
+        await fetch("https://api.spotify.com/v1/me/player", {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ device_ids: [deviceId], play: false }),
+        });
+    } catch (err) {
+        console.error("Transfer playback failed:", err);
+    }
+}
+
+function updateNowPlaying(state) {
+    const artEl = document.getElementById("spotifyArt");
+    const titleEl = document.getElementById("spotifyTitle");
+    const artistEl = document.getElementById("spotifyArtist");
+    const playBtn = document.getElementById("spotifyPlayBtn");
+
+    if (!state || !state.track_window?.current_track) {
+        if (artEl) artEl.style.backgroundImage = "";
+        if (titleEl) titleEl.textContent = "—";
+        if (artistEl) artistEl.textContent = "—";
+        if (playBtn) playBtn.textContent = "▶";
+        return;
+    }
+
+    const track = state.track_window.current_track;
+
+    if (artEl) {
+        const img = track.album?.images?.[0]?.url;
+        artEl.style.backgroundImage = img ? `url(${img})` : "";
+        artEl.style.backgroundSize = "cover";
+        artEl.style.backgroundPosition = "center";
+        // hide placeholder icon when art is loaded
+        const placeholder = artEl.querySelector(".spotify-art-placeholder");
+        if (placeholder) placeholder.style.display = img ? "none" : "flex";
+    }
+
+    if (titleEl) titleEl.textContent = track.name;
+    if (artistEl)
+        artistEl.textContent = track.artists.map((a) => a.name).join(", ");
+    if (playBtn) playBtn.textContent = state.paused ? "▶" : "⏸";
+}
+
+// ─── PLAYBACK CONTROLS ───────────────────────────────────────────────
+
+function bindPlaybackControls() {
+    const prevBtn = document.getElementById("spotifyPrevBtn");
+    const playBtn = document.getElementById("spotifyPlayBtn");
+    const nextBtn = document.getElementById("spotifyNextBtn");
+
+    if (prevBtn && !prevBtn.dataset.bound) {
+        prevBtn.dataset.bound = "1";
+        prevBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (spotifyPlayer) await spotifyPlayer.previousTrack();
+        });
+    }
+
+    if (playBtn && !playBtn.dataset.bound) {
+        playBtn.dataset.bound = "1";
+        playBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (spotifyPlayer) await spotifyPlayer.togglePlay();
+        });
+    }
+
+    if (nextBtn && !nextBtn.dataset.bound) {
+        nextBtn.dataset.bound = "1";
+        nextBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (spotifyPlayer) await spotifyPlayer.nextTrack();
+        });
+    }
+}
+
+// ─── VOLUME CONTROL ──────────────────────────────────────────────────
+
+let currentVolume = 65;
+
+function bindVolButtons() {
+    const volUp = document.getElementById("volUpBtn");
+    const volDown = document.getElementById("volDownBtn");
+    const volDisplay = document.getElementById("volDisplay");
+    if (!volUp || !volDown || !volDisplay) return;
+    if (volUp.dataset.bound) return;
+    volUp.dataset.bound = "1";
+
+    volUp.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        currentVolume = Math.min(100, currentVolume + 5);
+        volDisplay.textContent = currentVolume;
+        if (spotifyPlayer) await spotifyPlayer.setVolume(currentVolume / 100);
+    });
+
+    volDown.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        currentVolume = Math.max(0, currentVolume - 5);
+        volDisplay.textContent = currentVolume;
+        if (spotifyPlayer) await spotifyPlayer.setVolume(currentVolume / 100);
     });
 }
 
