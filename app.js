@@ -1346,6 +1346,7 @@ async function getValidSpotifyToken() {
             ...refreshed,
             refresh_token: refreshed.refresh_token ?? tokenRow.refresh_token,
         });
+        spotifyAccessTokenCache = refreshed.access_token;
         return refreshed.access_token;
     } catch (err) {
         console.error("Spotify token refresh failed:", err);
@@ -1417,6 +1418,7 @@ function bindSpotifyAuth() {
 let spotifyPlayer = null;
 let spotifyDeviceId = null;
 let spotifyPlayerReady = false;
+let spotifyAccessTokenCache = null;
 
 window.onSpotifyWebPlaybackSDKReady = function () {
     console.log("Spotify SDK loaded and ready");
@@ -1427,11 +1429,12 @@ async function initSpotifyPlayer() {
     const token = await getValidSpotifyToken();
     if (!token) return;
 
+    spotifyAccessTokenCache = token;
+
     spotifyPlayer = new Spotify.Player({
         name: "kf20d",
-        getOAuthToken: async (cb) => {
-            const t = await getValidSpotifyToken();
-            cb(t);
+        getOAuthToken: (cb) => {
+            cb(spotifyAccessTokenCache);
         },
         volume: 0.65,
     });
@@ -1443,23 +1446,18 @@ async function initSpotifyPlayer() {
         transferPlaybackToDevice(device_id);
     });
 
-    spotifyPlayer.addListener("not_ready", ({ device_id }) => {
-        console.warn("Spotify player not ready:", device_id);
-        spotifyPlayerReady = false;
-    });
-
-    spotifyPlayer.addListener("player_state_changed", (state) => {
-        updateNowPlaying(state);
-    });
-
-    spotifyPlayer.addListener("initialization_error", ({ message }) => {
-        console.error("SDK init error:", message);
-        setSpotifyHeaderError(true);
-    });
-
-    spotifyPlayer.addListener("authentication_error", ({ message }) => {
+    spotifyPlayer.addListener("authentication_error", async ({ message }) => {
         console.error("SDK auth error:", message);
-        setSpotifyHeaderError(true);
+        const fresh = await getValidSpotifyToken();
+        if (fresh) {
+            spotifyAccessTokenCache = fresh;
+            if (spotifyPlayer) {
+                await spotifyPlayer.connect();
+            }
+            setSpotifyHeaderError(false);
+        } else {
+            setSpotifyHeaderError(true);
+        }
     });
 
     spotifyPlayer.addListener("account_error", ({ message }) => {
@@ -1467,11 +1465,15 @@ async function initSpotifyPlayer() {
         setSpotifyHeaderError(true);
     });
 
+    spotifyPlayer.addListener("player_state_changed", (state) => {
+        updateNowPlaying(state);
+    });
+
     await spotifyPlayer.connect();
 }
 
 async function transferPlaybackToDevice(deviceId) {
-    const token = await getValidSpotifyToken();
+    const token = spotifyAccessTokenCache || (await getValidSpotifyToken());
     if (!token || !deviceId) return;
     try {
         await fetch("https://api.spotify.com/v1/me/player", {
