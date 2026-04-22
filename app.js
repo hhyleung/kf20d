@@ -1160,51 +1160,54 @@ function buildNotesHTML() {
 
 function renderSpotify() {
     const content = document.getElementById("spotifyContent");
+    if (!content) return;
 
     content.innerHTML = `
     <div class="spotify-panel">
       <div class="spotify-nowplaying">
-        <div class="spotify-art">
+        <div class="spotify-art" id="spotifyArt">
           <div class="spotify-art-placeholder">♪</div>
         </div>
-
         <div class="spotify-track">
-          <div class="spotify-track-title">Morning Chill Vibes</div>
-          <div class="spotify-track-artist">Spotify Radio</div>
-
+          <div class="spotify-track-title" id="spotifyTitle">—</div>
+          <div class="spotify-track-artist" id="spotifyArtist">—</div>
           <div class="spotify-playback-row">
-            <button class="spotify-btn" type="button">⏮</button>
-            <button class="spotify-btn spotify-btn-play" type="button">▶</button>
-            <button class="spotify-btn" type="button">⏭</button>
+            <button class="spotify-btn" id="spotifyPrevBtn" type="button">⏮</button>
+            <button class="spotify-btn spotify-btn-play" id="spotifyPlayBtn" type="button">▶</button>
+            <button class="spotify-btn" id="spotifyNextBtn" type="button">⏭</button>
           </div>
         </div>
       </div>
 
       <div class="spotify-shortcuts">
-        <span>Playlists</span>
-        <button class="spotify-slot-btn active" type="button">1</button>
-        <button class="spotify-slot-btn" type="button">2</button>
-        <button class="spotify-slot-btn" type="button">3</button>
-        <button class="spotify-slot-btn" type="button">4</button>
-        <button class="spotify-slot-btn" type="button">5</button>
+        <span id="spotifyPlaylistsLabel">Playlists</span>
+        <button class="spotify-slot-btn" data-slot="1" type="button">1</button>
+        <button class="spotify-slot-btn" data-slot="2" type="button">2</button>
+        <button class="spotify-slot-btn" data-slot="3" type="button">3</button>
+        <button class="spotify-slot-btn" data-slot="4" type="button">4</button>
+        <button class="spotify-slot-btn" data-slot="5" type="button">5</button>
       </div>
 
       <div class="spotify-schedule">
-        <div class="spotify-schedule-title">NEXT SCHEDULE</div>
-        <div class="spotify-schedule-row">
-          <span class="spotify-schedule-date">19 APR</span>
-          <span class="spotify-schedule-time">07:00</span>
-          <span class="spotify-schedule-playlist">Morning Chill</span>
+        <div class="spotify-schedule-header">
+          <div class="spotify-schedule-title">NEXT SCHEDULE</div>
+          <button class="spotify-schedule-action all" type="button" id="spotifySchedAllBtn">ALL</button>
+        </div>
+        <div class="spotify-schedule-row" id="spotifySchedRow">
+          <span class="spotify-schedule-date" id="spotifySchedDate">—</span>
+          <span class="spotify-schedule-time" id="spotifySchedTime"></span>
+          <span class="spotify-schedule-playlist" id="spotifySchedPlaylist"></span>
         </div>
         <div class="spotify-schedule-actions">
-          <button class="spotify-schedule-action add" type="button">Add</button>
-          <button class="spotify-schedule-action edit" type="button">Edit</button>
-          <button class="spotify-schedule-action skip" type="button">Skip</button>
-          <button class="spotify-schedule-action all" type="button">ALL</button>
+          <button class="spotify-schedule-action add"  type="button" id="spotifySchedAddBtn">Add</button>
+          <button class="spotify-schedule-action edit" type="button" id="spotifySchedEditBtn">Edit</button>
+          <button class="spotify-schedule-action skip" type="button" id="spotifySchedSkipBtn">Skip</button>
         </div>
       </div>
     </div>
   `;
+
+    bindPlaybackControls();
     bindVolButtons();
 }
 
