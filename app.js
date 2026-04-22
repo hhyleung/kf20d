@@ -577,6 +577,19 @@ const PANEL_CONFIGS = {
     },
 };
 
+// ─── SPOTIFY CONSTANTS ───────────────────────────────────────────────
+const SPOTIFY_CLIENT_ID = "61214ea8d81b43a6bd94e5aaaa39ec38";
+const SPOTIFY_REDIRECT_URI = "https://hhyleung.github.io/kf20d/";
+const SPOTIFY_SCOPES = [
+    "streaming",
+    "user-read-playback-state",
+    "user-modify-playback-state",
+    "user-read-currently-playing",
+    "playlist-read-private",
+    "playlist-read-collaborative",
+    "user-library-read",
+].join(" ");
+
 // SUPABASE CONNECTION
 async function initSupabase() {
     if (sbClient) return sbClient;
@@ -867,6 +880,9 @@ async function showDashboard() {
     renderSpotify();
 
     startClock();
+
+    bindSpotifyAuth();
+    await initSpotify();
 
     if (!realtimeSetupDone) {
         realtimeSetupDone = true;
@@ -1191,6 +1207,204 @@ function renderSpotify() {
     bindVolButtons();
 }
 
+// ─── SPOTIFY AUTH ────────────────────────────────────────────────────
+
+function generateCodeVerifier() {
+    const array = new Uint8Array(64);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode(...array))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+}
+
+async function generateCodeChallenge(verifier) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+}
+
+async function startSpotifyAuth() {
+    const verifier = generateCodeVerifier();
+    const challenge = await generateCodeChallenge(verifier);
+    sessionStorage.setItem("spotify_code_verifier", verifier);
+
+    const params = new URLSearchParams({
+        client_id: SPOTIFY_CLIENT_ID,
+        response_type: "code",
+        redirect_uri: SPOTIFY_REDIRECT_URI,
+        scope: SPOTIFY_SCOPES,
+        code_challenge_method: "S256",
+        code_challenge: challenge,
+    });
+
+    window.location.href = `https://accounts.spotify.com/authorize?${params}`;
+}
+
+async function exchangeCodeForToken(code) {
+    const verifier = sessionStorage.getItem("spotify_code_verifier");
+    if (!verifier) throw new Error("No code verifier found");
+
+    const res = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            client_id: SPOTIFY_CLIENT_ID,
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: SPOTIFY_REDIRECT_URI,
+            code_verifier: verifier,
+        }),
+    });
+
+    if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
+    const data = await res.json();
+    sessionStorage.removeItem("spotify_code_verifier");
+    return data;
+}
+
+async function saveSpotifyToken(tokenData) {
+    const sb = await ensureSupabaseReady();
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return;
+
+    const expiresAt = new Date(
+        Date.now() + tokenData.expires_in * 1000,
+    ).toISOString();
+
+    await sb.from("spotify_tokens").upsert(
+        {
+            user_id: user.id,
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token ?? null,
+            expires_at: expiresAt,
+            scope: tokenData.scope ?? null,
+            updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+    );
+}
+
+async function loadSpotifyToken() {
+    const sb = await ensureSupabaseReady();
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await sb
+        .from("spotify_tokens")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+    if (error || !data) return null;
+    return data;
+}
+
+async function refreshSpotifyToken(refreshToken) {
+    const res = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            client_id: SPOTIFY_CLIENT_ID,
+            grant_type: "refresh_token",
+            refresh_token: refreshToken,
+        }),
+    });
+
+    if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
+    return await res.json();
+}
+
+async function getValidSpotifyToken() {
+    const tokenRow = await loadSpotifyToken();
+    if (!tokenRow) return null;
+
+    const expiresAt = new Date(tokenRow.expires_at).getTime();
+    const fiveMinutes = 5 * 60 * 1000;
+    const needsRefresh = Date.now() > expiresAt - fiveMinutes;
+
+    if (!needsRefresh) return tokenRow.access_token;
+
+    try {
+        const refreshed = await refreshSpotifyToken(tokenRow.refresh_token);
+        await saveSpotifyToken({
+            ...refreshed,
+            refresh_token: refreshed.refresh_token ?? tokenRow.refresh_token,
+        });
+        return refreshed.access_token;
+    } catch (err) {
+        console.error("Spotify token refresh failed:", err);
+        setSpotifyHeaderError(true);
+        return null;
+    }
+}
+
+function setSpotifyHeaderError(isError) {
+    const panel = document.querySelector('[data-section="spotify"]');
+    if (!panel) return;
+    const header = panel.querySelector(".panel-header");
+    if (!header) return;
+    header.classList.toggle("spotify-header-error", isError);
+}
+
+async function initSpotify() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+
+    if (code) {
+        window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname,
+        );
+        try {
+            const tokenData = await exchangeCodeForToken(code);
+            await saveSpotifyToken(tokenData);
+            setSpotifyHeaderError(false);
+        } catch (err) {
+            console.error("Spotify auth callback failed:", err);
+            setSpotifyHeaderError(true);
+        }
+        return;
+    }
+
+    const token = await getValidSpotifyToken();
+    if (!token) {
+        setSpotifyHeaderError(true);
+    } else {
+        setSpotifyHeaderError(false);
+    }
+}
+
+function bindSpotifyAuth() {
+    const authBtn = document.getElementById("spotifyAuthBtn");
+    if (authBtn && !authBtn.dataset.bound) {
+        authBtn.dataset.bound = "1";
+        authBtn.addEventListener("click", startSpotifyAuth);
+    }
+
+    const panel = document.querySelector('[data-section="spotify"]');
+    if (!panel) return;
+    const header = panel.querySelector(".panel-header");
+    if (!header || header.dataset.spotifyBound) return;
+    header.dataset.spotifyBound = "1";
+
+    header.addEventListener("click", (e) => {
+        if (header.classList.contains("spotify-header-error")) {
+            e.stopPropagation();
+            openModal("spotifyAuthModal");
+        }
+    });
+}
+
 let currentVolume = 65;
 
 function bindVolButtons() {
@@ -1416,7 +1630,7 @@ function setupPanelClicks() {
             const panel = e.target.closest(".panel");
             const section = panel.dataset.section;
             const h3 = header.querySelector("h3");
-            if (section && h3) {
+            if (section && h3 && section !== "spotify") {
                 document.getElementById("listTitle").textContent =
                     h3.textContent.toUpperCase();
                 currentFullList = section;

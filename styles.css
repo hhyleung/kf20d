@@ -802,6 +802,7 @@ form::-webkit-scrollbar-thumb:hover {
     font-style: italic;
     margin-left: 0.5rem;
 }
+
 .plant-meta-pot {
     margin-right: 2rem;
 }
@@ -1074,6 +1075,20 @@ form::-webkit-scrollbar-thumb:hover {
     color: var(--btn-blue-color);
 }
 
+.spotify-vol-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.spotify-vol-display {
+    font-size: 1.4rem;
+    font-family: "Roboto Mono", monospace;
+    color: var(--text-primary);
+    min-width: 2.5rem;
+    text-align: center;
+}
+
 /* DATETIME PANEL */
 .panel[data-section="datetime"] .panel-header {
     cursor: pointer;
@@ -1095,16 +1110,6 @@ form::-webkit-scrollbar-thumb:hover {
     font-family: "Roboto Mono", monospace;
 }
 
-.spotify-vol-header {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.spotify-vol-display {
-    font-size: 1.4rem;
-    font-family: "Roboto Mono", monospace;
-    color: var(--text-primary);
-    min-width: 2.5rem;
-    text-align: center;
+.spotify-header-error h3 {
+  color: var(--btn-red-color) !important;
 }

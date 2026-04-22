@@ -655,6 +655,51 @@
             </div>
         </div>
 
+        <!-- SPOTIFY AUTH MODAL -->
+        <div class="modal" id="spotifyAuthModal">
+            <div class="modal-content modal-narrow">
+                <header>
+                    <h2>Connect Spotify</h2>
+                </header>
+                <div
+                    style="
+                        padding: 2.2rem;
+                        text-align: center;
+                        font-size: var(--item-font);
+                    "
+                >
+                    <p
+                        style="
+                            color: var(--text-secondary);
+                            margin-bottom: 2rem;
+                        "
+                    >
+                        Spotify authorisation required.<br />You will be
+                        redirected to Spotify to log in.
+                    </p>
+                    <div
+                        class="modal-actions"
+                        style="margin-top: 0; padding: 0"
+                    >
+                        <button
+                            type="button"
+                            id="spotifyAuthBtn"
+                            class="submit-btn"
+                        >
+                            Connect
+                        </button>
+                        <button
+                            type="button"
+                            onclick="closeModal('spotifyAuthModal')"
+                            class="cancel-btn"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- SCREEN BLANKER -->
         <div id="screenBlanker"></div>
 
