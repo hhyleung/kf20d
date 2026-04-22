@@ -582,6 +582,8 @@ const SPOTIFY_CLIENT_ID = "61214ea8d81b43a6bd94e5aaaa39ec38";
 const SPOTIFY_REDIRECT_URI = "https://hhyleung.github.io/kf20d/";
 const SPOTIFY_SCOPES = [
     "streaming",
+    "user-read-email",
+    "user-read-private",
     "user-read-playback-state",
     "user-modify-playback-state",
     "user-read-currently-playing",
