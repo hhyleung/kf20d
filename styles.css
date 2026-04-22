@@ -1127,7 +1127,7 @@ form::-webkit-scrollbar-thumb:hover {
     border: 2px solid var(--border);
     background: var(--bg-secondary);
     color: var(--text-primary);
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 700;
     cursor: pointer;
 }
@@ -1164,4 +1164,145 @@ form::-webkit-scrollbar-thumb:hover {
 .spotify-icon-option.active {
     border-color: var(--spotify);
     background: var(--bg-primary);
+}
+
+.modal-wide {
+    width: min(1100px, 96vw);
+}
+
+.spotify-schedule-modal {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.spotify-schedule-left,
+.spotify-schedule-right {
+    min-width: 0;
+}
+
+.spotify-calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.spotify-cal-month-label {
+    font-weight: 700;
+    text-align: center;
+    flex: 1;
+}
+
+.spotify-calendar-weekdays,
+.spotify-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.35rem;
+}
+
+.spotify-calendar-weekdays span {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding-bottom: 0.25rem;
+}
+
+.spotify-calendar-cell {
+    min-height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    cursor: pointer;
+    position: relative;
+}
+
+.spotify-calendar-cell.empty {
+    background: transparent;
+    border: none;
+    cursor: default;
+}
+
+.spotify-calendar-cell.today {
+    border-color: var(--spotify);
+}
+
+.spotify-calendar-cell.has-event::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--spotify);
+    position: absolute;
+    bottom: 6px;
+}
+
+.spotify-calendar-cell.selected {
+    background: rgba(29, 185, 84, 0.15);
+    border-color: var(--spotify);
+}
+
+.spotify-selected-date-label {
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+}
+
+.spotify-day-schedules {
+    display: grid;
+    gap: 0.75rem;
+    max-height: 45vh;
+    overflow: auto;
+}
+
+.spotify-day-row {
+    display: grid;
+    gap: 0.4rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+}
+
+.spotify-day-row-title {
+    font-weight: 700;
+}
+
+.spotify-day-row-meta {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.spotify-schedule-modal-actions {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.spotify-template-loader {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    margin-top: 1rem;
+}
+
+.spotify-weekday-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.spotify-weekday-picker label {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
 }

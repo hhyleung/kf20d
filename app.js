@@ -887,6 +887,7 @@ async function showDashboard() {
     bindSpotifyAuth();
     await initSpotify();
     await initSpotifyPlayer();
+    await loadSpotifySchedules();
 
     if (!realtimeSetupDone) {
         realtimeSetupDone = true;
@@ -1212,6 +1213,15 @@ function renderSpotify() {
     bindVolButtons();
     bindSpotifyPlaylistUI();
     refreshSpotifyPlaylistSlots();
+
+    const allBtn = document.getElementById("spotifySchedAllBtn");
+    if (allBtn && !allBtn.dataset.bound) {
+        allBtn.dataset.bound = "1";
+        allBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openSpotifyScheduleModal();
+        });
+    }
 }
 
 // ─── SPOTIFY AUTH ────────────────────────────────────────────────────
@@ -1556,28 +1566,6 @@ function bindPlaybackControls() {
     }
 }
 
-function bindSpotifyPlaylistUI() {
-    const label = document.getElementById("spotifyPlaylistsLabel");
-    if (label && !label.dataset.bound) {
-        label.dataset.bound = "1";
-        label.addEventListener("click", (e) => {
-            e.stopPropagation();
-            openSpotifyPlaylistModal();
-        });
-    }
-
-    document.querySelectorAll(".spotify-slot-btn").forEach((btn) => {
-        if (btn.dataset.bound) return;
-        btn.dataset.bound = "1";
-        btn.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            const playlistId = btn.dataset.playlistId;
-            if (!playlistId) return;
-            await playSpotifyPlaylist(playlistId);
-        });
-    });
-}
-
 // ─── VOLUME CONTROL ──────────────────────────────────────────────────
 
 let currentVolume = 65;
@@ -1605,9 +1593,19 @@ function bindVolButtons() {
     });
 }
 
+// Hardcoded icon options — add more later
+const SPOTIFY_SLOT_ICONS = ["♫", "☕\uFE0E", "☀"];
+const SPOTIFY_DEFAULT_ICON = "♫";
+
 // ─── SPOTIFY PLAYLISTS / SLOTS ──────────────────────────────────────
 
 let spotifyPlaylistCache = [];
+let spotifySlotData = [];
+let activeSlotPick = null;
+
+function ensureTextIcon(icon) {
+    return icon || SPOTIFY_DEFAULT_ICON;
+}
 
 async function fetchSpotifyPlaylists() {
     const token = spotifyAccessTokenCache || (await getValidSpotifyToken());
@@ -1651,54 +1649,31 @@ async function loadSpotifyPlaylistsFromDB() {
     return data || [];
 }
 
-async function saveSpotifyPlaylistSlot(slotNumber, playlist) {
-    const sb = await ensureSupabaseReady();
-    const {
-        data: { user },
-    } = await sb.auth.getUser();
-    if (!user) return;
-
-    const payload = {
-        user_id: user.id,
-        slot_number: slotNumber,
-        playlist_id: playlist.id,
-        playlist_name: playlist.name,
-        playlist_icon: playlist.images?.[0]?.url ? "🎵" : "🎵",
-    };
-
-    const { error } = await sb
-        .from("spotify_playlists")
-        .upsert(payload, { onConflict: "user_id,slot_number" });
-
-    if (error) {
-        console.error("Save spotify playlist slot failed:", error);
-        return;
-    }
-
-    await refreshSpotifyPlaylistSlots();
-}
-
 async function refreshSpotifyPlaylistSlots() {
     const rows = await loadSpotifyPlaylistsFromDB();
+    spotifySlotData = rows;
+
     document.querySelectorAll(".spotify-slot-btn").forEach((btn) => {
         const slot = Number(btn.dataset.slot);
         const row = rows.find((r) => r.slot_number === slot);
-        btn.textContent = row?.playlist_icon || "·";
+        const icon = ensureTextIcon(row?.playlist_icon);
+        btn.textContent = icon;
         btn.dataset.playlistId = row?.playlist_id || "";
         btn.dataset.playlistName = row?.playlist_name || "";
     });
+
+    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
+        const slot = Number(btn.dataset.slot);
+        const row = rows.find((r) => r.slot_number === slot);
+        const icon = ensureTextIcon(row?.playlist_icon);
+        btn.textContent = icon;
+        btn.classList.toggle("has-playlist", !!row?.playlist_id);
+    });
 }
-
-// Hardcoded icon options — add more later
-const SPOTIFY_SLOT_ICONS = ["♫", "☕\uFE0E", "☀"];
-
-let spotifySlotData = []; // rows from DB
-let activeSlotPick = null; // currently selected slot in modal
 
 async function openSpotifyPlaylistModal() {
     openModal("spotifyPlaylistModal");
 
-    // Load playlists and slot data in parallel
     const [playlists, slots] = await Promise.all([
         fetchSpotifyPlaylists(),
         loadSpotifyPlaylistsFromDB(),
@@ -1706,16 +1681,15 @@ async function openSpotifyPlaylistModal() {
 
     spotifySlotData = slots;
 
-    // Populate slot picker icons from saved data
-    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
+    const slotPicker = document.getElementById("spotifySlotPicker");
+    slotPicker.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
         const slot = Number(btn.dataset.slot);
         const row = slots.find((r) => r.slot_number === slot);
-        btn.textContent = row?.playlist_icon || String(slot);
+        btn.textContent = ensureTextIcon(row?.playlist_icon);
         btn.classList.toggle("has-playlist", !!row?.playlist_id);
         btn.classList.remove("active");
     });
 
-    // Populate playlist dropdown
     const select = document.getElementById("spotifySlotPlaylistSelect");
     select.innerHTML =
         '<option value="">— select —</option>' +
@@ -1723,11 +1697,10 @@ async function openSpotifyPlaylistModal() {
             .map((pl) => `<option value="${pl.id}">${pl.name}</option>`)
             .join("");
 
-    // Populate icon picker
     const iconPicker = document.getElementById("spotifyIconPicker");
     iconPicker.innerHTML = SPOTIFY_SLOT_ICONS.map(
         (icon) =>
-            `<div class="spotify-icon-option" data-icon="${icon}">${icon}</div>`,
+            `<button type="button" class="spotify-icon-option" data-icon="${icon}">${icon}</button>`,
     ).join("");
 
     iconPicker.querySelectorAll(".spotify-icon-option").forEach((el) => {
@@ -1739,36 +1712,29 @@ async function openSpotifyPlaylistModal() {
         });
     });
 
-    // Reset editor
     activeSlotPick = null;
     document.getElementById("spotifySlotEditor").style.display = "none";
     document.getElementById("spotifySlotEditorPrompt").style.display = "block";
 
-    // Bind slot picker buttons
     document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
         btn.onclick = () => selectSlotForEdit(Number(btn.dataset.slot));
     });
 
-    // Bind save button
-    const saveBtn = document.getElementById("spotifySlotSaveBtn");
-    saveBtn.onclick = saveSlotFromModal;
+    document.getElementById("spotifySlotSaveBtn").onclick = saveSlotFromModal;
 }
 
 function selectSlotForEdit(slotNumber) {
     activeSlotPick = slotNumber;
 
-    // Update active state on picker buttons
     document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
         btn.classList.toggle("active", Number(btn.dataset.slot) === slotNumber);
     });
 
-    // Show editor, hide prompt
     document.getElementById("spotifySlotEditor").style.display = "block";
     document.getElementById("spotifySlotEditorPrompt").style.display = "none";
     document.getElementById("spotifySlotEditorLabel").textContent =
         `Editing Slot ${slotNumber}`;
 
-    // Pre-fill with existing data if any
     const existing = spotifySlotData.find((r) => r.slot_number === slotNumber);
     const select = document.getElementById("spotifySlotPlaylistSelect");
     select.value = existing?.playlist_id || "";
@@ -1777,7 +1743,7 @@ function selectSlotForEdit(slotNumber) {
     iconPicker.querySelectorAll(".spotify-icon-option").forEach((el) => {
         el.classList.toggle(
             "active",
-            el.dataset.icon === (existing?.playlist_icon || "🎵"),
+            el.dataset.icon === ensureTextIcon(existing?.playlist_icon),
         );
     });
 }
@@ -1791,7 +1757,7 @@ async function saveSlotFromModal() {
     if (!playlistId) return;
 
     const activeIcon = document.querySelector(".spotify-icon-option.active");
-    const icon = activeIcon?.dataset.icon || "🎵";
+    const icon = ensureTextIcon(activeIcon?.dataset.icon);
 
     const sb = await ensureSupabaseReady();
     const {
@@ -1815,15 +1781,6 @@ async function saveSlotFromModal() {
         return;
     }
 
-    // Update picker button immediately
-    const btn = document.querySelector(
-        `.spotify-slot-pick-btn[data-slot="${activeSlotPick}"]`,
-    );
-    if (btn) {
-        btn.textContent = icon;
-        btn.classList.add("has-playlist");
-    }
-
     await refreshSpotifyPlaylistSlots();
     closeModal("spotifyPlaylistModal");
 }
@@ -1832,6 +1789,16 @@ async function playSpotifyPlaylist(playlistId) {
     if (!spotifyDeviceId) return;
     const token = spotifyAccessTokenCache || (await getValidSpotifyToken());
     if (!token) return;
+
+    await fetch(
+        `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(spotifyDeviceId)}`,
+        {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}` },
+        },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
 
     await fetch(
         `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
@@ -1846,14 +1813,241 @@ async function playSpotifyPlaylist(playlistId) {
             }),
         },
     );
+}
 
-    await fetch(
-        `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(spotifyDeviceId)}`,
-        {
-            method: "PUT",
-            headers: { Authorization: `Bearer ${token}` },
-        },
+function bindSpotifyPlaylistUI() {
+    const label = document.getElementById("spotifyPlaylistsLabel");
+    if (label && !label.dataset.bound) {
+        label.dataset.bound = "1";
+        label.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openSpotifyPlaylistModal();
+        });
+    }
+
+    document.querySelectorAll(".spotify-slot-btn").forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const playlistId = btn.dataset.playlistId;
+            if (!playlistId) return;
+            await playSpotifyPlaylist(playlistId);
+        });
+    });
+}
+
+// SPOTIFY SCHEDULER
+let spotifyCalendarMonth = new Date();
+let spotifySelectedDate = getTodayHKT();
+let spotifyScheduleCache = [];
+
+async function openSpotifyScheduleModal() {
+    openModal("spotifyScheduleModal");
+    await loadSpotifySchedules();
+    renderSpotifyCalendar();
+    renderSpotifyDaySchedules(spotifySelectedDate);
+    bindSpotifyScheduleModal();
+    bindSpotifyTemplateLoader();
+}
+
+async function loadSpotifySchedules() {
+    const sb = await ensureSupabaseReady();
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb
+        .from("spotify_schedules")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("scheduled_date", { ascending: true })
+        .order("scheduled_time", { ascending: true });
+
+    if (error) {
+        console.error("Load spotify_schedules failed:", error);
+        return [];
+    }
+
+    spotifyScheduleCache = data || [];
+    return spotifyScheduleCache;
+}
+
+function renderSpotifyCalendar() {
+    const grid = document.getElementById("spotifyCalendarGrid");
+    const label = document.getElementById("spotifyCalMonthLabel");
+    if (!grid || !label) return;
+
+    const y = spotifyCalendarMonth.getFullYear();
+    const m = spotifyCalendarMonth.getMonth();
+
+    const monthName = spotifyCalendarMonth
+        .toLocaleDateString("en-GB", {
+            month: "short",
+            year: "numeric",
+        })
+        .toUpperCase();
+    label.textContent = monthName;
+
+    const firstDay = new Date(y, m, 1);
+    const startOffset = firstDay.getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const today = getTodayHKT();
+
+    let html = "";
+    for (let i = 0; i < startOffset; i++) {
+        html += `<div class="spotify-calendar-cell empty"></div>`;
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const hasEvent = spotifyScheduleCache.some(
+            (s) => s.scheduled_date === dateStr,
+        );
+        const isToday = dateStr === today;
+        const isSelected = dateStr === spotifySelectedDate;
+
+        html += `
+      <button type="button"
+        class="spotify-calendar-cell ${hasEvent ? "has-event" : ""} ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}"
+        data-date="${dateStr}">
+        ${day}
+      </button>
+    `;
+    }
+
+    grid.innerHTML = html;
+}
+
+function renderSpotifyDaySchedules(dateStr) {
+    const label = document.getElementById("spotifySelectedDateLabel");
+    const list = document.getElementById("spotifyDaySchedules");
+    if (!label || !list) return;
+
+    label.textContent = dateStr;
+
+    const items = spotifyScheduleCache.filter(
+        (s) => s.scheduled_date === dateStr,
     );
+    if (!items.length) {
+        list.innerHTML = `<div class="spotify-day-row"><div class="spotify-day-row-meta">No schedules for this day.</div></div>`;
+        return;
+    }
+
+    list.innerHTML = items
+        .map(
+            (item) => `
+    <div class="spotify-day-row">
+      <div class="spotify-day-row-title">${item.scheduled_time} · ${item.playlist_name || "Untitled"}</div>
+      <div class="spotify-day-row-meta">${item.schedule_type}${item.template_ref ? " · template" : ""}</div>
+    </div>
+  `,
+        )
+        .join("");
+}
+
+function bindSpotifyScheduleModal() {
+    const prevBtn = document.getElementById("spotifyCalPrevBtn");
+    const nextBtn = document.getElementById("spotifyCalNextBtn");
+
+    if (prevBtn && !prevBtn.dataset.bound) {
+        prevBtn.dataset.bound = "1";
+        prevBtn.addEventListener("click", () => {
+            spotifyCalendarMonth = new Date(
+                spotifyCalendarMonth.getFullYear(),
+                spotifyCalendarMonth.getMonth() - 1,
+                1,
+            );
+            renderSpotifyCalendar();
+        });
+    }
+
+    if (nextBtn && !nextBtn.dataset.bound) {
+        nextBtn.dataset.bound = "1";
+        nextBtn.addEventListener("click", () => {
+            spotifyCalendarMonth = new Date(
+                spotifyCalendarMonth.getFullYear(),
+                spotifyCalendarMonth.getMonth() + 1,
+                1,
+            );
+            renderSpotifyCalendar();
+        });
+    }
+
+    document
+        .getElementById("spotifyCalendarGrid")
+        ?.querySelectorAll(".spotify-calendar-cell[data-date]")
+        .forEach((cell) => {
+            cell.onclick = () => {
+                spotifySelectedDate = cell.dataset.date;
+                renderSpotifyCalendar();
+                renderSpotifyDaySchedules(spotifySelectedDate);
+            };
+        });
+
+    document.getElementById("spotifyLoadTemplateBtn").onclick = () => {
+        document.getElementById("spotifyTemplateLoader").style.display =
+            "block";
+        bindSpotifyTemplateLoader();
+    };
+
+    const addBtn = document.getElementById("spotifyAddScheduleBtn");
+    const editBtn = document.getElementById("spotifyEditScheduleBtn");
+    const delBtn = document.getElementById("spotifyDeleteScheduleBtn");
+
+    if (addBtn && !addBtn.dataset.bound) {
+        addBtn.dataset.bound = "1";
+        addBtn.addEventListener("click", () => {
+            alert("Add schedule coming next.");
+        });
+    }
+
+    if (editBtn && !editBtn.dataset.bound) {
+        editBtn.dataset.bound = "1";
+        editBtn.addEventListener("click", () => {
+            alert("Edit schedule coming next.");
+        });
+    }
+
+    if (delBtn && !delBtn.dataset.bound) {
+        delBtn.dataset.bound = "1";
+        delBtn.addEventListener("click", () => {
+            alert("Delete schedule coming next.");
+        });
+    }
+}
+
+function bindSpotifyTemplateLoader() {
+    const toggleFields = () => {
+        const type = document.getElementById("spotifyTemplateType")?.value;
+        const weekly = document.getElementById("spotifyWeeklyFields");
+        const shift = document.getElementById("spotifyShiftFields");
+        if (weekly) weekly.style.display = type === "weekly" ? "block" : "none";
+        if (shift) shift.style.display = type === "shift" ? "block" : "none";
+    };
+
+    const typeEl = document.getElementById("spotifyTemplateType");
+    if (typeEl && !typeEl.dataset.bound) {
+        typeEl.dataset.bound = "1";
+        typeEl.addEventListener("change", toggleFields);
+    }
+    toggleFields();
+
+    const cancelBtn = document.getElementById("spotifyTemplateCancelBtn");
+    if (cancelBtn && !cancelBtn.dataset.bound) {
+        cancelBtn.dataset.bound = "1";
+        cancelBtn.addEventListener("click", () => {
+            document.getElementById("spotifyTemplateLoader").style.display =
+                "none";
+        });
+    }
+
+    const generateBtn = document.getElementById("spotifyTemplateGenerateBtn");
+    if (generateBtn && !generateBtn.dataset.bound) {
+        generateBtn.dataset.bound = "1";
+        generateBtn.addEventListener("click", generateSpotifyTemplateSchedules);
+    }
 }
 
 // FULL LIST
@@ -1876,6 +2070,153 @@ function buildFullListHTML(list) {
         default:
             return "<p>List not found</p>";
     }
+}
+
+function parseISODate(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr + "T00:00:00Z");
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function toISODate(d) {
+    return d.toISOString().slice(0, 10);
+}
+
+function addDaysUTC(dateStr, days) {
+    const d = parseISODate(dateStr);
+    if (!d) return null;
+    d.setUTCDate(d.getUTCDate() + days);
+    return toISODate(d);
+}
+
+function getWeeklyDatesInRange(startDate, endDate, weekdays) {
+    const out = [];
+    let d = parseISODate(startDate);
+    const end = parseISODate(endDate);
+    if (!d || !end) return out;
+
+    while (d <= end) {
+        const day = d.getUTCDay();
+        if (weekdays.includes(day)) out.push(toISODate(d));
+        d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return out;
+}
+
+async function generateSpotifyTemplateSchedules() {
+    const type = document.getElementById("spotifyTemplateType")?.value;
+    const startDate =
+        document.getElementById("spotifyTemplateStartDate")?.value ||
+        getTodayHKT();
+    const endDate =
+        document.getElementById("spotifyTemplateEndDate")?.value ||
+        addDaysUTC(startDate, 180);
+
+    const playlistSelect = document.getElementById(
+        "spotifyTemplatePlaylistSelect",
+    );
+    const playlistId = playlistSelect?.value;
+    const playlistName =
+        playlistSelect?.options[playlistSelect.selectedIndex]?.text || "";
+    if (!playlistId) return;
+
+    const sb = await ensureSupabaseReady();
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return;
+
+    let rows = [];
+
+    if (type === "weekly") {
+        const weekdays = [
+            ...document.querySelectorAll(
+                '#spotifyWeeklyFields input[type="checkbox"]:checked',
+            ),
+        ].map((x) => Number(x.value));
+
+        const time =
+            document.getElementById("spotifyWeeklyTime")?.value || "07:00";
+        const dates = getWeeklyDatesInRange(startDate, endDate, weekdays);
+
+        rows = dates.map((date) => ({
+            user_id: user.id,
+            schedule_type: "weekly",
+            scheduled_date: date,
+            scheduled_time: time,
+            playlist_id: playlistId,
+            playlist_name: playlistName,
+            template_ref: crypto.randomUUID(),
+            triggered: false,
+        }));
+    }
+
+    if (type === "shift") {
+        const day1Index = Number(
+            document.getElementById("spotifyShiftDay1Index")?.value || 1,
+        );
+        const afternoonTime =
+            document.getElementById("spotifyShiftAfternoonTime")?.value ||
+            "11:00";
+        const earlyTime =
+            document.getElementById("spotifyShiftEarlyTime")?.value || "06:00";
+        const overnightTime =
+            document.getElementById("spotifyShiftOvernightTime")?.value ||
+            "14:00";
+        const offTime =
+            document.getElementById("spotifyShiftOffTime")?.value || "";
+
+        const shiftPattern = [
+            { day: 1, type: "afternoon", time: afternoonTime },
+            { day: 2, type: "afternoon", time: afternoonTime },
+            { day: 3, type: "off", time: offTime },
+            { day: 4, type: "early", time: earlyTime },
+            { day: 5, type: "early", time: earlyTime },
+            { day: 6, type: "overnight", time: overnightTime },
+            { day: 7, type: "overnight", time: overnightTime },
+            { day: 8, type: "off", time: offTime },
+            { day: 9, type: "off", time: offTime },
+            { day: 10, type: "off", time: offTime },
+        ];
+
+        const days = [];
+        let current = parseISODate(startDate);
+        const end = parseISODate(endDate);
+        const cycleStart = day1Index;
+
+        while (current <= end) {
+            const cycleDay = ((days.length + cycleStart - 1) % 10) + 1;
+            const pattern = shiftPattern.find((p) => p.day === cycleDay);
+            if (pattern && pattern.time) {
+                days.push({
+                    user_id: user.id,
+                    schedule_type: "shift",
+                    scheduled_date: toISODate(current),
+                    scheduled_time: pattern.time,
+                    playlist_id: playlistId,
+                    playlist_name: playlistName,
+                    template_ref: crypto.randomUUID(),
+                    triggered: false,
+                });
+            }
+            current.setUTCDate(current.getUTCDate() + 1);
+        }
+
+        rows = days;
+    }
+
+    if (!rows.length) return;
+
+    const { error } = await sb.from("spotify_schedules").insert(rows);
+    if (error) {
+        console.error("Generate template schedules failed:", error);
+        return;
+    }
+
+    await loadSpotifySchedules();
+    renderSpotifyCalendar();
+    renderSpotifyDaySchedules(spotifySelectedDate);
+    document.getElementById("spotifyTemplateLoader").style.display = "none";
 }
 
 // MODAL BUILDERS

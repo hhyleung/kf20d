@@ -700,53 +700,50 @@
             </div>
         </div>
 
-        <!-- SPOTIFY PLAYLIST MODAL -->
         <div class="modal" id="spotifyPlaylistModal">
             <div class="modal-content modal-narrow">
                 <header>
                     <h2>Playlists</h2>
                 </header>
                 <div style="padding: 1.5rem">
-                    <!-- 5 slot buttons at top -->
                     <div class="spotify-slot-picker" id="spotifySlotPicker">
                         <button
                             class="spotify-slot-pick-btn"
                             data-slot="1"
                             type="button"
                         >
-                            1
+                            ♫
                         </button>
                         <button
                             class="spotify-slot-pick-btn"
                             data-slot="2"
                             type="button"
                         >
-                            2
+                            ♫
                         </button>
                         <button
                             class="spotify-slot-pick-btn"
                             data-slot="3"
                             type="button"
                         >
-                            3
+                            ♫
                         </button>
                         <button
                             class="spotify-slot-pick-btn"
                             data-slot="4"
                             type="button"
                         >
-                            4
+                            ♫
                         </button>
                         <button
                             class="spotify-slot-pick-btn"
                             data-slot="5"
                             type="button"
                         >
-                            5
+                            ♫
                         </button>
                     </div>
 
-                    <!-- Edit section below, shown after selecting a slot -->
                     <div
                         id="spotifySlotEditor"
                         style="display: none; margin-top: 1.5rem"
@@ -795,7 +792,6 @@
                         </div>
                     </div>
 
-                    <!-- Shown before any slot is selected -->
                     <div
                         id="spotifySlotEditorPrompt"
                         style="
@@ -806,6 +802,271 @@
                         "
                     >
                         Select a slot above to edit
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SPOTIFY SCHEDULE MODAL -->
+        <div class="modal" id="spotifyScheduleModal">
+            <div class="modal-content modal-wide">
+                <header>
+                    <h2>SCHEDULES</h2>
+                </header>
+                <div class="spotify-schedule-modal">
+                    <div class="spotify-schedule-left">
+                        <div class="spotify-calendar-header">
+                            <button
+                                type="button"
+                                class="action-btn"
+                                id="spotifyCalPrevBtn"
+                            >
+                                ◀
+                            </button>
+                            <div
+                                id="spotifyCalMonthLabel"
+                                class="spotify-cal-month-label"
+                            >
+                                APR 2026
+                            </div>
+                            <button
+                                type="button"
+                                class="action-btn"
+                                id="spotifyCalNextBtn"
+                            >
+                                ▶
+                            </button>
+                        </div>
+                        <div class="spotify-calendar-weekdays">
+                            <span>Sun</span><span>Mon</span><span>Tue</span
+                            ><span>Wed</span><span>Thu</span><span>Fri</span
+                            ><span>Sat</span>
+                        </div>
+                        <div
+                            id="spotifyCalendarGrid"
+                            class="spotify-calendar-grid"
+                        ></div>
+                    </div>
+
+                    <div class="spotify-schedule-right">
+                        <div
+                            id="spotifySelectedDateLabel"
+                            class="spotify-selected-date-label"
+                        >
+                            Select a date
+                        </div>
+                        <div
+                            id="spotifyDaySchedules"
+                            class="spotify-day-schedules"
+                        ></div>
+
+                        <div
+                            id="spotifyTemplateLoader"
+                            class="spotify-template-loader"
+                            style="display: none"
+                        >
+                            <div class="form-group">
+                                <label>Template Type</label>
+                                <select id="spotifyTemplateType">
+                                    <option value="weekly">Weekly</option>
+                                    <option value="shift">Shift</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Start Date</label>
+                                <input
+                                    type="date"
+                                    id="spotifyTemplateStartDate"
+                                />
+                            </div>
+
+                            <div class="form-group">
+                                <label>End Date</label>
+                                <input
+                                    type="date"
+                                    id="spotifyTemplateEndDate"
+                                />
+                            </div>
+
+                            <div id="spotifyWeeklyFields" style="display: none">
+                                <div class="form-group">
+                                    <label>Weekdays</label>
+                                    <div class="spotify-weekday-picker">
+                                        <label
+                                            ><input type="checkbox" value="0" />
+                                            Sun</label
+                                        >
+                                        <label
+                                            ><input type="checkbox" value="1" />
+                                            Mon</label
+                                        >
+                                        <label
+                                            ><input type="checkbox" value="2" />
+                                            Tue</label
+                                        >
+                                        <label
+                                            ><input type="checkbox" value="3" />
+                                            Wed</label
+                                        >
+                                        <label
+                                            ><input type="checkbox" value="4" />
+                                            Thu</label
+                                        >
+                                        <label
+                                            ><input type="checkbox" value="5" />
+                                            Fri</label
+                                        >
+                                        <label
+                                            ><input type="checkbox" value="6" />
+                                            Sat</label
+                                        >
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Time</label>
+                                    <input type="time" id="spotifyWeeklyTime" />
+                                </div>
+                            </div>
+
+                            <div id="spotifyShiftFields" style="display: none">
+                                <div class="form-group">
+                                    <label>Cycle Start</label>
+                                    <select id="spotifyShiftDay1Index">
+                                        <option value="1">
+                                            Day 1 starts today
+                                        </option>
+                                        <option value="2">
+                                            Day 2 starts today
+                                        </option>
+                                        <option value="3">
+                                            Day 3 starts today
+                                        </option>
+                                        <option value="4">
+                                            Day 4 starts today
+                                        </option>
+                                        <option value="5">
+                                            Day 5 starts today
+                                        </option>
+                                        <option value="6">
+                                            Day 6 starts today
+                                        </option>
+                                        <option value="7">
+                                            Day 7 starts today
+                                        </option>
+                                        <option value="8">
+                                            Day 8 starts today
+                                        </option>
+                                        <option value="9">
+                                            Day 9 starts today
+                                        </option>
+                                        <option value="10">
+                                            Day 10 starts today
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Afternoon Time</label>
+                                    <input
+                                        type="time"
+                                        id="spotifyShiftAfternoonTime"
+                                        value="11:00"
+                                    />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Early Time</label>
+                                    <input
+                                        type="time"
+                                        id="spotifyShiftEarlyTime"
+                                        value="06:00"
+                                    />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Overnight Time</label>
+                                    <input
+                                        type="time"
+                                        id="spotifyShiftOvernightTime"
+                                        value="14:00"
+                                    />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Day Off Time</label>
+                                    <input
+                                        type="time"
+                                        id="spotifyShiftOffTime"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Playlist</label>
+                                <select id="spotifyTemplatePlaylistSelect">
+                                    <option value="">— select —</option>
+                                </select>
+                            </div>
+
+                            <div class="modal-actions">
+                                <button
+                                    type="button"
+                                    class="submit-btn"
+                                    id="spotifyTemplateGenerateBtn"
+                                >
+                                    Generate
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cancel-btn"
+                                    id="spotifyTemplateCancelBtn"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+
+                        <div
+                            class="modal-actions spotify-schedule-modal-actions"
+                        >
+                            <button
+                                type="button"
+                                class="submit-btn"
+                                id="spotifyLoadTemplateBtn"
+                            >
+                                Load Template
+                            </button>
+                            <button
+                                type="button"
+                                class="submit-btn"
+                                id="spotifyAddScheduleBtn"
+                            >
+                                Add
+                            </button>
+                            <button
+                                type="button"
+                                class="submit-btn"
+                                id="spotifyEditScheduleBtn"
+                            >
+                                Edit
+                            </button>
+                            <button
+                                type="button"
+                                class="delete-btn"
+                                id="spotifyDeleteScheduleBtn"
+                            >
+                                Delete
+                            </button>
+                            <button
+                                type="button"
+                                class="cancel-btn"
+                                onclick="closeModal('spotifyScheduleModal')"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
