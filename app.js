@@ -1680,71 +1680,156 @@ async function saveSpotifyPlaylistSlot(slotNumber, playlist) {
 
 async function refreshSpotifyPlaylistSlots() {
     const rows = await loadSpotifyPlaylistsFromDB();
-    const slotButtons = document.querySelectorAll(".spotify-slot-btn");
-    slotButtons.forEach((btn) => {
+    document.querySelectorAll(".spotify-slot-btn").forEach((btn) => {
         const slot = Number(btn.dataset.slot);
         const row = rows.find((r) => r.slot_number === slot);
-        btn.textContent = row
-            ? `${row.playlist_icon || "🎵"} ${slot}`
-            : String(slot);
+        btn.textContent = row?.playlist_icon || "·";
         btn.dataset.playlistId = row?.playlist_id || "";
         btn.dataset.playlistName = row?.playlist_name || "";
     });
 }
 
-async function openSpotifyPlaylistModal() {
-    const body = document.getElementById("spotifyPlaylistModalBody");
-    if (!body) return;
+// Hardcoded icon options — add more later
+const SPOTIFY_SLOT_ICONS = ["♫", "☕\uFE0E", "☀"];
 
-    body.innerHTML =
-        '<div style="padding:1rem;color:var(--text-secondary);">Loading playlists...</div>';
+let spotifySlotData = []; // rows from DB
+let activeSlotPick = null; // currently selected slot in modal
+
+async function openSpotifyPlaylistModal() {
     openModal("spotifyPlaylistModal");
 
-    const playlists = await fetchSpotifyPlaylists();
-    const html = playlists
-        .map((pl) => {
-            const art = pl.images?.[0]?.url
-                ? `<img src="${pl.images[0].url}" style="width:48px;height:48px;border-radius:10px;object-fit:cover;" />`
-                : `<div class="spotify-playlist-item-art">🎵</div>`;
+    // Load playlists and slot data in parallel
+    const [playlists, slots] = await Promise.all([
+        fetchSpotifyPlaylists(),
+        loadSpotifyPlaylistsFromDB(),
+    ]);
 
-            return `
-      <div class="spotify-playlist-item">
-        <div>${art}</div>
-        <div>
-          <div class="spotify-playlist-item-title">${pl.name}</div>
-          <div class="spotify-playlist-item-meta">${pl.tracks?.total || 0} tracks</div>
-        </div>
-        <button class="submit-btn" type="button" data-playlist-id="${pl.id}" data-playlist-name="${pl.name}">Assign</button>
-      </div>
-    `;
-        })
-        .join("");
+    spotifySlotData = slots;
 
-    body.innerHTML =
-        html ||
-        '<div style="padding:1rem;color:var(--text-secondary);">No playlists found.</div>';
+    // Populate slot picker icons from saved data
+    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
+        const slot = Number(btn.dataset.slot);
+        const row = slots.find((r) => r.slot_number === slot);
+        btn.textContent = row?.playlist_icon || String(slot);
+        btn.classList.toggle("has-playlist", !!row?.playlist_id);
+        btn.classList.remove("active");
+    });
 
-    body.querySelectorAll("button[data-playlist-id]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-            const playlist = {
-                id: btn.dataset.playlistId,
-                name: btn.dataset.playlistName,
-                images: [],
-            };
+    // Populate playlist dropdown
+    const select = document.getElementById("spotifySlotPlaylistSelect");
+    select.innerHTML =
+        '<option value="">— select —</option>' +
+        playlists
+            .map((pl) => `<option value="${pl.id}">${pl.name}</option>`)
+            .join("");
 
-            const slot = prompt("Assign to slot number 1–5?");
-            const slotNumber = Number(slot);
-            if (![1, 2, 3, 4, 5].includes(slotNumber)) return;
+    // Populate icon picker
+    const iconPicker = document.getElementById("spotifyIconPicker");
+    iconPicker.innerHTML = SPOTIFY_SLOT_ICONS.map(
+        (icon) =>
+            `<div class="spotify-icon-option" data-icon="${icon}">${icon}</div>`,
+    ).join("");
 
-            await saveSpotifyPlaylistSlot(slotNumber, playlist);
-            closeModal("spotifyPlaylistModal");
+    iconPicker.querySelectorAll(".spotify-icon-option").forEach((el) => {
+        el.addEventListener("click", () => {
+            iconPicker
+                .querySelectorAll(".spotify-icon-option")
+                .forEach((x) => x.classList.remove("active"));
+            el.classList.add("active");
         });
     });
+
+    // Reset editor
+    activeSlotPick = null;
+    document.getElementById("spotifySlotEditor").style.display = "none";
+    document.getElementById("spotifySlotEditorPrompt").style.display = "block";
+
+    // Bind slot picker buttons
+    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
+        btn.onclick = () => selectSlotForEdit(Number(btn.dataset.slot));
+    });
+
+    // Bind save button
+    const saveBtn = document.getElementById("spotifySlotSaveBtn");
+    saveBtn.onclick = saveSlotFromModal;
+}
+
+function selectSlotForEdit(slotNumber) {
+    activeSlotPick = slotNumber;
+
+    // Update active state on picker buttons
+    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
+        btn.classList.toggle("active", Number(btn.dataset.slot) === slotNumber);
+    });
+
+    // Show editor, hide prompt
+    document.getElementById("spotifySlotEditor").style.display = "block";
+    document.getElementById("spotifySlotEditorPrompt").style.display = "none";
+    document.getElementById("spotifySlotEditorLabel").textContent =
+        `Editing Slot ${slotNumber}`;
+
+    // Pre-fill with existing data if any
+    const existing = spotifySlotData.find((r) => r.slot_number === slotNumber);
+    const select = document.getElementById("spotifySlotPlaylistSelect");
+    select.value = existing?.playlist_id || "";
+
+    const iconPicker = document.getElementById("spotifyIconPicker");
+    iconPicker.querySelectorAll(".spotify-icon-option").forEach((el) => {
+        el.classList.toggle(
+            "active",
+            el.dataset.icon === (existing?.playlist_icon || "🎵"),
+        );
+    });
+}
+
+async function saveSlotFromModal() {
+    if (!activeSlotPick) return;
+
+    const select = document.getElementById("spotifySlotPlaylistSelect");
+    const playlistId = select.value;
+    const playlistName = select.options[select.selectedIndex]?.text || "";
+    if (!playlistId) return;
+
+    const activeIcon = document.querySelector(".spotify-icon-option.active");
+    const icon = activeIcon?.dataset.icon || "🎵";
+
+    const sb = await ensureSupabaseReady();
+    const {
+        data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { error } = await sb.from("spotify_playlists").upsert(
+        {
+            user_id: user.id,
+            slot_number: activeSlotPick,
+            playlist_id: playlistId,
+            playlist_name: playlistName,
+            playlist_icon: icon,
+        },
+        { onConflict: "user_id,slot_number" },
+    );
+
+    if (error) {
+        console.error("Save slot failed:", error);
+        return;
+    }
+
+    // Update picker button immediately
+    const btn = document.querySelector(
+        `.spotify-slot-pick-btn[data-slot="${activeSlotPick}"]`,
+    );
+    if (btn) {
+        btn.textContent = icon;
+        btn.classList.add("has-playlist");
+    }
+
+    await refreshSpotifyPlaylistSlots();
+    closeModal("spotifyPlaylistModal");
 }
 
 async function playSpotifyPlaylist(playlistId) {
     if (!spotifyDeviceId) return;
-
     const token = spotifyAccessTokenCache || (await getValidSpotifyToken());
     if (!token) return;
 
@@ -1759,6 +1844,14 @@ async function playSpotifyPlaylist(playlistId) {
             body: JSON.stringify({
                 context_uri: `spotify:playlist:${playlistId}`,
             }),
+        },
+    );
+
+    await fetch(
+        `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(spotifyDeviceId)}`,
+        {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}` },
         },
     );
 }

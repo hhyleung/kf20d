@@ -1114,58 +1114,54 @@ form::-webkit-scrollbar-thumb:hover {
     color: var(--btn-red-color) !important;
 }
 
-.spotify-playlists-label {
-    cursor: pointer;
-    user-select: none;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.spotify-playlists-label:hover {
-    color: var(--spotify);
-}
-
-.spotify-playlist-modal-body {
+/* SPOTIFY PLAYLIST MODAL */
+.spotify-slot-picker {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(5, 1fr);
     gap: 0.75rem;
-    max-height: 60vh;
-    overflow: auto;
 }
 
-.spotify-playlist-item {
-    display: grid;
-    grid-template-columns: 48px 1fr auto;
-    gap: 0.85rem;
-    align-items: center;
-    padding: 0.75rem;
-    border: 1px solid var(--border);
+.spotify-slot-pick-btn {
+    height: 52px;
     border-radius: 12px;
+    border: 2px solid var(--border);
     background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
 }
 
-.spotify-playlist-item-art {
-    width: 48px;
-    height: 48px;
-    border-radius: 10px;
+.spotify-slot-pick-btn.active {
+    border-color: var(--spotify);
+    color: var(--spotify);
     background: var(--bg-primary);
+}
+
+.spotify-slot-pick-btn.has-playlist {
+    border-color: var(--text-secondary);
+}
+
+.spotify-icon-picker {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.spotify-icon-option {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--bg-secondary);
+    font-size: 1.3rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
+    cursor: pointer;
 }
 
-.spotify-playlist-item-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.spotify-playlist-item-meta {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-.spotify-playlist-item button {
-    min-width: 88px;
+.spotify-icon-option.active {
+    border-color: var(--spotify);
+    background: var(--bg-primary);
 }
