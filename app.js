@@ -835,6 +835,10 @@ function showLogin() {
     document.querySelector(".dashboard").style.display = "none";
     cleanupSubscriptions();
     realtimeSetupDone = false;
+    if (scheduleTickInterval) {
+        clearInterval(scheduleTickInterval);
+        scheduleTickInterval = null;
+    }
 }
 
 async function showDashboard() {
@@ -887,12 +891,56 @@ async function showDashboard() {
     bindSpotifyAuth();
     await initSpotify();
     await initSpotifyPlayer();
+    startScheduleTicker();
     await loadSpotifySchedules();
+    renderNextSchedule();
 
     if (!realtimeSetupDone) {
         realtimeSetupDone = true;
         setTimeout(setupRealtime, 500);
     }
+}
+
+function renderNextSchedule() {
+    const now = new Date();
+    const todayStr = getTodayHKT();
+    const currentTime = now.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Hong_Kong",
+    });
+
+    const next = spotifyScheduleCache.find((s) => {
+        if (s.triggered) return false;
+        if (s.scheduled_date > todayStr) return true;
+        if (s.scheduled_date === todayStr && s.scheduled_time > currentTime)
+            return true;
+        return false;
+    });
+
+    const dateEl = document.getElementById("spotifySchedDate");
+    const timeEl = document.getElementById("spotifySchedTime");
+    const playlistEl = document.getElementById("spotifySchedPlaylist");
+
+    if (!next) {
+        if (dateEl) dateEl.textContent = "—";
+        if (timeEl) timeEl.textContent = "";
+        if (playlistEl) playlistEl.textContent = "No upcoming schedules";
+        return;
+    }
+
+    if (dateEl) {
+        const d = new Date(next.scheduled_date + "T00:00:00Z");
+        dateEl.textContent = d
+            .toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                timeZone: "Asia/Hong_Kong",
+            })
+            .toUpperCase();
+    }
+    if (timeEl) timeEl.textContent = next.scheduled_time?.slice(0, 5) || "";
+    if (playlistEl) playlistEl.textContent = next.playlist_name || "Untitled";
 }
 
 let clockInterval = null;
@@ -1213,6 +1261,7 @@ function renderSpotify() {
     bindVolButtons();
     bindSpotifyPlaylistUI();
     refreshSpotifyPlaylistSlots();
+    bindSpotifySchedButtons();
 
     const allBtn = document.getElementById("spotifySchedAllBtn");
     if (allBtn && !allBtn.dataset.bound) {
@@ -1222,6 +1271,59 @@ function renderSpotify() {
             openSpotifyScheduleModal();
         });
     }
+}
+
+let scheduleTickInterval = null;
+
+function startScheduleTicker() {
+    if (scheduleTickInterval) clearInterval(scheduleTickInterval);
+    scheduleTickInterval = setInterval(checkAndTriggerSchedule, 30000); // 每 30 秒檢查一次
+    checkAndTriggerSchedule(); // 啟動時先跑一次
+}
+
+async function checkAndTriggerSchedule() {
+    if (!spotifyPlayerReady || !spotifyDeviceId) return;
+
+    const todayStr = getTodayHKT();
+    const nowHKT = new Date().toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Hong_Kong",
+    });
+
+    // 找出今天、時間已到、還未 triggered 的排程
+    const due = spotifyScheduleCache.filter(
+        (s) =>
+            !s.triggered &&
+            s.scheduled_date === todayStr &&
+            s.scheduled_time?.slice(0, 5) <= nowHKT,
+    );
+
+    if (!due.length) return;
+
+    // 取最新到期的那一筆
+    const target = due[due.length - 1];
+
+    if (!target.playlist_id) return;
+
+    // 標記為 triggered
+    const sb = await ensureSupabaseReady();
+    const { error } = await sb
+        .from("spotify_schedules")
+        .update({ triggered: true })
+        .eq("id", target.id);
+
+    if (error) {
+        console.error("Trigger schedule failed:", error);
+        return;
+    }
+
+    // 播放
+    await playSpotifyPlaylist(target.playlist_id);
+
+    // 重新載入並更新主面板
+    await loadSpotifySchedules();
+    renderNextSchedule();
 }
 
 // ─── SPOTIFY AUTH ────────────────────────────────────────────────────
@@ -1856,6 +1958,8 @@ function bindSpotifyPlaylistUI() {
 let spotifyCalendarMonth = new Date();
 let spotifySelectedDate = getTodayHKT();
 let spotifyScheduleCache = [];
+let spotifySelectedScheduleId = null;
+let spotifySelectedSchedule = null;
 
 async function openSpotifyScheduleModal() {
     openModal("spotifyScheduleModal");
@@ -1933,6 +2037,16 @@ function renderSpotifyCalendar() {
     }
 
     grid.innerHTML = html;
+
+    grid.querySelectorAll(".spotify-calendar-cell[data-date]").forEach(
+        (cell) => {
+            cell.onclick = () => {
+                spotifySelectedDate = cell.dataset.date;
+                renderSpotifyCalendar();
+                renderSpotifyDaySchedules(spotifySelectedDate);
+            };
+        },
+    );
 }
 
 function renderSpotifyDaySchedules(dateStr) {
@@ -2028,7 +2142,7 @@ async function populateTemplatePlaylistDropdown() {
             .join("");
 }
 
-function openSpotifyAddSchedule() {
+async function openSpotifyAddSchedule() {
     if (!spotifySelectedDate) return;
     document.getElementById("spotifyScheduleFormTitle").textContent =
         "ADD SCHEDULE";
@@ -2038,11 +2152,11 @@ function openSpotifyAddSchedule() {
     document.getElementById("ssfNotes").value = "";
     document.getElementById("ssfDeleteBtn").style.display = "none";
     document.getElementById("ssfDeleteBtn").dataset.id = "";
-    populateSsfPlaylistDropdown();
+    await populateSsfPlaylistDropdown();
     openModal("spotifyScheduleFormModal");
 }
 
-function openSpotifyEditSchedule() {
+async function openSpotifyEditSchedule() {
     if (!spotifySelectedSchedule) return;
     const item = spotifySelectedSchedule;
     document.getElementById("spotifyScheduleFormTitle").textContent =
@@ -2050,11 +2164,10 @@ function openSpotifyEditSchedule() {
     document.getElementById("ssfDate").value = item.scheduled_date;
     document.getElementById("ssfTime").value = item.scheduled_time;
     document.getElementById("ssfType").value = item.schedule_type || "once";
-    document.getElementById("ssfNotes").value = item.notes || "";
     const delBtn = document.getElementById("ssfDeleteBtn");
     delBtn.style.display = "inline-flex";
     delBtn.dataset.id = item.id;
-    populateSsfPlaylistDropdown();
+    await populateSsfPlaylistDropdown();
     document.getElementById("ssfPlaylist").value = item.playlist_id || "";
     openModal("spotifyScheduleFormModal");
 }
@@ -2094,7 +2207,6 @@ async function bindSpotifyScheduleForm() {
             schedule_type: type,
             playlist_id: playlistId || null,
             playlist_name: playlistName || null,
-            notes: notes || null,
             triggered: false,
         };
 
@@ -2175,21 +2287,11 @@ function bindSpotifyScheduleModal() {
         });
     }
 
-    document
-        .getElementById("spotifyCalendarGrid")
-        ?.querySelectorAll(".spotify-calendar-cell[data-date]")
-        .forEach((cell) => {
-            cell.onclick = () => {
-                spotifySelectedDate = cell.dataset.date;
-                renderSpotifyCalendar();
-                renderSpotifyDaySchedules(spotifySelectedDate);
-            };
-        });
-
-    document.getElementById("spotifyLoadTemplateBtn").onclick = () => {
+    document.getElementById("spotifyLoadTemplateBtn").onclick = async () => {
         document.getElementById("spotifyTemplateLoader").style.display =
             "block";
         bindSpotifyTemplateLoader();
+        await populateTemplatePlaylistDropdown();
     };
 
     const addBtn = document.getElementById("spotifyAddScheduleBtn");
@@ -2206,10 +2308,10 @@ function bindSpotifyScheduleModal() {
 
     if (editBtn && !editBtn.dataset.bound) {
         editBtn.dataset.bound = "1";
-        editBtn.addEventListener("click", () => {
+        editBtn.addEventListener("click", async () => {
             if (!spotifySelectedSchedule) return;
             bindSpotifyScheduleForm();
-            openSpotifyEditSchedule();
+            await openSpotifyEditSchedule();
         });
     }
 
@@ -2232,6 +2334,96 @@ function bindSpotifyScheduleModal() {
             await loadSpotifySchedules();
             renderSpotifyCalendar();
             renderSpotifyDaySchedules(spotifySelectedDate);
+        });
+    }
+}
+
+function bindSpotifySchedButtons() {
+    const skipBtn = document.getElementById("spotifySchedSkipBtn");
+    if (skipBtn && !skipBtn.dataset.bound) {
+        skipBtn.dataset.bound = "1";
+        skipBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const todayStr = getTodayHKT();
+            const currentTime = new Date().toLocaleTimeString("en-GB", {
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Asia/Hong_Kong",
+            });
+
+            const next = spotifyScheduleCache.find((s) => {
+                if (s.triggered) return false;
+                if (s.scheduled_date > todayStr) return true;
+                if (
+                    s.scheduled_date === todayStr &&
+                    s.scheduled_time > currentTime
+                )
+                    return true;
+                return false;
+            });
+
+            if (!next) return;
+            if (
+                !confirm(
+                    `Skip schedule: ${next.scheduled_date} ${next.scheduled_time} · ${next.playlist_name}?`,
+                )
+            )
+                return;
+
+            const sb = await ensureSupabaseReady();
+            const { error } = await sb
+                .from("spotify_schedules")
+                .update({ triggered: true })
+                .eq("id", next.id);
+
+            if (error) {
+                console.error("Skip schedule failed:", error);
+                return;
+            }
+
+            await loadSpotifySchedules();
+            renderNextSchedule();
+        });
+    }
+
+    const addBtn = document.getElementById("spotifySchedAddBtn");
+    if (addBtn && !addBtn.dataset.bound) {
+        addBtn.dataset.bound = "1";
+        addBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            bindSpotifyScheduleForm();
+            openSpotifyAddSchedule();
+        });
+    }
+
+    const editBtn = document.getElementById("spotifySchedEditBtn");
+    if (editBtn && !editBtn.dataset.bound) {
+        editBtn.dataset.bound = "1";
+        editBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const todayStr = getTodayHKT();
+            const currentTime = new Date().toLocaleTimeString("en-GB", {
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Asia/Hong_Kong",
+            });
+
+            const next = spotifyScheduleCache.find((s) => {
+                if (s.triggered) return false;
+                if (s.scheduled_date > todayStr) return true;
+                if (
+                    s.scheduled_date === todayStr &&
+                    s.scheduled_time > currentTime
+                )
+                    return true;
+                return false;
+            });
+
+            if (!next) return;
+            spotifySelectedSchedule = next;
+            spotifySelectedScheduleId = next.id;
+            bindSpotifyScheduleForm();
+            await openSpotifyEditSchedule();
         });
     }
 }
@@ -2436,9 +2628,6 @@ async function generateSpotifyTemplateSchedules() {
     renderSpotifyDaySchedules(spotifySelectedDate);
     document.getElementById("spotifyTemplateLoader").style.display = "none";
 }
-
-let spotifySelectedScheduleId = null;
-let spotifySelectedSchedule = null;
 
 // MODAL BUILDERS
 function openModal(id) {
