@@ -913,7 +913,10 @@ function renderNextSchedule() {
     const next = spotifyScheduleCache.find((s) => {
         if (s.triggered) return false;
         if (s.scheduled_date > todayStr) return true;
-        if (s.scheduled_date === todayStr && s.scheduled_time > currentTime)
+        if (
+            s.scheduled_date === todayStr &&
+            s.scheduled_time?.slice(0, 5) > currentTime
+        )
             return true;
         return false;
     });
@@ -1277,51 +1280,42 @@ let scheduleTickInterval = null;
 
 function startScheduleTicker() {
     if (scheduleTickInterval) clearInterval(scheduleTickInterval);
-    scheduleTickInterval = setInterval(checkAndTriggerSchedule, 30000); // 每 30 秒檢查一次
-    checkAndTriggerSchedule(); // 啟動時先跑一次
+    scheduleTickInterval = setInterval(checkAndTriggerSchedule, 60000);
+    checkAndTriggerSchedule();
 }
 
 async function checkAndTriggerSchedule() {
     if (!spotifyPlayerReady || !spotifyDeviceId) return;
-
     const todayStr = getTodayHKT();
     const nowHKT = new Date().toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
         timeZone: "Asia/Hong_Kong",
     });
-
-    // 找出今天、時間已到、還未 triggered 的排程
     const due = spotifyScheduleCache.filter(
         (s) =>
             !s.triggered &&
             s.scheduled_date === todayStr &&
-            s.scheduled_time?.slice(0, 5) <= nowHKT,
+            s.scheduled_time?.slice(0, 5) === nowHKT,
     );
-
     if (!due.length) return;
 
-    // 取最新到期的那一筆
-    const target = due[due.length - 1];
-
-    if (!target.playlist_id) return;
-
-    // 標記為 triggered
     const sb = await ensureSupabaseReady();
-    const { error } = await sb
-        .from("spotify_schedules")
-        .update({ triggered: true })
-        .eq("id", target.id);
+    let lastPlaylistId = null;
 
-    if (error) {
-        console.error("Trigger schedule failed:", error);
-        return;
+    for (const entry of due) {
+        const { error } = await sb
+            .from("spotify_schedules")
+            .update({ triggered: true })
+            .eq("id", entry.id);
+        if (error) {
+            console.error("Trigger schedule failed", error);
+            continue;
+        }
+        if (entry.playlist_id) lastPlaylistId = entry.playlist_id;
     }
 
-    // 播放
-    await playSpotifyPlaylist(target.playlist_id);
-
-    // 重新載入並更新主面板
+    if (lastPlaylistId) await playSpotifyPlaylist(lastPlaylistId);
     await loadSpotifySchedules();
     renderNextSchedule();
 }
@@ -1564,7 +1558,9 @@ async function initSpotifyPlayer() {
     spotifyPlayer = new Spotify.Player({
         name: "kf20d",
         getOAuthToken: (cb) => {
-            cb(spotifyAccessTokenCache);
+            getValidSpotifyToken().then((t) => {
+                if (t) cb(t);
+            });
         },
         volume: 0.65,
     });
@@ -1626,7 +1622,13 @@ function updateNowPlaying(state) {
     const playBtn = document.getElementById("spotifyPlayBtn");
 
     if (!state || !state.track_window?.current_track) {
-        if (artEl) artEl.style.backgroundImage = "";
+        if (artEl) {
+            artEl.style.backgroundImage = "";
+            artEl.style.backgroundSize = "";
+            artEl.style.backgroundPosition = "";
+            const placeholder = artEl.querySelector(".spotify-art-placeholder");
+            if (placeholder) placeholder.style.display = "flex";
+        }
         if (titleEl) titleEl.textContent = "—";
         if (artistEl) artistEl.textContent = "—";
         if (playBtn) playBtn.textContent = "▶";
@@ -2021,11 +2023,28 @@ function renderSpotifyCalendar() {
 
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const hasEvent = spotifyScheduleCache.some(
-            (s) => s.scheduled_date === dateStr,
+        const dayEntries = spotifyScheduleCache.filter(
+            (s) => s.scheduled_date === dateStr && !s.triggered,
         );
         const isToday = dateStr === today;
         const isSelected = dateStr === spotifySelectedDate;
+
+        if (dayEntries.length) {
+            const types = new Set(dayEntries.map((s) => s.schedule_type));
+            const dotsEl = document.createElement("div");
+            dotsEl.className = "cal-dots";
+
+            // Order: weekly, shift, once
+            ["weekly", "shift", "once"].forEach((t) => {
+                if (types.has(t)) {
+                    const dot = document.createElement("span");
+                    dot.className = `cal-dot dot-${t}`;
+                    dotsEl.appendChild(dot);
+                }
+            });
+
+            cell.appendChild(dotsEl);
+        }
 
         html += `
       <button type="button"
@@ -2078,7 +2097,7 @@ function renderSpotifyDaySchedules(dateStr) {
         ${item.scheduled_time} · ${item.playlist_name || "Untitled"}
       </div>
       <div class="spotify-day-row-meta">
-        ${item.schedule_type}${item.notes ? " · " + item.notes : ""}
+        ${item.schedule_type}
       </div>
     </div>
   `,
@@ -2142,117 +2161,114 @@ async function populateTemplatePlaylistDropdown() {
             .join("");
 }
 
-async function openSpotifyAddSchedule() {
-    if (!spotifySelectedDate) return;
+async function openSpotifyAddSchedule(dateStr) {
+    spotifySelectedScheduleId = null;
     document.getElementById("spotifyScheduleFormTitle").textContent =
         "ADD SCHEDULE";
-    document.getElementById("ssfDate").value = spotifySelectedDate;
-    document.getElementById("ssfTime").value = "07:00";
-    document.getElementById("ssfType").value = "once";
-    document.getElementById("ssfNotes").value = "";
+    document.getElementById("ssfDate").value = dateStr || getTodayHKT();
+    document.getElementById("ssfTime").value = "";
+    document.getElementById("ssfPlaylist").value = "";
     document.getElementById("ssfDeleteBtn").style.display = "none";
-    document.getElementById("ssfDeleteBtn").dataset.id = "";
     await populateSsfPlaylistDropdown();
     openModal("spotifyScheduleFormModal");
 }
 
-async function openSpotifyEditSchedule() {
-    if (!spotifySelectedSchedule) return;
-    const item = spotifySelectedSchedule;
+async function openSpotifyEditSchedule(scheduleId) {
+    const item = spotifyScheduleCache.find((s) => s.id === scheduleId);
+    if (!item) return;
+    spotifySelectedScheduleId = scheduleId;
     document.getElementById("spotifyScheduleFormTitle").textContent =
         "EDIT SCHEDULE";
-    document.getElementById("ssfDate").value = item.scheduled_date;
-    document.getElementById("ssfTime").value = item.scheduled_time;
-    document.getElementById("ssfType").value = item.schedule_type || "once";
-    const delBtn = document.getElementById("ssfDeleteBtn");
-    delBtn.style.display = "inline-flex";
-    delBtn.dataset.id = item.id;
-    await populateSsfPlaylistDropdown();
-    document.getElementById("ssfPlaylist").value = item.playlist_id || "";
+    document.getElementById("ssfDate").value = item.scheduled_date || "";
+    document.getElementById("ssfTime").value =
+        item.scheduled_time?.slice(0, 5) || "";
+    document.getElementById("ssfDeleteBtn").style.display = "block";
+    await populateSsfPlaylistDropdown(item.playlist_id);
     openModal("spotifyScheduleFormModal");
 }
 
-async function bindSpotifyScheduleForm() {
+function bindSpotifyScheduleForm() {
     const form = document.getElementById("spotifyScheduleForm");
     if (!form || form.dataset.bound) return;
     form.dataset.bound = "1";
 
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
+        const isEdit = !!spotifySelectedScheduleId;
+        const date = document.getElementById("ssfDate").value;
+        const time = document.getElementById("ssfTime").value;
+        const playlistSelect = document.getElementById("ssfPlaylist");
+        const playlistId = playlistSelect.value;
+        const playlistName =
+            playlistSelect.options[playlistSelect.selectedIndex]?.text || "";
+
+        if (!date || !time || !playlistId) return;
+
         const sb = await ensureSupabaseReady();
         const {
             data: { user },
         } = await sb.auth.getUser();
         if (!user) return;
 
-        const date = document.getElementById("ssfDate").value;
-        const time = document.getElementById("ssfTime").value;
-        const type = document.getElementById("ssfType").value;
-        const notes = document.getElementById("ssfNotes").value.trim();
-        const playlistSel = document.getElementById("ssfPlaylist");
-        const playlistId = playlistSel.value;
-        const playlistName =
-            playlistSel.options[playlistSel.selectedIndex]?.text || "";
-
-        const isEdit =
-            !!spotifySelectedScheduleId &&
-            document
-                .getElementById("spotifyScheduleFormTitle")
-                .textContent.includes("EDIT");
-
         const record = {
             user_id: user.id,
+            schedule_type: "once",
             scheduled_date: date,
             scheduled_time: time,
-            schedule_type: type,
-            playlist_id: playlistId || null,
-            playlist_name: playlistName || null,
+            playlist_id: playlistId,
+            playlist_name: playlistName,
             triggered: false,
         };
 
-        let error;
         if (isEdit) {
-            ({ error } = await sb
+            const { error } = await sb
                 .from("spotify_schedules")
-                .update(record)
-                .eq("id", spotifySelectedScheduleId));
+                .update({
+                    scheduled_date: record.scheduled_date,
+                    scheduled_time: record.scheduled_time,
+                    playlist_id: record.playlist_id,
+                    playlist_name: record.playlist_name,
+                })
+                .eq("id", spotifySelectedScheduleId);
+            if (error) {
+                console.error("Update schedule failed", error);
+                return;
+            }
         } else {
-            ({ error } = await sb.from("spotify_schedules").insert(record));
-        }
-
-        if (error) {
-            console.error("Save schedule failed:", error);
-            return;
+            const { error } = await sb.from("spotify_schedules").insert(record);
+            if (error) {
+                console.error("Insert schedule failed", error);
+                return;
+            }
         }
 
         closeModal("spotifyScheduleFormModal");
-        spotifySelectedScheduleId = null;
-        spotifySelectedSchedule = null;
         await loadSpotifySchedules();
+        renderNextSchedule();
         renderSpotifyCalendar();
         renderSpotifyDaySchedules(spotifySelectedDate);
     });
 
-    const delBtn = document.getElementById("ssfDeleteBtn");
-    if (delBtn && !delBtn.dataset.bound) {
-        delBtn.dataset.bound = "1";
-        delBtn.addEventListener("click", async () => {
-            const id = delBtn.dataset.id;
-            if (!id) return;
+    // Delete button
+    const deleteBtn = document.getElementById("ssfDeleteBtn");
+    if (deleteBtn && !deleteBtn.dataset.bound) {
+        deleteBtn.dataset.bound = "1";
+        deleteBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!spotifySelectedScheduleId) return;
             if (!confirm("Delete this schedule?")) return;
             const sb = await ensureSupabaseReady();
             const { error } = await sb
                 .from("spotify_schedules")
                 .delete()
-                .eq("id", id);
+                .eq("id", spotifySelectedScheduleId);
             if (error) {
-                console.error("Delete schedule failed:", error);
+                console.error("Delete schedule failed", error);
                 return;
             }
             closeModal("spotifyScheduleFormModal");
-            spotifySelectedScheduleId = null;
-            spotifySelectedSchedule = null;
             await loadSpotifySchedules();
+            renderNextSchedule();
             renderSpotifyCalendar();
             renderSpotifyDaySchedules(spotifySelectedDate);
         });
@@ -2350,7 +2366,6 @@ function bindSpotifySchedButtons() {
                 minute: "2-digit",
                 timeZone: "Asia/Hong_Kong",
             });
-
             const next = spotifyScheduleCache.find((s) => {
                 if (s.triggered) return false;
                 if (s.scheduled_date > todayStr) return true;
@@ -2361,26 +2376,17 @@ function bindSpotifySchedButtons() {
                     return true;
                 return false;
             });
-
             if (!next) return;
-            if (
-                !confirm(
-                    `Skip schedule: ${next.scheduled_date} ${next.scheduled_time} · ${next.playlist_name}?`,
-                )
-            )
-                return;
-
+            if (!confirm("Skip and delete this schedule?")) return;
             const sb = await ensureSupabaseReady();
             const { error } = await sb
                 .from("spotify_schedules")
-                .update({ triggered: true })
+                .delete()
                 .eq("id", next.id);
-
             if (error) {
-                console.error("Skip schedule failed:", error);
+                console.error("Skip schedule failed", error);
                 return;
             }
-
             await loadSpotifySchedules();
             renderNextSchedule();
         });
@@ -2514,21 +2520,25 @@ function getWeeklyDatesInRange(startDate, endDate, weekdays) {
 }
 
 async function generateSpotifyTemplateSchedules() {
-    const type = document.getElementById("spotifyTemplateType")?.value;
-    const startDate =
-        document.getElementById("spotifyTemplateStartDate")?.value ||
-        getTodayHKT();
-    const endDate =
-        document.getElementById("spotifyTemplateEndDate")?.value ||
-        addDaysUTC(startDate, 180);
-
+    const type = document.getElementById("spotifyTemplateType").value;
+    const startDateStr = document.getElementById(
+        "spotifyTemplateStartDate",
+    ).value;
+    const endDateStr = document.getElementById("spotifyTemplateEndDate").value;
+    const overrideMode =
+        document.querySelector('input[name="spotifyOverride"]:checked')
+            ?.value || "add";
     const playlistSelect = document.getElementById(
         "spotifyTemplatePlaylistSelect",
     );
-    const playlistId = playlistSelect?.value;
+    const playlistId = playlistSelect.value;
     const playlistName =
-        playlistSelect?.options[playlistSelect.selectedIndex]?.text || "";
-    if (!playlistId) return;
+        playlistSelect.options[playlistSelect.selectedIndex]?.text || "";
+
+    if (!startDateStr || !playlistId) {
+        alert("Please set a start date and playlist.");
+        return;
+    }
 
     const sb = await ensureSupabaseReady();
     const {
@@ -2536,97 +2546,140 @@ async function generateSpotifyTemplateSchedules() {
     } = await sb.auth.getUser();
     if (!user) return;
 
-    let rows = [];
+    // Resolve end date: default to 3 months from start
+    let endDate;
+    if (endDateStr) {
+        endDate = new Date(endDateStr + "T00:00:00Z");
+    } else {
+        endDate = new Date(startDateStr + "T00:00:00Z");
+        endDate.setMonth(endDate.getMonth() + 3);
+    }
+    const resolvedEndStr = endDate.toISOString().slice(0, 10);
+
+    // Override: delete all untriggered future schedules in range
+    if (overrideMode === "replace") {
+        const { error: delError } = await sb
+            .from("spotify_schedules")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("triggered", false)
+            .gte("scheduled_date", startDateStr)
+            .lte("scheduled_date", resolvedEndStr);
+        if (delError) {
+            console.error("Override delete failed", delError);
+            return;
+        }
+    }
+
+    // Generate rows with shared template_ref
+    const templateRef = crypto.randomUUID();
+    const rows = [];
 
     if (type === "weekly") {
-        const weekdays = [
+        const checkedDays = [
             ...document.querySelectorAll(
                 '#spotifyWeeklyFields input[type="checkbox"]:checked',
             ),
-        ].map((x) => Number(x.value));
-
-        const time =
-            document.getElementById("spotifyWeeklyTime")?.value || "07:00";
-        const dates = getWeeklyDatesInRange(startDate, endDate, weekdays);
-
-        rows = dates.map((date) => ({
-            user_id: user.id,
-            schedule_type: "weekly",
-            scheduled_date: date,
-            scheduled_time: time,
-            playlist_id: playlistId,
-            playlist_name: playlistName,
-            template_ref: crypto.randomUUID(),
-            triggered: false,
-        }));
-    }
-
-    if (type === "shift") {
-        const day1Index = Number(
-            document.getElementById("spotifyShiftDay1Index")?.value || 1,
-        );
-        const afternoonTime =
-            document.getElementById("spotifyShiftAfternoonTime")?.value ||
-            "11:00";
-        const earlyTime =
-            document.getElementById("spotifyShiftEarlyTime")?.value || "06:00";
-        const overnightTime =
-            document.getElementById("spotifyShiftOvernightTime")?.value ||
-            "14:00";
-        const offTime =
-            document.getElementById("spotifyShiftOffTime")?.value || "";
-
-        const shiftPattern = [
-            { day: 1, type: "afternoon", time: afternoonTime },
-            { day: 2, type: "afternoon", time: afternoonTime },
-            { day: 3, type: "off", time: offTime },
-            { day: 4, type: "early", time: earlyTime },
-            { day: 5, type: "early", time: earlyTime },
-            { day: 6, type: "overnight", time: overnightTime },
-            { day: 7, type: "overnight", time: overnightTime },
-            { day: 8, type: "off", time: offTime },
-            { day: 9, type: "off", time: offTime },
-            { day: 10, type: "off", time: offTime },
-        ];
-
-        const days = [];
-        let current = parseISODate(startDate);
-        const end = parseISODate(endDate);
-        const cycleStart = day1Index;
-
-        while (current <= end) {
-            const cycleDay = ((days.length + cycleStart - 1) % 10) + 1;
-            const pattern = shiftPattern.find((p) => p.day === cycleDay);
-            if (pattern && pattern.time) {
-                days.push({
+        ].map((cb) => parseInt(cb.value));
+        const time = document.getElementById("spotifyWeeklyTime").value;
+        if (!checkedDays.length || !time) {
+            alert("Please select at least one weekday and a time.");
+            return;
+        }
+        let cursor = new Date(startDateStr + "T00:00:00Z");
+        while (cursor <= endDate) {
+            if (checkedDays.includes(cursor.getUTCDay())) {
+                rows.push({
                     user_id: user.id,
-                    schedule_type: "shift",
-                    scheduled_date: toISODate(current),
-                    scheduled_time: pattern.time,
+                    schedule_type: "weekly",
+                    template_ref: templateRef,
+                    scheduled_date: cursor.toISOString().slice(0, 10),
+                    scheduled_time: time,
                     playlist_id: playlistId,
                     playlist_name: playlistName,
-                    template_ref: crypto.randomUUID(),
                     triggered: false,
                 });
             }
-            current.setUTCDate(current.getUTCDate() + 1);
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
+    } else if (type === "shift") {
+        const day1Index = parseInt(
+            document.getElementById("spotifyShiftDay1Index").value,
+        );
+        const times = {
+            afternoon: document.getElementById("spotifyShiftAfternoonTime")
+                .value,
+            early: document.getElementById("spotifyShiftEarlyTime").value,
+            overnight: document.getElementById("spotifyShiftOvernightTime")
+                .value,
+            off: document.getElementById("spotifyShiftOffTime").value,
+        };
+        // Shift pattern: which time each day in the 10-day cycle uses
+        const shiftPattern = [
+            times.afternoon, // Day 1
+            times.afternoon, // Day 2
+            times.off, // Day 3
+            times.early, // Day 4
+            times.early, // Day 5
+            times.overnight, // Day 6
+            times.overnight, // Day 7
+            times.off, // Day 8
+            times.off, // Day 9
+            times.off, // Day 10
+        ];
+        // Calculate the cycle offset so today aligns to day1Index
+        // day1Index = 1 means today is Day 1, so offset = 0
+        // day1Index = 3 means today is Day 3, so cycle started 2 days ago
+        const startDate = new Date(startDateStr + "T00:00:00Z");
+        const cycleOffset = (day1Index - 1 + 10) % 10;
+        let cursor = new Date(startDate);
+        // Work out what cycle day the startDate falls on
+        // cycleOffset days before startDate = Day 1
+        // So startDate is cycle day = cycleOffset (0-indexed)
+        let cycleDay = cycleOffset;
 
-        rows = days;
+        while (cursor <= endDate) {
+            const time = shiftPattern[cycleDay];
+            if (time) {
+                rows.push({
+                    user_id: user.id,
+                    schedule_type: "shift",
+                    template_ref: templateRef,
+                    scheduled_date: cursor.toISOString().slice(0, 10),
+                    scheduled_time: time,
+                    playlist_id: playlistId,
+                    playlist_name: playlistName,
+                    triggered: false,
+                });
+            }
+            cycleDay = (cycleDay + 1) % 10;
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
     }
 
-    if (!rows.length) return;
-
-    const { error } = await sb.from("spotify_schedules").insert(rows);
-    if (error) {
-        console.error("Generate template schedules failed:", error);
+    if (!rows.length) {
+        alert("No schedules generated. Check your settings.");
         return;
     }
 
+    // Insert in batches of 100 to avoid Supabase payload limits
+    for (let i = 0; i < rows.length; i += 100) {
+        const batch = rows.slice(i, i + 100);
+        const { error } = await sb.from("spotify_schedules").insert(batch);
+        if (error) {
+            console.error("Insert schedules failed", error);
+            return;
+        }
+    }
+
     await loadSpotifySchedules();
+    renderNextSchedule();
     renderSpotifyCalendar();
-    renderSpotifyDaySchedules(spotifySelectedDate);
+    if (spotifySelectedDate) renderSpotifyDaySchedules(spotifySelectedDate);
+
+    // Hide template loader after success
     document.getElementById("spotifyTemplateLoader").style.display = "none";
+    document.getElementById("spotifyLoadTemplateBtn").style.display = "block";
 }
 
 // MODAL BUILDERS

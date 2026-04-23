@@ -889,6 +889,29 @@
                                 />
                             </div>
 
+                            <div class="form-group">
+                                <label>Existing Future Schedules</label>
+                                <div class="spotify-override-picker">
+                                    <label class="spotify-override-option">
+                                        <input
+                                            type="radio"
+                                            name="spotifyOverride"
+                                            value="add"
+                                            checked
+                                        />
+                                        <span>Add to existing</span>
+                                    </label>
+                                    <label class="spotify-override-option">
+                                        <input
+                                            type="radio"
+                                            name="spotifyOverride"
+                                            value="replace"
+                                        />
+                                        <span>Replace all future</span>
+                                    </label>
+                                </div>
+                            </div>
+
                             <div id="spotifyWeeklyFields" style="display: none">
                                 <div class="form-group">
                                     <label>Weekdays</label>
@@ -923,7 +946,6 @@
                                         >
                                     </div>
                                 </div>
-
                                 <div class="form-group">
                                     <label>Time</label>
                                     <input type="time" id="spotifyWeeklyTime" />
@@ -966,7 +988,6 @@
                                         </option>
                                     </select>
                                 </div>
-
                                 <div class="form-group">
                                     <label>Afternoon Time</label>
                                     <input
@@ -975,7 +996,6 @@
                                         value="11:00"
                                     />
                                 </div>
-
                                 <div class="form-group">
                                     <label>Early Time</label>
                                     <input
@@ -984,7 +1004,6 @@
                                         value="06:00"
                                     />
                                 </div>
-
                                 <div class="form-group">
                                     <label>Overnight Time</label>
                                     <input
@@ -993,7 +1012,6 @@
                                         value="14:00"
                                     />
                                 </div>
-
                                 <div class="form-group">
                                     <label>Day Off Time</label>
                                     <input
@@ -1074,9 +1092,12 @@
 
         <!-- SPOTIFY SCHEDULE FORM MODAL -->
         <div class="modal" id="spotifyScheduleFormModal">
-            <div class="modal-content">
+            <div class="modal-content modal-narrow">
                 <header>
                     <h2 id="spotifyScheduleFormTitle">ADD SCHEDULE</h2>
+                    <button onclick="closeModal('spotifyScheduleFormModal')">
+                        &times;
+                    </button>
                 </header>
                 <form id="spotifyScheduleForm">
                     <div class="form-group">
@@ -1088,26 +1109,10 @@
                         <input type="time" id="ssfTime" required />
                     </div>
                     <div class="form-group">
-                        <label>Type</label>
-                        <select id="ssfType">
-                            <option value="once">Once</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="shift">Shift</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
                         <label>Playlist</label>
                         <select id="ssfPlaylist" required>
                             <option value="">— select —</option>
                         </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Notes</label>
-                        <input
-                            type="text"
-                            id="ssfNotes"
-                            placeholder="Optional"
-                        />
                     </div>
                     <div class="modal-actions">
                         <button type="submit" class="submit-btn">Save</button>
