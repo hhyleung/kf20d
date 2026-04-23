@@ -1072,6 +1072,65 @@
             </div>
         </div>
 
+        <!-- SPOTIFY SCHEDULE FORM MODAL -->
+        <div class="modal" id="spotifyScheduleFormModal">
+            <div class="modal-content">
+                <header>
+                    <h2 id="spotifyScheduleFormTitle">ADD SCHEDULE</h2>
+                </header>
+                <form id="spotifyScheduleForm">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="ssfDate" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Time</label>
+                        <input type="time" id="ssfTime" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="ssfType">
+                            <option value="once">Once</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="shift">Shift</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Playlist</label>
+                        <select id="ssfPlaylist" required>
+                            <option value="">— select —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <input
+                            type="text"
+                            id="ssfNotes"
+                            placeholder="Optional"
+                        />
+                    </div>
+                    <div class="modal-actions">
+                        <button type="submit" class="submit-btn">Save</button>
+                        <button
+                            type="button"
+                            class="cancel-btn"
+                            onclick="closeModal('spotifyScheduleFormModal')"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="delete-btn"
+                            id="ssfDeleteBtn"
+                            style="display: none"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- SCREEN BLANKER -->
         <div id="screenBlanker"></div>
 

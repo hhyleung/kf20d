@@ -1376,7 +1376,22 @@ function setSpotifyHeaderError(isError) {
     header.classList.toggle("spotify-header-error", isError);
 }
 
+function isTabletSpotifySession() {
+    const DEV_MODE = true;
+    if (DEV_MODE) return true;
+
+    const ua = navigator.userAgent || "";
+    const isFirefox = /Firefox\/\d+/i.test(ua);
+    const isWindows81 = /Windows NT 6\.3/i.test(ua);
+    return isFirefox && isWindows81;
+}
+
 async function initSpotify() {
+    if (!isTabletSpotifySession()) {
+        setSpotifyHeaderError(false);
+        return;
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get("code");
 
@@ -1930,21 +1945,206 @@ function renderSpotifyDaySchedules(dateStr) {
     const items = spotifyScheduleCache.filter(
         (s) => s.scheduled_date === dateStr,
     );
+
     if (!items.length) {
-        list.innerHTML = `<div class="spotify-day-row"><div class="spotify-day-row-meta">No schedules for this day.</div></div>`;
+        list.innerHTML = `<div class="spotify-day-row">
+      <div class="spotify-day-row-meta">No schedules for this day.</div>
+    </div>`;
+        spotifySelectedScheduleId = null;
+        spotifySelectedSchedule = null;
         return;
     }
 
     list.innerHTML = items
         .map(
             (item) => `
-    <div class="spotify-day-row">
-      <div class="spotify-day-row-title">${item.scheduled_time} · ${item.playlist_name || "Untitled"}</div>
-      <div class="spotify-day-row-meta">${item.schedule_type}${item.template_ref ? " · template" : ""}</div>
+    <div class="spotify-day-row ${spotifySelectedScheduleId === item.id ? "selected" : ""}"
+         data-id="${item.id}">
+      <div class="spotify-day-row-title">
+        ${item.scheduled_time} · ${item.playlist_name || "Untitled"}
+      </div>
+      <div class="spotify-day-row-meta">
+        ${item.schedule_type}${item.notes ? " · " + item.notes : ""}
+      </div>
     </div>
   `,
         )
         .join("");
+
+    list.querySelectorAll(".spotify-day-row[data-id]").forEach((row) => {
+        row.onclick = () => {
+            const item = spotifyScheduleCache.find(
+                (s) => String(s.id) === row.dataset.id,
+            );
+            if (!item) return;
+            spotifySelectedScheduleId = item.id;
+            spotifySelectedSchedule = item;
+            renderSpotifyDaySchedules(dateStr);
+        };
+    });
+}
+
+async function populateSsfPlaylistDropdown() {
+    const sel = document.getElementById("ssfPlaylist");
+    if (!sel) return;
+
+    sel.innerHTML = '<option value="">Loading...</option>';
+
+    const playlists = spotifyPlaylistCache.length
+        ? spotifyPlaylistCache
+        : await fetchSpotifyPlaylists();
+
+    if (!playlists.length) {
+        sel.innerHTML = '<option value="">— no playlists found —</option>';
+        return;
+    }
+
+    sel.innerHTML =
+        '<option value="">— select —</option>' +
+        playlists
+            .map((p) => `<option value="${p.id}">${p.name}</option>`)
+            .join("");
+}
+
+async function populateTemplatePlaylistDropdown() {
+    const sel = document.getElementById("spotifyTemplatePlaylistSelect");
+    if (!sel) return;
+
+    sel.innerHTML = '<option value="">Loading...</option>';
+
+    const playlists = spotifyPlaylistCache.length
+        ? spotifyPlaylistCache
+        : await fetchSpotifyPlaylists();
+
+    if (!playlists.length) {
+        sel.innerHTML = '<option value="">— no playlists found —</option>';
+        return;
+    }
+
+    sel.innerHTML =
+        '<option value="">— select —</option>' +
+        playlists
+            .map((p) => `<option value="${p.id}">${p.name}</option>`)
+            .join("");
+}
+
+function openSpotifyAddSchedule() {
+    if (!spotifySelectedDate) return;
+    document.getElementById("spotifyScheduleFormTitle").textContent =
+        "ADD SCHEDULE";
+    document.getElementById("ssfDate").value = spotifySelectedDate;
+    document.getElementById("ssfTime").value = "07:00";
+    document.getElementById("ssfType").value = "once";
+    document.getElementById("ssfNotes").value = "";
+    document.getElementById("ssfDeleteBtn").style.display = "none";
+    document.getElementById("ssfDeleteBtn").dataset.id = "";
+    populateSsfPlaylistDropdown();
+    openModal("spotifyScheduleFormModal");
+}
+
+function openSpotifyEditSchedule() {
+    if (!spotifySelectedSchedule) return;
+    const item = spotifySelectedSchedule;
+    document.getElementById("spotifyScheduleFormTitle").textContent =
+        "EDIT SCHEDULE";
+    document.getElementById("ssfDate").value = item.scheduled_date;
+    document.getElementById("ssfTime").value = item.scheduled_time;
+    document.getElementById("ssfType").value = item.schedule_type || "once";
+    document.getElementById("ssfNotes").value = item.notes || "";
+    const delBtn = document.getElementById("ssfDeleteBtn");
+    delBtn.style.display = "inline-flex";
+    delBtn.dataset.id = item.id;
+    populateSsfPlaylistDropdown();
+    document.getElementById("ssfPlaylist").value = item.playlist_id || "";
+    openModal("spotifyScheduleFormModal");
+}
+
+async function bindSpotifyScheduleForm() {
+    const form = document.getElementById("spotifyScheduleForm");
+    if (!form || form.dataset.bound) return;
+    form.dataset.bound = "1";
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const sb = await ensureSupabaseReady();
+        const {
+            data: { user },
+        } = await sb.auth.getUser();
+        if (!user) return;
+
+        const date = document.getElementById("ssfDate").value;
+        const time = document.getElementById("ssfTime").value;
+        const type = document.getElementById("ssfType").value;
+        const notes = document.getElementById("ssfNotes").value.trim();
+        const playlistSel = document.getElementById("ssfPlaylist");
+        const playlistId = playlistSel.value;
+        const playlistName =
+            playlistSel.options[playlistSel.selectedIndex]?.text || "";
+
+        const isEdit =
+            !!spotifySelectedScheduleId &&
+            document
+                .getElementById("spotifyScheduleFormTitle")
+                .textContent.includes("EDIT");
+
+        const record = {
+            user_id: user.id,
+            scheduled_date: date,
+            scheduled_time: time,
+            schedule_type: type,
+            playlist_id: playlistId || null,
+            playlist_name: playlistName || null,
+            notes: notes || null,
+            triggered: false,
+        };
+
+        let error;
+        if (isEdit) {
+            ({ error } = await sb
+                .from("spotify_schedules")
+                .update(record)
+                .eq("id", spotifySelectedScheduleId));
+        } else {
+            ({ error } = await sb.from("spotify_schedules").insert(record));
+        }
+
+        if (error) {
+            console.error("Save schedule failed:", error);
+            return;
+        }
+
+        closeModal("spotifyScheduleFormModal");
+        spotifySelectedScheduleId = null;
+        spotifySelectedSchedule = null;
+        await loadSpotifySchedules();
+        renderSpotifyCalendar();
+        renderSpotifyDaySchedules(spotifySelectedDate);
+    });
+
+    const delBtn = document.getElementById("ssfDeleteBtn");
+    if (delBtn && !delBtn.dataset.bound) {
+        delBtn.dataset.bound = "1";
+        delBtn.addEventListener("click", async () => {
+            const id = delBtn.dataset.id;
+            if (!id) return;
+            if (!confirm("Delete this schedule?")) return;
+            const sb = await ensureSupabaseReady();
+            const { error } = await sb
+                .from("spotify_schedules")
+                .delete()
+                .eq("id", id);
+            if (error) {
+                console.error("Delete schedule failed:", error);
+                return;
+            }
+            closeModal("spotifyScheduleFormModal");
+            spotifySelectedScheduleId = null;
+            spotifySelectedSchedule = null;
+            await loadSpotifySchedules();
+            renderSpotifyCalendar();
+            renderSpotifyDaySchedules(spotifySelectedDate);
+        });
+    }
 }
 
 function bindSpotifyScheduleModal() {
@@ -1999,21 +2199,39 @@ function bindSpotifyScheduleModal() {
     if (addBtn && !addBtn.dataset.bound) {
         addBtn.dataset.bound = "1";
         addBtn.addEventListener("click", () => {
-            alert("Add schedule coming next.");
+            bindSpotifyScheduleForm();
+            openSpotifyAddSchedule();
         });
     }
 
     if (editBtn && !editBtn.dataset.bound) {
         editBtn.dataset.bound = "1";
         editBtn.addEventListener("click", () => {
-            alert("Edit schedule coming next.");
+            if (!spotifySelectedSchedule) return;
+            bindSpotifyScheduleForm();
+            openSpotifyEditSchedule();
         });
     }
 
     if (delBtn && !delBtn.dataset.bound) {
         delBtn.dataset.bound = "1";
-        delBtn.addEventListener("click", () => {
-            alert("Delete schedule coming next.");
+        delBtn.addEventListener("click", async () => {
+            if (!spotifySelectedScheduleId) return;
+            if (!confirm("Delete this schedule?")) return;
+            const sb = await ensureSupabaseReady();
+            const { error } = await sb
+                .from("spotify_schedules")
+                .delete()
+                .eq("id", spotifySelectedScheduleId);
+            if (error) {
+                console.error(error);
+                return;
+            }
+            spotifySelectedScheduleId = null;
+            spotifySelectedSchedule = null;
+            await loadSpotifySchedules();
+            renderSpotifyCalendar();
+            renderSpotifyDaySchedules(spotifySelectedDate);
         });
     }
 }
@@ -2218,6 +2436,9 @@ async function generateSpotifyTemplateSchedules() {
     renderSpotifyDaySchedules(spotifySelectedDate);
     document.getElementById("spotifyTemplateLoader").style.display = "none";
 }
+
+let spotifySelectedScheduleId = null;
+let spotifySelectedSchedule = null;
 
 // MODAL BUILDERS
 function openModal(id) {
