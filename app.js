@@ -1909,29 +1909,38 @@ async function playSpotifyPlaylist(playlistId) {
     const token = spotifyAccessTokenCache || (await getValidSpotifyToken());
     if (!token) return;
 
-    await fetch(
-        `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(spotifyDeviceId)}`,
-        {
-            method: "PUT",
-            headers: { Authorization: `Bearer ${token}` },
-        },
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 250));
-
-    await fetch(
-        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
-        {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
+    try {
+        // Start playback first (shuffle state will be set after)
+        const playRes = await fetch(
+            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    context_uri: `spotify:playlist:${playlistId}`,
+                }),
             },
-            body: JSON.stringify({
-                context_uri: `spotify:playlist:${playlistId}`,
-            }),
-        },
-    );
+        );
+        if (!playRes.ok) {
+            console.error("Play failed", playRes.status, await playRes.text());
+            return;
+        }
+
+        // Enable shuffle after playback starts
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await fetch(
+            `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(spotifyDeviceId)}`,
+            {
+                method: "PUT",
+                headers: { Authorization: `Bearer ${token}` },
+            },
+        );
+    } catch (err) {
+        console.error("playSpotifyPlaylist error", err);
+    }
 }
 
 function bindSpotifyPlaylistUI() {
@@ -2029,30 +2038,17 @@ function renderSpotifyCalendar() {
         const isToday = dateStr === today;
         const isSelected = dateStr === spotifySelectedDate;
 
+        let dotsHtml = "";
         if (dayEntries.length) {
             const types = new Set(dayEntries.map((s) => s.schedule_type));
-            const dotsEl = document.createElement("div");
-            dotsEl.className = "cal-dots";
-
-            // Order: weekly, shift, once
-            ["weekly", "shift", "once"].forEach((t) => {
-                if (types.has(t)) {
-                    const dot = document.createElement("span");
-                    dot.className = `cal-dot dot-${t}`;
-                    dotsEl.appendChild(dot);
-                }
-            });
-
-            cell.appendChild(dotsEl);
+            const dotSpans = ["weekly", "shift", "once"]
+                .filter((t) => types.has(t))
+                .map((t) => `<span class="cal-dot dot-${t}"></span>`)
+                .join("");
+            dotsHtml = `<div class="cal-dots">${dotSpans}</div>`;
         }
 
-        html += `
-      <button type="button"
-        class="spotify-calendar-cell ${hasEvent ? "has-event" : ""} ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}"
-        data-date="${dateStr}">
-        ${day}
-      </button>
-    `;
+        html += `<button type="button" class="spotify-calendar-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" data-date="${dateStr}">${day}${dotsHtml}</button>`;
     }
 
     grid.innerHTML = html;
