@@ -759,11 +759,24 @@
                             Editing Slot 1
                         </div>
 
-                        <div class="form-group">
-                            <label>Playlist</label>
-                            <select id="spotifySlotPlaylistSelect">
-                                <option value="">— select —</option>
-                            </select>
+                        <div class="spotify-field-group">
+                            <label for="spotifySlotPlaylistSelect"
+                                >Playlist</label
+                            >
+                            <select id="spotifySlotPlaylistSelect"></select>
+                        </div>
+
+                        <div class="spotify-field-group">
+                            <label for="spotifySlotPlaylistManual"
+                                >Or paste playlist URL / ID</label
+                            >
+                            <input
+                                id="spotifySlotPlaylistManual"
+                                type="text"
+                                placeholder="https://open.spotify.com/playlist/... or playlist ID"
+                                autocomplete="off"
+                                spellcheck="false"
+                            />
                         </div>
 
                         <div class="form-group" style="margin-top: 1rem">
@@ -1021,11 +1034,26 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
-                                <label>Playlist</label>
-                                <select id="spotifyTemplatePlaylistSelect">
-                                    <option value="">— select —</option>
-                                </select>
+                            <div class="spotify-field-group">
+                                <label for="spotifyTemplatePlaylistSelect"
+                                    >Playlist</label
+                                >
+                                <select
+                                    id="spotifyTemplatePlaylistSelect"
+                                ></select>
+                            </div>
+
+                            <div class="spotify-field-group">
+                                <label for="spotifyTemplatePlaylistManual"
+                                    >Or paste playlist URL / ID</label
+                                >
+                                <input
+                                    id="spotifyTemplatePlaylistManual"
+                                    type="text"
+                                    placeholder="https://open.spotify.com/playlist/... or playlist ID"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                />
                             </div>
 
                             <div class="modal-actions">
@@ -1108,11 +1136,22 @@
                         <label>Time</label>
                         <input type="time" id="ssfTime" required />
                     </div>
-                    <div class="form-group">
-                        <label>Playlist</label>
-                        <select id="ssfPlaylist" required>
-                            <option value="">— select —</option>
-                        </select>
+                    <div class="spotify-field-group">
+                        <label for="ssfPlaylist">Playlist</label>
+                        <select id="ssfPlaylist"></select>
+                    </div>
+
+                    <div class="spotify-field-group">
+                        <label for="ssfPlaylistManual"
+                            >Or paste playlist URL / ID</label
+                        >
+                        <input
+                            id="ssfPlaylistManual"
+                            type="text"
+                            placeholder="https://open.spotify.com/playlist/... or playlist ID"
+                            autocomplete="off"
+                            spellcheck="false"
+                        />
                     </div>
                     <div class="modal-actions">
                         <button type="submit" class="submit-btn">Save</button>

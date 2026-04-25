@@ -2129,6 +2129,35 @@ function fetchNowPlaying() {
     }, 5000);
 }
 
+function parsePlaylistInput(input) {
+    const raw = String(input || "").trim();
+    if (!raw) return "";
+    if (/^[A-Za-z0-9]{22}$/.test(raw)) return raw;
+    const match = raw.match(/spotify\.com\/playlist\/([A-Za-z0-9]{22})/i);
+    if (match) return match[1];
+    const uriMatch = raw.match(/^spotify:playlist:([A-Za-z0-9]{22})$/i);
+    if (uriMatch) return uriMatch[1];
+    return "";
+}
+
+async function fetchPlaylistById(playlistId) {
+    const token = await getValidSpotifyToken();
+    if (!token || !playlistId) return null;
+    try {
+        const res = await fetch(
+            `https://api.spotify.com/v1/playlists/${playlistId}`,
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            },
+        );
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (err) {
+        console.error("fetchPlaylistById failed: ", err);
+        return null;
+    }
+}
+
 async function fetchPlaylists() {
     const token = await getValidSpotifyToken();
     if (!token) {
@@ -2142,52 +2171,33 @@ async function fetchPlaylists() {
             const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-
-            if (!res.ok) {
-                console.error(
-                    "fetchPlaylists failed",
-                    res.status,
-                    await res.text(),
-                );
-                break;
-            }
+            if (!res.ok) break;
             const data = await res.json();
-            all.push(...(data.items || []));
+            all.push(...(data.items || []).filter(Boolean));
             url = data.next;
         }
-        const unique = [];
-        const seen = new Set();
-        all.forEach((item) => {
-            if (!item?.id || seen.has(item.id)) return;
-            seen.add(item.id);
-            unique.push(item);
-        });
-        let likedSongsCount = 0;
+        let likedTotal = 0;
         try {
             const likedRes = await fetch(
                 "https://api.spotify.com/v1/me/tracks?limit=1",
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                },
+                { headers: { Authorization: `Bearer ${token}` } },
             );
             if (likedRes.ok) {
                 const likedData = await likedRes.json();
-                likedSongsCount = likedData.total || 0;
+                likedTotal = likedData.total || 0;
             }
-        } catch (err) {
-            console.error("fetch liked songs count failed:", err);
-        }
+        } catch (_) {}
         spotifyPlaylists = [
             {
                 id: SPOTIFY_LIKED_SONGS_ID,
                 name: "Liked Songs",
                 uri: "spotify:collection:tracks",
                 owner: { display_name: "You" },
-                tracks: { total: likedSongsCount },
+                tracks: { total: likedTotal },
                 images: [],
                 isVirtualLikedSongs: true,
             },
-            ...unique,
+            ...all,
         ];
         return spotifyPlaylists;
     } catch (err) {
@@ -2340,7 +2350,7 @@ async function playSpotifyPlaylist(playlistId) {
     if (!playlistId) return;
     const token = await getValidSpotifyToken();
     if (!token) return;
-    const targetDeviceId = await getDeviceId();
+    const targetDeviceId = await getKf20dDeviceId();
     if (!targetDeviceId) {
         console.error("Could not find Spotify device kf20d");
         return;
@@ -2349,6 +2359,7 @@ async function playSpotifyPlaylist(playlistId) {
         playlistId === SPOTIFY_LIKED_SONGS_ID
             ? { context_uri: "spotify:collection:tracks" }
             : { context_uri: `spotify:playlist:${playlistId}` };
+
     try {
         const playRes = await fetch(
             `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(targetDeviceId)}`,
@@ -2636,7 +2647,6 @@ async function populatePlaylistDropdown(elementId, selectedId = "") {
     const playlists = spotifyPlaylists.length
         ? spotifyPlaylists
         : await fetchPlaylists();
-
     if (!playlists.length) {
         setElementHTML(
             elementId,
@@ -2648,14 +2658,7 @@ async function populatePlaylistDropdown(elementId, selectedId = "") {
         elementId,
         '<option value="">— select —</option>' +
             playlists
-                .map((p) => {
-                    const suffix = p.isVirtualLikedSongs
-                        ? ""
-                        : p.owner?.display_name
-                          ? ` — ${p.owner.display_name}`
-                          : "";
-                    return `<option value="${p.id}">${p.name}${suffix}</option>`;
-                })
+                .map((p) => `<option value="${p.id}">${p.name}</option>`)
                 .join(""),
     );
     setElementValue(elementId, selectedId || "");
@@ -2667,6 +2670,7 @@ async function openPlaylistModal() {
         fetchPlaylists(),
         loadPlaylists(),
     ]);
+    setElementValue("spotifySlotPlaylistManual", "");
     playlistSlots = slots;
     selectAllElements(
         ".spotify-slot-pick-btn",
@@ -2680,17 +2684,9 @@ async function openPlaylistModal() {
     });
     setElementHTML(
         "spotifySlotPlaylistSelect",
-        '<option value="">— select —</option>' +
-            playlists
-                .map((pl) => {
-                    const suffix = pl.isVirtualLikedSongs
-                        ? ""
-                        : pl.owner?.display_name
-                          ? ` — ${pl.owner.display_name}`
-                          : "";
-                    return `<option value="${pl.id}">${pl.name}${suffix}</option>`;
-                })
-                .join(""),
+        `<option value="">select</option>${playlists
+            .map((pl) => `<option value="${pl.id}">${pl.name}</option>`)
+            .join("")}`,
     );
     setElementHTML(
         "spotifyIconPicker",
@@ -2702,15 +2698,15 @@ async function openPlaylistModal() {
     selectAllElements(
         ".spotify-icon-option",
         getElement("spotifyIconPicker"),
-    ).forEach((el) => {
+    ).forEach((el) =>
         el.addEventListener("click", () => {
             selectAllElements(
                 ".spotify-icon-option",
                 getElement("spotifyIconPicker"),
             ).forEach((x) => x.classList.remove("active"));
             el.classList.add("active");
-        });
-    });
+        }),
+    );
     activeSlot = null;
     hideElement("spotifySlotEditor");
     showElement("spotifySlotEditorPrompt", "block");
@@ -2722,10 +2718,12 @@ async function openPlaylistModal() {
 
 async function openSpotifyAddSchedule(dateStr) {
     spotifySelectedScheduleId = null;
+    spotifySelectedSchedule = null;
     setElementText("spotifyScheduleFormTitle", "ADD SCHEDULE");
     setElementValue("ssfDate", dateStr || getTodayHKT());
     setElementValue("ssfTime", "");
     setElementValue("ssfPlaylist", "");
+    setElementValue("ssfPlaylistManual", "");
     hideElement("ssfDeleteBtn");
     await populatePlaylistDropdown("ssfPlaylist");
     openModal("spotifyScheduleFormModal");
@@ -2737,8 +2735,9 @@ async function openSpotifyEditSchedule(scheduleId) {
     spotifySelectedScheduleId = scheduleId;
     spotifySelectedSchedule = item;
     setElementText("spotifyScheduleFormTitle", "EDIT SCHEDULE");
-    setElementValue("ssfDate", item.scheduled_date || "");
+    setElementValue("ssfDate", item.scheduled_date);
     setElementValue("ssfTime", item.scheduled_time?.slice(0, 5) || "");
+    setElementValue("ssfPlaylistManual", "");
     showElement("ssfDeleteBtn", "block");
     await populatePlaylistDropdown("ssfPlaylist", item.playlist_id);
     openModal("spotifyScheduleFormModal");
@@ -2847,31 +2846,52 @@ function setupSlots() {
 
 function selectSlotForEdit(slotNumber) {
     activeSlot = slotNumber;
-    selectAllElements(".spotify-slot-pick-btn").forEach((btn) => {
-        btn.classList.toggle("active", Number(btn.dataset.slot) === slotNumber);
-    });
+    selectAllElements(".spotify-slot-pick-btn").forEach((btn) =>
+        btn.classList.toggle("active", Number(btn.dataset.slot) === slotNumber),
+    );
     showElement("spotifySlotEditor", "block");
     hideElement("spotifySlotEditorPrompt");
     setElementText("spotifySlotEditorLabel", `Editing Slot ${slotNumber}`);
     const existing = playlistSlots.find((r) => r.slot_number === slotNumber);
     setElementValue("spotifySlotPlaylistSelect", existing?.playlist_id || "");
+    setElementValue("spotifySlotPlaylistManual", "");
     selectAllElements(
         ".spotify-icon-option",
         getElement("spotifyIconPicker"),
-    ).forEach((el) => {
+    ).forEach((el) =>
         el.classList.toggle(
             "active",
             el.dataset.icon === ensureTextIcon(existing?.playlist_icon),
-        );
-    });
+        ),
+    );
 }
 
 async function saveSlotFromModal() {
     if (!activeSlot) return;
     const select = getElement("spotifySlotPlaylistSelect");
-    const playlistId = select.value;
-    const playlistName = select.options[select.selectedIndex]?.text || "";
-    if (!playlistId) return;
+    const manualInput = getElement("spotifySlotPlaylistManual");
+    const manualId = parsePlaylistInput(manualInput?.value || "");
+    let playlistId = manualId || select.value;
+    let playlistName = "";
+    if (!playlistId) {
+        alert("Please select a playlist or paste a playlist URL / ID.");
+        return;
+    }
+    if (manualInput?.value && !manualId) {
+        alert("Invalid Spotify playlist URL / ID.");
+        return;
+    }
+    if (manualId) {
+        const playlist = await fetchPlaylistById(manualId);
+        if (!playlist?.id) {
+            alert("Could not find that playlist.");
+            return;
+        }
+        playlistId = playlist.id;
+        playlistName = playlist.name || "Untitled";
+    } else {
+        playlistName = select.options[select.selectedIndex]?.text || "Untitled";
+    }
     const activeIcon = selectElement(".spotify-icon-option.active");
     const icon = ensureTextIcon(activeIcon?.dataset.icon);
     const { sb, user } = await getSupabaseContext();
@@ -2886,9 +2906,10 @@ async function saveSlotFromModal() {
         { onConflict: "user_id,slot_number" },
     );
     if (error) {
-        console.error("saveSlotFromModal failed: ", error);
+        console.error("saveSlotFromModal failed:", error);
         return;
     }
+    if (manualInput) manualInput.value = "";
     await renderSlots();
     closeModal("spotifyPlaylistModal");
 }
@@ -2900,18 +2921,42 @@ function setupScheduleForm() {
 
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
+
         const isEdit = !!spotifySelectedScheduleId;
         const date = getElement("ssfDate").value;
         const time = getElement("ssfTime").value;
         const playlistSelect = getElement("ssfPlaylist");
-        const playlistId = playlistSelect.value;
-        const playlistName =
-            playlistSelect.options[playlistSelect.selectedIndex]?.text || "";
+        const manualInput = getElement("ssfPlaylistManual");
 
-        if (!date || !time || !playlistId) return;
+        const manualId = parsePlaylistInput(manualInput?.value || "");
+        let playlistId = manualId || playlistSelect.value;
+        let playlistName = "";
+
+        if (!date || !time || !playlistId) {
+            alert("Please set date, time, and playlist.");
+            return;
+        }
+
+        if (manualInput?.value && !manualId) {
+            alert("Invalid Spotify playlist URL / ID.");
+            return;
+        }
+
+        if (manualId) {
+            const playlist = await fetchPlaylistById(manualId);
+            if (!playlist?.id) {
+                alert("Could not find that playlist.");
+                return;
+            }
+            playlistId = playlist.id;
+            playlistName = playlist.name || "Untitled";
+        } else {
+            playlistName =
+                playlistSelect.options[playlistSelect.selectedIndex]?.text ||
+                "Untitled";
+        }
 
         const { sb, user } = await getSupabaseContext();
-
         const record = {
             user_id: user.id,
             schedule_type: "once",
@@ -2922,8 +2967,10 @@ function setupScheduleForm() {
             triggered: false,
         };
 
+        let error = null;
+
         if (isEdit) {
-            const { error } = await sb
+            ({ error } = await sb
                 .from("spotify_schedules")
                 .update({
                     scheduled_date: record.scheduled_date,
@@ -2931,19 +2978,18 @@ function setupScheduleForm() {
                     playlist_id: record.playlist_id,
                     playlist_name: record.playlist_name,
                 })
-                .eq("id", spotifySelectedScheduleId);
-            if (error) {
-                console.error("Update schedule failed", error);
-                return;
-            }
+                .eq("id", spotifySelectedScheduleId)
+                .eq("user_id", user.id));
         } else {
-            const { error } = await sb.from("spotify_schedules").insert(record);
-            if (error) {
-                console.error("Insert schedule failed", error);
-                return;
-            }
+            ({ error } = await sb.from("spotify_schedules").insert(record));
         }
 
+        if (error) {
+            console.error("Save schedule failed:", error);
+            return;
+        }
+
+        if (manualInput) manualInput.value = "";
         closeModal("spotifyScheduleFormModal");
         await loadSchedules();
         renderNextSchedule();
@@ -2958,16 +3004,22 @@ function setupScheduleForm() {
             e.stopPropagation();
             if (!spotifySelectedScheduleId) return;
             if (!confirm("Delete this schedule?")) return;
+
             const { sb, user } = await getSupabaseContext();
             const { error } = await sb
                 .from("spotify_schedules")
                 .delete()
-                .eq("id", spotifySelectedScheduleId);
+                .eq("id", spotifySelectedScheduleId)
+                .eq("user_id", user.id);
+
             if (error) {
-                console.error("Delete schedule failed", error);
+                console.error("Delete schedule failed:", error);
                 return;
             }
+
             closeModal("spotifyScheduleFormModal");
+            spotifySelectedScheduleId = null;
+            spotifySelectedSchedule = null;
             await loadSchedules();
             renderNextSchedule();
             renderCalendar();
@@ -3039,6 +3091,7 @@ function setupScheduleModal() {
         showElement("spotifyTemplateLoader", "block");
         setupTemplates();
         await populatePlaylistDropdown("spotifyTemplatePlaylistSelect");
+        setElementValue("spotifyTemplatePlaylistManual", "");
     };
 
     const addBtn = getElement("spotifyAddScheduleBtn");
@@ -3153,60 +3206,85 @@ async function generateSchedules() {
     const startDateStr = getElement("spotifyTemplateStartDate").value;
     const endDateStr = getElement("spotifyTemplateEndDate").value;
     const overrideMode =
-        selectElement('input[name="spotifyOverride"]:checked')?.value || "add";
+        selectElement('input[name="spotifyOverrideMode"]:checked')?.value ||
+        "add";
+
     const playlistSelect = getElement("spotifyTemplatePlaylistSelect");
-    const playlistId = playlistSelect.value;
-    const playlistName =
-        playlistSelect.options[playlistSelect.selectedIndex]?.text || "";
+    const manualInput = getElement("spotifyTemplatePlaylistManual");
+
+    const manualId = parsePlaylistInput(manualInput?.value || "");
+    let playlistId = manualId || playlistSelect.value;
+    let playlistName = "";
 
     if (!startDateStr || !playlistId) {
         alert("Please set a start date and playlist.");
         return;
     }
 
-    const { sb, user } = await getSupabaseContext();
-
-    // Resolve end date: default to 3 months from start
-    let endDate;
-    if (endDateStr) {
-        endDate = new Date(endDateStr + "T00:00:00Z");
-    } else {
-        endDate = new Date(startDateStr + "T00:00:00Z");
-        endDate.setMonth(endDate.getMonth() + 3);
+    if (manualInput?.value && !manualId) {
+        alert("Invalid Spotify playlist URL / ID.");
+        return;
     }
-    const resolvedEndStr = endDate.toISOString().slice(0, 10);
 
-    // Override: delete all untriggered future schedules in range
-    if (overrideMode === "replace") {
-        const { error: delError } = await sb
+    if (manualId) {
+        const playlist = await fetchPlaylistById(manualId);
+        if (!playlist?.id) {
+            alert("Could not find that playlist.");
+            return;
+        }
+        playlistId = playlist.id;
+        playlistName = playlist.name || "Untitled";
+    } else {
+        playlistName =
+            playlistSelect.options[playlistSelect.selectedIndex]?.text ||
+            "Untitled";
+    }
+
+    const { sb, user } = await getSupabaseContext();
+    const rows = [];
+    const startDate = new Date(startDateStr + "T00:00:00Z");
+    const endDate = endDateStr
+        ? new Date(endDateStr + "T00:00:00Z")
+        : new Date(startDateStr + "T00:00:00Z");
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        alert("Invalid date range.");
+        return;
+    }
+
+    if (endDate < startDate) {
+        alert("End date cannot be earlier than start date.");
+        return;
+    }
+
+    const templateRef = crypto.randomUUID();
+
+    if (overrideMode === "replace-range") {
+        const { error } = await sb
             .from("spotify_schedules")
             .delete()
-            .eq("user_id", user.id)
-            .eq("triggered", false)
             .gte("scheduled_date", startDateStr)
-            .lte("scheduled_date", resolvedEndStr);
-        if (delError) {
-            console.error("Override delete failed", delError);
+            .lte("scheduled_date", endDate.toISOString().slice(0, 10))
+            .eq("user_id", user.id);
+
+        if (error) {
+            console.error("Replace-range delete failed:", error);
             return;
         }
     }
 
-    // Generate rows with shared template_ref
-    const templateRef = crypto.randomUUID();
-    const rows = [];
-
     if (type === "weekly") {
-        const checkedDays = [
-            ...selectAllElements(
-                '#spotifyWeeklyFields input[type="checkbox"]:checked',
-            ),
-        ].map((cb) => parseInt(cb.value));
+        const checkedDays = selectAllElements(
+            '#spotifyWeeklyFields input[type="checkbox"]:checked',
+        ).map((cb) => parseInt(cb.value, 10));
         const time = getElement("spotifyWeeklyTime").value;
+
         if (!checkedDays.length || !time) {
             alert("Please select at least one weekday and a time.");
             return;
         }
-        let cursor = new Date(startDateStr + "T00:00:00Z");
+
+        const cursor = new Date(startDate);
         while (cursor <= endDate) {
             if (checkedDays.includes(cursor.getUTCDay())) {
                 rows.push({
@@ -3223,39 +3301,39 @@ async function generateSchedules() {
             cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
     } else if (type === "shift") {
-        const day1Index = parseInt(getElement("spotifyShiftDay1Index").value);
+        const day1Index = parseInt(
+            getElement("spotifyShiftDay1Index").value,
+            10,
+        );
         const times = {
             afternoon: getElement("spotifyShiftAfternoonTime").value,
             early: getElement("spotifyShiftEarlyTime").value,
             overnight: getElement("spotifyShiftOvernightTime").value,
             off: getElement("spotifyShiftOffTime").value,
         };
-        // Shift pattern: which time each day in the 10-day cycle uses
-        const shiftPattern = [
-            times.afternoon, // Day 1
-            times.afternoon, // Day 2
-            times.off, // Day 3
-            times.early, // Day 4
-            times.early, // Day 5
-            times.overnight, // Day 6
-            times.overnight, // Day 7
-            times.off, // Day 8
-            times.off, // Day 9
-            times.off, // Day 10
-        ];
-        // Calculate the cycle offset so today aligns to day1Index
-        // day1Index = 1 means today is Day 1, so offset = 0
-        // day1Index = 3 means today is Day 3, so cycle started 2 days ago
-        const startDate = new Date(startDateStr + "T00:00:00Z");
-        const cycleOffset = (day1Index - 1 + 10) % 10;
-        let cursor = new Date(startDate);
-        // Work out what cycle day the startDate falls on
-        // cycleOffset days before startDate = Day 1
-        // So startDate is cycle day = cycleOffset (0-indexed)
-        let cycleDay = cycleOffset;
 
+        const shiftPattern = [
+            times.afternoon,
+            times.afternoon,
+            times.off,
+            times.early,
+            times.early,
+            times.overnight,
+            times.overnight,
+            times.off,
+            times.off,
+            times.off,
+        ];
+
+        const cursor = new Date(startDate);
         while (cursor <= endDate) {
+            const daysSinceStart = Math.floor(
+                (cursor - startDate) / (1000 * 60 * 60 * 24),
+            );
+            const cycleDay =
+                (((day1Index - 1 + daysSinceStart) % 10) + 10) % 10;
             const time = shiftPattern[cycleDay];
+
             if (time) {
                 rows.push({
                     user_id: user.id,
@@ -3266,9 +3344,10 @@ async function generateSchedules() {
                     playlist_id: playlistId,
                     playlist_name: playlistName,
                     triggered: false,
+                    cycle_day: cycleDay + 1,
                 });
             }
-            cycleDay = (cycleDay + 1) % 10;
+
             cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
     }
@@ -3278,22 +3357,20 @@ async function generateSchedules() {
         return;
     }
 
-    // Insert in batches of 100 to avoid Supabase payload limits
     for (let i = 0; i < rows.length; i += 100) {
         const batch = rows.slice(i, i + 100);
         const { error } = await sb.from("spotify_schedules").insert(batch);
         if (error) {
-            console.error("Insert schedules failed", error);
+            console.error("Insert schedules failed:", error);
             return;
         }
     }
 
+    if (manualInput) manualInput.value = "";
     await loadSchedules();
     renderNextSchedule();
     renderCalendar();
     if (spotifySelectedDate) renderSchedule(spotifySelectedDate);
-
-    // Hide template loader after success
     hideElement("spotifyTemplateLoader");
     showElement("spotifyLoadTemplateBtn", "block");
 }
