@@ -2262,17 +2262,16 @@ async function makeActiveDevice(deviceId) {
 }
 
 async function playSpotifyPlaylist(playlistId) {
-    if (!playlistId || !spotifyDeviceId || !spotifyPlayer) return;
+    if (!playlistId || !spotifyDeviceId) return;
     const token = await getValidSpotifyToken();
     if (!token) return;
     try {
-        await spotifyPlayer.activateElement();
         const transferred = await makeActiveDevice(spotifyDeviceId);
         if (!transferred) {
             console.error("Could not transfer playback to dashboard");
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        await new Promise((resolve) => setTimeout(resolve, 900));
         const playRes = await fetch(
             "https://api.spotify.com/v1/me/player/play",
             {
@@ -2282,6 +2281,7 @@ async function playSpotifyPlaylist(playlistId) {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
+                    device_id: spotifyDeviceId,
                     context_uri: `spotify:playlist:${playlistId}`,
                 }),
             },
@@ -2290,12 +2290,15 @@ async function playSpotifyPlaylist(playlistId) {
             console.error("Play failed", playRes.status, await playRes.text());
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        await new Promise((resolve) => setTimeout(resolve, 400));
         const shuffleRes = await fetch(
-            "https://api.spotify.com/v1/me/player/shuffle?state=true",
+            "https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=" +
+                encodeURIComponent(spotifyDeviceId),
             {
                 method: "PUT",
-                headers: { Authorization: `Bearer ${token}` },
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
             },
         );
         if (!shuffleRes.ok) {
@@ -2326,10 +2329,10 @@ function getNextSchedule() {
     return (
         schedules.find((s) => {
             if (!s || s.triggered) return false;
-            if (s.scheduleddate > todayStr) return true;
+            if (s.scheduled_date > todayStr) return true;
             if (
-                s.scheduleddate === todayStr &&
-                s.scheduledtime?.slice(0, 5) > currentTime
+                s.scheduled_date === todayStr &&
+                s.scheduled_time?.slice(0, 5) > currentTime
             )
                 return true;
             return false;
@@ -2452,7 +2455,7 @@ function renderNextSchedule() {
     }
     setElementText(
         "spotifySchedDate",
-        new Date(`${next.scheduleddate}T00:00:00Z`)
+        new Date(`${next.scheduled_date}T00:00:00Z`)
             .toLocaleDateString("en-GB", {
                 day: "2-digit",
                 month: "short",
@@ -2460,8 +2463,8 @@ function renderNextSchedule() {
             })
             .toUpperCase(),
     );
-    setElementText("spotifySchedTime", next.scheduledtime?.slice(0, 5) ?? "");
-    setElementText("spotifySchedPlaylist", next.playlistname || "Untitled");
+    setElementText("spotifySchedTime", next.scheduled_time?.slice(0, 5) ?? "");
+    setElementText("spotifySchedPlaylist", next.playlist_name || "Untitled");
 }
 
 function renderCalendar() {
