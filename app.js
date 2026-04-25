@@ -2232,29 +2232,80 @@ async function initSpotifyPlayer() {
 
 async function makeActiveDevice(deviceId) {
     const token = await getValidSpotifyToken();
-    if (!token || !deviceId) return;
+    if (!token || !deviceId) return false;
     try {
-        await fetch("https://api.spotify.com/v1/me/player", {
+        const res = await fetch("https://api.spotify.com/v1/me/player", {
             method: "PUT",
             headers: {
                 Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ device_ids: [deviceId], play: false }),
+            body: JSON.stringify({
+                device_ids: [deviceId],
+                play: false,
+            }),
         });
+        if (!res.ok) {
+            console.error(
+                "makeActiveDevice failed",
+                res.status,
+                await res.text(),
+            );
+            return false;
+        }
+        return true;
     } catch (err) {
         console.error("makeActiveDevice failed: ", err);
+        return false;
     }
 }
 
+async function waitForSpotifyDevice(deviceId, timeout = 5000) {
+    const token = await getValidSpotifyToken();
+    if (!token || !deviceId) return false;
+    const started = Date.now();
+    while (Date.now() - started < timeout) {
+        try {
+            const res = await fetch(
+                "https://api.spotify.com/v1/me/player/devices",
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                const found = data.devices?.some((d) => d.id === deviceId);
+                if (found) return true;
+            }
+        } catch (err) {
+            console.error("waitForSpotifyDevice failed: ", err);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    return false;
+}
+
 async function playSpotifyPlaylist(playlistId) {
-    if (!spotifyDeviceId) return;
+    if (!playlistId) return;
+    if (!spotifyDeviceId) {
+        console.error("No spotifyDeviceId");
+        return;
+    }
     const token = await getValidSpotifyToken();
     if (!token) return;
     try {
-        await makeActiveDevice(spotifyDeviceId);
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        const playRes = await fetch(
+        const transferred = await makeActiveDevice(spotifyDeviceId);
+        if (!transferred) return;
+        const deviceReady = await waitForSpotifyDevice(spotifyDeviceId, 6000);
+        if (!deviceReady) {
+            console.error(
+                "Spotify device never became available:",
+                spotifyDeviceId,
+            );
+            return;
+        }
+        let playRes = await fetch(
             `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
             {
                 method: "PUT",
@@ -2267,6 +2318,23 @@ async function playSpotifyPlaylist(playlistId) {
                 }),
             },
         );
+        if (playRes.status === 404) {
+            await makeActiveDevice(spotifyDeviceId);
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            playRes = await fetch(
+                `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        context_uri: `spotify:playlist:${playlistId}`,
+                    }),
+                },
+            );
+        }
         if (!playRes.ok) {
             console.error("Play failed", playRes.status, await playRes.text());
             return;
@@ -2751,14 +2819,15 @@ function selectSlotForEdit(slotNumber) {
     setElementText("spotifySlotEditorLabel", `Editing Slot ${slotNumber}`);
     const existing = playlistSlots.find((r) => r.slot_number === slotNumber);
     setElementValue("spotifySlotPlaylistSelect", existing?.playlist_id || "");
-    selectAllElements(".spotify-icon-option", getElement("spotifyIconPicker")).forEach(
-        (el) => {
-            el.classList.toggle(
-                "active",
-                el.dataset.icon === ensureTextIcon(existing?.playlist_icon),
-            );
-        },
-    );
+    selectAllElements(
+        ".spotify-icon-option",
+        getElement("spotifyIconPicker"),
+    ).forEach((el) => {
+        el.classList.toggle(
+            "active",
+            el.dataset.icon === ensureTextIcon(existing?.playlist_icon),
+        );
+    });
 }
 
 async function saveSlotFromModal() {
