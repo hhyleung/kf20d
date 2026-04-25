@@ -2230,82 +2230,13 @@ async function initSpotifyPlayer() {
     await spotifyPlayer.connect();
 }
 
-async function makeActiveDevice(deviceId) {
-    const token = await getValidSpotifyToken();
-    if (!token || !deviceId) return false;
-    try {
-        const res = await fetch("https://api.spotify.com/v1/me/player", {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                device_ids: [deviceId],
-                play: false,
-            }),
-        });
-        if (!res.ok) {
-            console.error(
-                "makeActiveDevice failed",
-                res.status,
-                await res.text(),
-            );
-            return false;
-        }
-        return true;
-    } catch (err) {
-        console.error("makeActiveDevice failed: ", err);
-        return false;
-    }
-}
-
-async function waitForSpotifyDevice(deviceId, timeout = 5000) {
-    const token = await getValidSpotifyToken();
-    if (!token || !deviceId) return false;
-    const started = Date.now();
-    while (Date.now() - started < timeout) {
-        try {
-            const res = await fetch(
-                "https://api.spotify.com/v1/me/player/devices",
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                },
-            );
-
-            if (res.ok) {
-                const data = await res.json();
-                const found = data.devices?.some((d) => d.id === deviceId);
-                if (found) return true;
-            }
-        } catch (err) {
-            console.error("waitForSpotifyDevice failed: ", err);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 400));
-    }
-    return false;
-}
-
 async function playSpotifyPlaylist(playlistId) {
-    if (!playlistId) return;
-    if (!spotifyDeviceId) {
-        console.error("No spotifyDeviceId");
-        return;
-    }
+    if (!playlistId || !spotifyPlayer || !spotifyDeviceId) return;
     const token = await getValidSpotifyToken();
     if (!token) return;
     try {
-        const transferred = await makeActiveDevice(spotifyDeviceId);
-        if (!transferred) return;
-        const deviceReady = await waitForSpotifyDevice(spotifyDeviceId, 6000);
-        if (!deviceReady) {
-            console.error(
-                "Spotify device never became available:",
-                spotifyDeviceId,
-            );
-            return;
-        }
-        let playRes = await fetch(
+        await spotifyPlayer.activateElement();
+        let res = await fetch(
             `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
             {
                 method: "PUT",
@@ -2318,10 +2249,31 @@ async function playSpotifyPlaylist(playlistId) {
                 }),
             },
         );
-        if (playRes.status === 404) {
-            await makeActiveDevice(spotifyDeviceId);
-            await new Promise((resolve) => setTimeout(resolve, 800));
-            playRes = await fetch(
+        if (res.status === 404) {
+            const devicesRes = await fetch(
+                "https://api.spotify.com/v1/me/player/devices",
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            const devicesData = devicesRes.ok
+                ? await devicesRes.json()
+                : { devices: [] };
+            const exists = devicesData.devices?.some(
+                (d) => d.id === spotifyDeviceId,
+            );
+            if (!exists) {
+                console.error(
+                    "Spotify browser device is not listed yet",
+                    spotifyDeviceId,
+                );
+                alert(
+                    "Spotify browser player is not ready yet. Open Spotify once or pick this browser from Spotify Connect, then try again.",
+                );
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            res = await fetch(
                 `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
                 {
                     method: "PUT",
@@ -2335,18 +2287,10 @@ async function playSpotifyPlaylist(playlistId) {
                 },
             );
         }
-        if (!playRes.ok) {
-            console.error("Play failed", playRes.status, await playRes.text());
+        if (!res.ok) {
+            console.error("Play failed", res.status, await res.text());
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await fetch(
-            `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(spotifyDeviceId)}`,
-            {
-                method: "PUT",
-                headers: { Authorization: `Bearer ${token}` },
-            },
-        );
     } catch (err) {
         console.error("playSpotifyPlaylist failed: ", err);
     }
@@ -2453,9 +2397,7 @@ function renderNowPlaying(state) {
         artEl.style.backgroundSize = "cover";
         artEl.style.backgroundPosition = "center";
         const placeholder = selectElement(".spotify-art-placeholder", artEl);
-        if (placeholder) {
-            img ? hideElement(placeholder) : showElement(placeholder);
-        }
+        if (placeholder) placeholder.style.display = img ? "none" : "flex";
     }
 
     setElementText("spotifyTitle", track.name);
