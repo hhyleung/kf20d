@@ -19,6 +19,7 @@ const SPOTIFY_SCOPES = [
     "playlist-read-collaborative",
     "user-library-read",
 ];
+const SPOTIFY_LIKED_SONGS_ID = "__liked_songs__";
 
 const PANEL_TABLES = [
     "fridge_stock",
@@ -2127,22 +2128,73 @@ function fetchNowPlaying() {
         }
     }, 5000);
 }
+
 async function fetchPlaylists() {
     const token = await getValidSpotifyToken();
-    if (!token) return [];
-    let url = "https://api.spotify.com/v1/me/playlists?limit=50";
-    const all = [];
-    while (url) {
-        const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) break;
-        const data = await res.json();
-        all.push(...(data.items || []));
-        url = data.next;
+    if (!token) {
+        spotifyPlaylists = [];
+        return [];
     }
-    spotifyPlaylists = all;
-    return all;
+    const all = [];
+    let url = "https://api.spotify.com/v1/me/playlists?limit=50";
+    try {
+        while (url) {
+            const res = await fetch(url, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (!res.ok) {
+                console.error(
+                    "fetchPlaylists failed",
+                    res.status,
+                    await res.text(),
+                );
+                break;
+            }
+            const data = await res.json();
+            all.push(...(data.items || []));
+            url = data.next;
+        }
+        const unique = [];
+        const seen = new Set();
+        all.forEach((item) => {
+            if (!item?.id || seen.has(item.id)) return;
+            seen.add(item.id);
+            unique.push(item);
+        });
+        let likedSongsCount = 0;
+        try {
+            const likedRes = await fetch(
+                "https://api.spotify.com/v1/me/tracks?limit=1",
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            if (likedRes.ok) {
+                const likedData = await likedRes.json();
+                likedSongsCount = likedData.total || 0;
+            }
+        } catch (err) {
+            console.error("fetch liked songs count failed:", err);
+        }
+        spotifyPlaylists = [
+            {
+                id: SPOTIFY_LIKED_SONGS_ID,
+                name: "Liked Songs",
+                uri: "spotify:collection:tracks",
+                owner: { display_name: "You" },
+                tracks: { total: likedSongsCount },
+                images: [],
+                isVirtualLikedSongs: true,
+            },
+            ...unique,
+        ];
+        return spotifyPlaylists;
+    } catch (err) {
+        console.error("fetchPlaylists failed: ", err);
+        spotifyPlaylists = [];
+        return [];
+    }
 }
 
 async function loadPlaylists() {
@@ -2230,20 +2282,6 @@ async function initSpotifyPlayer() {
     await spotifyPlayer.connect();
 }
 
-async function getActiveDevice() {
-    const token = await getValidSpotifyToken();
-    if (!token) return null;
-    const res = await fetch("https://api.spotify.com/v1/me/player", {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.status === 204) return null;
-    if (!res.ok) {
-        console.error("getActiveDevice failed: ", res.status, await res.text());
-        return null;
-    }
-    return await res.json();
-}
-
 async function makeActiveDevice(deviceId) {
     const token = await getValidSpotifyToken();
     if (!token || !deviceId || !spotifyPlayer) return false;
@@ -2285,13 +2323,8 @@ async function getDeviceId() {
                 headers: { Authorization: `Bearer ${token}` },
             },
         );
-
         if (!res.ok) {
-            console.error(
-                "getKf20dDeviceId failed",
-                res.status,
-                await res.text(),
-            );
+            console.error("getDeviceId failed", res.status, await res.text());
             return null;
         }
         const data = await res.json();
@@ -2312,6 +2345,10 @@ async function playSpotifyPlaylist(playlistId) {
         console.error("Could not find Spotify device kf20d");
         return;
     }
+    const body =
+        playlistId === SPOTIFY_LIKED_SONGS_ID
+            ? { context_uri: "spotify:collection:tracks" }
+            : { context_uri: `spotify:playlist:${playlistId}` };
     try {
         const playRes = await fetch(
             `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(targetDeviceId)}`,
@@ -2321,9 +2358,7 @@ async function playSpotifyPlaylist(playlistId) {
                     Authorization: `Bearer ${token}`,
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    context_uri: `spotify:playlist:${playlistId}`,
-                }),
+                body: JSON.stringify(body),
             },
         );
         if (!playRes.ok) {
@@ -2331,7 +2366,6 @@ async function playSpotifyPlaylist(playlistId) {
             return;
         }
         await new Promise((resolve) => setTimeout(resolve, 400));
-
         await fetch("https://api.spotify.com/v1/me/player/shuffle?state=true", {
             method: "PUT",
             headers: { Authorization: `Bearer ${token}` },
@@ -2602,6 +2636,7 @@ async function populatePlaylistDropdown(elementId, selectedId = "") {
     const playlists = spotifyPlaylists.length
         ? spotifyPlaylists
         : await fetchPlaylists();
+
     if (!playlists.length) {
         setElementHTML(
             elementId,
@@ -2613,7 +2648,14 @@ async function populatePlaylistDropdown(elementId, selectedId = "") {
         elementId,
         '<option value="">— select —</option>' +
             playlists
-                .map((p) => `<option value="${p.id}">${p.name}</option>`)
+                .map((p) => {
+                    const suffix = p.isVirtualLikedSongs
+                        ? ""
+                        : p.owner?.display_name
+                          ? ` — ${p.owner.display_name}`
+                          : "";
+                    return `<option value="${p.id}">${p.name}${suffix}</option>`;
+                })
                 .join(""),
     );
     setElementValue(elementId, selectedId || "");
@@ -2640,7 +2682,14 @@ async function openPlaylistModal() {
         "spotifySlotPlaylistSelect",
         '<option value="">— select —</option>' +
             playlists
-                .map((pl) => `<option value="${pl.id}">${pl.name}</option>`)
+                .map((pl) => {
+                    const suffix = pl.isVirtualLikedSongs
+                        ? ""
+                        : pl.owner?.display_name
+                          ? ` — ${pl.owner.display_name}`
+                          : "";
+                    return `<option value="${pl.id}">${pl.name}${suffix}</option>`;
+                })
                 .join(""),
     );
     setElementHTML(
