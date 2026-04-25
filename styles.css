@@ -857,6 +857,7 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-panel {
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
@@ -895,6 +896,7 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-track-title {
+    min-width: 0;
     grid-column: 2;
     grid-row: 1;
     font-size: 1.6rem;
@@ -906,6 +908,7 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-track-artist {
+    min-width: 0;
     grid-column: 2;
     grid-row: 2;
     font-size: 1.6rem;
@@ -1368,4 +1371,17 @@ form::-webkit-scrollbar-thumb:hover {
 .form-group select {
     margin-top: 0;
     margin-bottom: 0;
+}
+
+.spotify-schedule,
+.spotify-schedule-row {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.spotify-schedule-playlist {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
