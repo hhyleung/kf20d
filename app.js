@@ -1221,8 +1221,13 @@ function renderPanel(section) {
     const renderCfg = cfg.render ?? cfg;
     if (!renderCfg.contentId || !renderCfg.buildFn) return;
     setElementHTML(renderCfg.contentId, renderCfg.buildFn());
-    if (activePanel === section && renderCfg.fullBuildFn) {
-        setElementHTML("fullListContent", renderCfg.fullBuildFn());
+    const fullListOwner = cfg.renderKey ?? cfg.key ?? section;
+    if (activePanel === section || activePanel === fullListOwner) {
+        const activeCfg = PANEL_CONFIGS[activePanel];
+        const activeRenderCfg = activeCfg?.render ?? activeCfg;
+        if (activeRenderCfg?.fullBuildFn) {
+            setElementHTML("fullListContent", activeRenderCfg.fullBuildFn());
+        }
     }
     if (cfg.after) cfg.after();
 }
@@ -1430,10 +1435,9 @@ function setupPanelEvents() {
             if (!section || !h3 || section === "spotify") return;
             setElementText("listTitle", h3.textContent.toUpperCase());
             activePanel = section;
-            setElementHTML(
-                "fullListContent",
-                PANEL_CONFIGS[section].render?.fullBuildFn?.() ?? "",
-            );
+            const cfg = PANEL_CONFIGS[section];
+            const renderCfg = cfg.render ?? cfg;
+            setElementHTML("fullListContent", renderCfg.fullBuildFn?.() ?? "");
             refreshListMetadata();
             openModal("fullListModal");
         });
@@ -2997,8 +3001,8 @@ function setupScheduleForm() {
         closeModal("spotifyScheduleFormModal");
         await loadSchedules();
         renderNextSchedule();
-        renderSpotifyCalendar();
-        renderSpotifyScheduleList(spotifySelectedDate);
+        renderCalendar();
+        renderSchedule(spotifySelectedDate);
     });
 
     const deleteBtn = getElement("ssfDeleteBtn");
@@ -3027,8 +3031,8 @@ function setupScheduleForm() {
             spotifySelectedSchedule = null;
             await loadSchedules();
             renderNextSchedule();
-            renderSpotifyCalendar();
-            renderSpotifyScheduleList(spotifySelectedDate);
+            renderCalendar();
+            renderSchedule(spotifySelectedDate);
         });
     }
 }
@@ -3371,8 +3375,8 @@ async function generateSchedules() {
     if (manualInput) manualInput.value = "";
     await loadSchedules();
     renderNextSchedule();
-    renderSpotifyCalendar();
-    renderSpotifyScheduleList(spotifySelectedDate);
+    renderCalendar();
+    renderSchedule(spotifySelectedDate);
     hideElement("spotifyTemplateLoader");
     showElement("spotifyLoadTemplateBtn", "block");
 }
