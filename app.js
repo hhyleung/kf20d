@@ -31,15 +31,7 @@ const PANEL_TABLES = [
 const MEAL_PREP_CATS = ["Carbs", "Veggies", "Proteins", "Fruits", "Others"];
 const FRIDGE_STOCK_CATS = ["Fridge", "Freezer"];
 
-const ICONS = [
-    "♫", "☕\uFE0E", "☀", "♪", "☼", "☀", "☁", "☂", "♠", 
-    "♥", "♦", "♣", "★", "▷", "◁", "♦", 
-    "◈", "❖", "✦", "✧", "✵", "✶", "✷", "✸", "✹", "✺", "☀", "☁", "☂", 
-    "☃", "☄", "★", "☆", "☼", "☽", "☾", "⚡", "❄", "❅", "❆", "✺", "☺", 
-    "☻", "☹", "♡", "♥", "❤", "❥", "❣", "✉", "✆", "✂", "✁", "✃", "⌂", 
-    "⌁", "⌀", "☎", "☏", "✆", "✏", "✐", "✑", "✒", "✓", "✔", "✗", "✘", 
-    "⚑", "⚐", "⚙", "⚒", "⚓", "⚔", "⚖", "⚗", "♻", "♾", "♨",
-];
+const ICONS = ["♫", "☼", "☁", "❄", "☆", "♡", "⚐", "⚓", "☕\uFE0E"];
 // ============================================================
 // #endregion
 // ============================================================
@@ -74,6 +66,7 @@ let activePanel = null;
 let clockInterval = null;
 let scheduleTickInterval = null;
 
+let nowPlayingInterval = null;
 let spotifyPlaylists = [];
 let playlistSlots = [];
 let schedules = [];
@@ -1344,7 +1337,7 @@ function openPlantAddModal() {
 }
 
 function openPlantDetail(plantId) {
-    const plant = plants.find((p) => p.id === plantId);
+    const plant = panelData.plants.find((p) => p.id === plantId);
     if (!plant) return;
     setElementText("plantDetailTitle", plant.plant_name.toUpperCase());
     setElementValue("pdPlantNameInput", plant.plant_name);
@@ -1366,7 +1359,7 @@ function openPlantDetail(plantId) {
     );
     setElementText("pdFertiliserUsed", plant.last_fertiliser_used || "");
     getElement("pdLogEventBtn").dataset.id = plantId;
-    const history = plantHistory
+    const history = panelData.plantHistory
         .filter((h) => h.plant_id === plantId)
         .sort((a, b) => new Date(b.event_date) - new Date(a.event_date));
     if (!history.length) {
@@ -1405,7 +1398,7 @@ function openPlantDetail(plantId) {
 }
 
 function openPlantEventModal(plantId) {
-    const plant = plants.find((p) => p.id === plantId);
+    const plant = panelData.plants.find((p) => p.id === plantId);
     if (!plant) return;
     setElementText("plantEventTitle", plant.plant_name.toUpperCase());
     setElementValue("plantEventId", plantId);
@@ -1428,11 +1421,11 @@ function openPlantEventModal(plantId) {
 function setupPanelEvents() {
     if (setupPanelEvents.bound) return;
     setupPanelEvents.bound = true;
-    document.querySelectorAll(".panel-header").forEach((header) => {
+    selectAllElements(".panel-header").forEach((header) => {
         header.addEventListener("click", (e) => {
             const panel = e.target.closest(".panel");
             const section = panel.dataset.section;
-            const h3 = header.querySelector("h3");
+            const h3 = selectElement("h3", header);
             if (!section || !h3 || section === "spotify") return;
             setElementText("listTitle", h3.textContent.toUpperCase());
             activePanel = section;
@@ -1445,7 +1438,7 @@ function setupPanelEvents() {
         });
     });
 
-    document.querySelectorAll(".panel .add-btn").forEach((btn) => {
+    selectAllElements(".panel .add-btn").forEach((btn) => {
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
             const section = btn.closest(".panel")?.dataset.section;
@@ -1917,7 +1910,9 @@ document.addEventListener("click", async (e) => {
 // ============================================================
 function activateSpotifyHeader(activate = true) {
     const panel = selectElement('[data-section="spotify"]');
-    const header = panel.querySelector(".panel-header");
+    if (!panel) return;
+    const header = selectElement(".panel-header", panel);
+    if (!header) return;
     header.classList.toggle("spotify-header-error", activate);
 }
 
@@ -1979,16 +1974,16 @@ async function getValidSpotifyToken(forceRefresh = false) {
     ) {
         return spotifyToken;
     }
-    const tokenRow = await loadSpotifyToken();
-    if (!tokenRow) return null;
-    const expiresAt = new Date(tokenRow.expires_at).getTime();
-    const needsRefresh = Date.now() > expiresAt - fiveMinutes;
-    if (!needsRefresh) {
-        spotifyToken = tokenRow.access_token;
-        spotifyTokenExpiry = expiresAt;
-        return tokenRow.access_token;
-    }
     try {
+        const tokenRow = await loadSpotifyToken();
+        if (!tokenRow) return null;
+        const expiresAt = new Date(tokenRow.expires_at).getTime();
+        const needsRefresh = Date.now() > expiresAt - fiveMinutes;
+        if (!needsRefresh) {
+            spotifyToken = tokenRow.access_token;
+            spotifyTokenExpiry = expiresAt;
+            return tokenRow.access_token;
+        }
         const refreshed = await refreshSpotifyToken(tokenRow.refresh_token);
         await saveSpotifyToken({
             ...refreshed,
@@ -2011,11 +2006,8 @@ async function getValidSpotifyToken(forceRefresh = false) {
 function isTablet() {
     if (DEV_MODE) return true;
     const ua = navigator.userAgent || "";
-    console.log(ua);
     const isFirefox = /Firefox\/\d+/i.test(ua);
     const isWindows81 = /Windows NT 6\.3/i.test(ua);
-    console.log(isFirefox);
-    console.log(isWindows81);
     return isFirefox && isWindows81;
 }
 
@@ -2102,6 +2094,39 @@ async function initSpotify() {
 // ============================================================
 // #region SPOTIFY DATA
 // ============================================================
+function fetchNowPlaying() {
+    if (nowPlayingInterval) return;
+    nowPlayingInterval = setInterval(async () => {
+        const token = await getValidSpotifyToken();
+        if (!token) return;
+        try {
+            const res = await fetch("https://api.spotify.com/v1/me/player", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.status === 204 || !res.ok) {
+                renderNowPlaying(null);
+                return;
+            }
+            const data = await res.json();
+            if (!data?.item) {
+                renderNowPlaying(null);
+                return;
+            }
+            renderNowPlaying({
+                paused: !data.is_playing,
+                track_window: {
+                    current_track: {
+                        name: data.item.name,
+                        artists: data.item.artists,
+                        album: { images: data.item.album.images },
+                    },
+                },
+            });
+        } catch (err) {
+            console.error("fetchNowPlaying failed: ", err);
+        }
+    }, 5000);
+}
 async function fetchPlaylists() {
     const token = await getValidSpotifyToken();
     if (!token) return [];
@@ -2200,7 +2225,7 @@ async function initSpotifyPlayer() {
         activateSpotifyHeader();
     });
 
-    spotifyPlayer.addListener("player_state_changed", updateNowPlaying);
+    spotifyPlayer.addListener("player_state_changed", renderNowPlaying);
 
     await spotifyPlayer.connect();
 }
@@ -2265,6 +2290,27 @@ async function playSpotifyPlaylist(playlistId) {
 // ============================================================
 // #region SPOTIFY SCHEDULER
 // ============================================================
+function getNextSchedule() {
+    const todayStr = getTodayHKT();
+    const currentTime = new Date().toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Hong_Kong",
+    });
+    return (
+        schedules.find((s) => {
+            if (!s || s.triggered) return false;
+            if (s.scheduleddate > todayStr) return true;
+            if (
+                s.scheduleddate === todayStr &&
+                s.scheduledtime?.slice(0, 5) > currentTime
+            )
+                return true;
+            return false;
+        }) ?? null
+    );
+}
+
 async function checkAndTriggerSchedule() {
     if (!isSpotifyReady || !spotifyDeviceId) return;
     const todayStr = getTodayHKT();
@@ -2280,7 +2326,7 @@ async function checkAndTriggerSchedule() {
             s.scheduled_time?.slice(0, 5) === nowHKT,
     );
     if (!due.length) return;
-    const { sb } = await getSupabaseContext(false);
+    const { sb, user } = await getSupabaseContext();
     let lastPlaylistId = null;
     for (const entry of due) {
         const { error } = await sb
@@ -2308,76 +2354,54 @@ function startScheduleTicker() {
 // ============================================================
 
 // ============================================================
-// #region SPOTIFY UI
+// #region SPOTIFY RENDERERS
 // ============================================================
-function updateNowPlaying(state) {
-    const artEl = document.getElementById("spotifyArt");
-    const titleEl = document.getElementById("spotifyTitle");
-    const artistEl = document.getElementById("spotifyArtist");
-    const playBtn = document.getElementById("spotifyPlayBtn");
+function ensureTextIcon(icon) {
+    return icon || "♫";
+}
 
+function renderNowPlaying(state) {
+    const artEl = getElement("spotifyArt");
     if (!state || !state.track_window?.current_track) {
         if (artEl) {
             artEl.style.backgroundImage = "";
             artEl.style.backgroundSize = "";
             artEl.style.backgroundPosition = "";
-            const placeholder = artEl.querySelector(".spotify-art-placeholder");
-            if (placeholder) placeholder.style.display = "flex";
+            const placeholder = selectElement(
+                ".spotify-art-placeholder",
+                artEl,
+            );
+            showElement(placeholder);
         }
-        if (titleEl) titleEl.textContent = "—";
-        if (artistEl) artistEl.textContent = "—";
-        if (playBtn) playBtn.textContent = "▶";
+        setElementText("spotifyTitle", "—");
+        setElementText("spotifyArtist", "—");
+        setElementText("spotifyPlayBtn", "▶");
         return;
     }
-
     const track = state.track_window.current_track;
-
     if (artEl) {
         const img = track.album?.images?.[0]?.url;
         artEl.style.backgroundImage = img ? `url(${img})` : "";
         artEl.style.backgroundSize = "cover";
         artEl.style.backgroundPosition = "center";
-        const placeholder = artEl.querySelector(".spotify-art-placeholder");
-        if (placeholder) placeholder.style.display = img ? "none" : "flex";
+        const placeholder = selectElement(".spotify-art-placeholder", artEl);
+        if (placeholder) {
+            img ? hideElement(placeholder) : showElement(placeholder);
+        }
     }
 
-    if (titleEl) titleEl.textContent = track.name;
-    if (artistEl)
-        artistEl.textContent = track.artists.map((a) => a.name).join(", ");
-    if (playBtn) playBtn.textContent = state.paused ? "▶" : "❚❚■";
+    setElementText("spotifyTitle", track.name);
+    setElementText(
+        "spotifyArtist",
+        track.artists.map((a) => a.name).join(", "),
+    );
+    setElementText("spotifyPlayBtn", state.paused ? "❚❚" : "■");
 }
 
-async function openSpotifyAddSchedule(dateStr) {
-    spotifySelectedScheduleId = null;
-    document.getElementById("spotifyScheduleFormTitle").textContent =
-        "ADD SCHEDULE";
-    document.getElementById("ssfDate").value = dateStr || getTodayHKT();
-    document.getElementById("ssfTime").value = "";
-    document.getElementById("ssfPlaylist").value = "";
-    document.getElementById("ssfDeleteBtn").style.display = "none";
-    await populatePlaylistDropdown("ssfPlaylist");
-    openModal("spotifyScheduleFormModal");
-}
-
-async function openSpotifyEditSchedule(scheduleId) {
-    const item = schedules.find((s) => s.id === scheduleId);
-    if (!item) return;
-    spotifySelectedScheduleId = scheduleId;
-    document.getElementById("spotifyScheduleFormTitle").textContent =
-        "EDIT SCHEDULE";
-    document.getElementById("ssfDate").value = item.scheduled_date || "";
-    document.getElementById("ssfTime").value =
-        item.scheduled_time?.slice(0, 5) || "";
-    document.getElementById("ssfDeleteBtn").style.display = "block";
-    await populatePlaylistDropdown("ssfPlaylist", item.playlist_id);
-    openModal("spotifyScheduleFormModal");
-}
-
-async function refreshSpotifyPlaylistSlots() {
+async function renderSlots() {
     const rows = await loadPlaylists();
     playlistSlots = rows;
-
-    document.querySelectorAll(".spotify-slot-btn").forEach((btn) => {
+    selectAllElements(".spotify-slot-btn").forEach((btn) => {
         const slot = Number(btn.dataset.slot);
         const row = rows.find((r) => r.slot_number === slot);
         const icon = ensureTextIcon(row?.playlist_icon);
@@ -2385,8 +2409,7 @@ async function refreshSpotifyPlaylistSlots() {
         btn.dataset.playlistId = row?.playlist_id || "";
         btn.dataset.playlistName = row?.playlist_name || "";
     });
-
-    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
+    selectAllElements(".spotify-slot-pick-btn").forEach((btn) => {
         const slot = Number(btn.dataset.slot);
         const row = rows.find((r) => r.slot_number === slot);
         const icon = ensureTextIcon(row?.playlist_icon);
@@ -2395,201 +2418,48 @@ async function refreshSpotifyPlaylistSlots() {
     });
 }
 
-async function openSpotifyPlaylistModal() {
-    openModal("spotifyPlaylistModal");
-
-    const [playlists, slots] = await Promise.all([
-        fetchPlaylists(),
-        loadPlaylists(),
-    ]);
-
-    playlistSlots = slots;
-
-    const slotPicker = document.getElementById("spotifySlotPicker");
-    slotPicker.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
-        const slot = Number(btn.dataset.slot);
-        const row = slots.find((r) => r.slot_number === slot);
-        btn.textContent = ensureTextIcon(row?.playlist_icon);
-        btn.classList.toggle("has-playlist", !!row?.playlist_id);
-        btn.classList.remove("active");
-    });
-
-    const select = document.getElementById("spotifySlotPlaylistSelect");
-    select.innerHTML =
-        '<option value="">— select —</option>' +
-        playlists
-            .map((pl) => `<option value="${pl.id}">${pl.name}</option>`)
-            .join("");
-
-    const iconPicker = document.getElementById("spotifyIconPicker");
-    iconPicker.innerHTML = ICONS.map(
-        (icon) =>
-            `<button type="button" class="spotify-icon-option" data-icon="${icon}">${icon}</button>`,
-    ).join("");
-
-    iconPicker.querySelectorAll(".spotify-icon-option").forEach((el) => {
-        el.addEventListener("click", () => {
-            iconPicker
-                .querySelectorAll(".spotify-icon-option")
-                .forEach((x) => x.classList.remove("active"));
-            el.classList.add("active");
-        });
-    });
-
-    activeSlot = null;
-    document.getElementById("spotifySlotEditor").style.display = "none";
-    document.getElementById("spotifySlotEditorPrompt").style.display = "block";
-
-    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
-        btn.onclick = () => selectSlotForEdit(Number(btn.dataset.slot));
-    });
-
-    document.getElementById("spotifySlotSaveBtn").onclick = saveSlotFromModal;
-}
-
-function renderSpotify() {
-    const content = document.getElementById("spotifyContent");
-    if (!content) return;
-
-    content.innerHTML = `
-    <div class="spotify-panel">
-      <div class="spotify-nowplaying">
-        <div class="spotify-art" id="spotifyArt">
-          <div class="spotify-art-placeholder">♪</div>
-        </div>
-        <div class="spotify-track">
-          <div class="spotify-track-title" id="spotifyTitle">—</div>
-          <div class="spotify-track-artist" id="spotifyArtist">—</div>
-          <div class="spotify-playback-row">
-            <button class="spotify-btn" id="spotifyPrevBtn" type="button">⏮</button>
-            <button class="spotify-btn spotify-btn-play" id="spotifyPlayBtn" type="button">▶</button>
-            <button class="spotify-btn" id="spotifyNextBtn" type="button">⏭</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="spotify-shortcuts">
-        <span id="spotifyPlaylistsLabel">Playlists</span>
-        <button class="spotify-slot-btn" data-slot="1" type="button">1</button>
-        <button class="spotify-slot-btn" data-slot="2" type="button">2</button>
-        <button class="spotify-slot-btn" data-slot="3" type="button">3</button>
-        <button class="spotify-slot-btn" data-slot="4" type="button">4</button>
-        <button class="spotify-slot-btn" data-slot="5" type="button">5</button>
-      </div>
-
-      <div class="spotify-schedule">
-        <div class="spotify-schedule-title">NEXT SCHEDULE</div>
-        <div class="spotify-schedule-row" id="spotifySchedRow">
-          <span class="spotify-schedule-date" id="spotifySchedDate">—</span>
-          <span class="spotify-schedule-time" id="spotifySchedTime"></span>
-          <span class="spotify-schedule-playlist" id="spotifySchedPlaylist"></span>
-        </div>
-        <div class="spotify-schedule-actions">
-          <button class="spotify-schedule-action add"  type="button" id="spotifySchedAddBtn">Add</button>
-          <button class="spotify-schedule-action edit" type="button" id="spotifySchedEditBtn">Edit</button>
-          <button class="spotify-schedule-action skip" type="button" id="spotifySchedSkipBtn">Skip</button>
-          <button class="spotify-schedule-action all" type="button" id="spotifySchedAllBtn">ALL</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-    bindPlaybackControls();
-    setupVolumeControls();
-    bindSpotifyPlaylistUI();
-    refreshSpotifyPlaylistSlots();
-    bindSpotifySchedButtons();
-
-    const allBtn = document.getElementById("spotifySchedAllBtn");
-    if (allBtn && !allBtn.dataset.bound) {
-        allBtn.dataset.bound = "1";
-        allBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            openSpotifyScheduleModal();
-        });
-    }
-}
-
 function renderNextSchedule() {
-    const now = new Date();
-    const todayStr = getTodayHKT();
-    const currentTime = now.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Hong_Kong",
-    });
-
-    const next = schedules.find((s) => {
-        if (s.triggered) return false;
-        if (s.scheduled_date > todayStr) return true;
-        if (
-            s.scheduled_date === todayStr &&
-            s.scheduled_time?.slice(0, 5) > currentTime
-        )
-            return true;
-        return false;
-    });
-
-    const dateEl = document.getElementById("spotifySchedDate");
-    const timeEl = document.getElementById("spotifySchedTime");
-    const playlistEl = document.getElementById("spotifySchedPlaylist");
-
+    const next = getNextSchedule();
     if (!next) {
-        if (dateEl) dateEl.textContent = "—";
-        if (timeEl) timeEl.textContent = "";
-        if (playlistEl) playlistEl.textContent = "No upcoming schedules";
+        setElementText("spotifySchedDate", "");
+        setElementText("spotifySchedTime", "");
+        setElementText("spotifySchedPlaylist", "No upcoming schedules");
         return;
     }
-
-    if (dateEl) {
-        const d = new Date(next.scheduled_date + "T00:00:00Z");
-        dateEl.textContent = d
+    setElementText(
+        "spotifySchedDate",
+        new Date(`${next.scheduleddate}T00:00:00Z`)
             .toLocaleDateString("en-GB", {
                 day: "2-digit",
                 month: "short",
                 timeZone: "Asia/Hong_Kong",
             })
-            .toUpperCase();
-    }
-    if (timeEl) timeEl.textContent = next.scheduled_time?.slice(0, 5) || "";
-    if (playlistEl) playlistEl.textContent = next.playlist_name || "Untitled";
+            .toUpperCase(),
+    );
+    setElementText("spotifySchedTime", next.scheduledtime?.slice(0, 5) ?? "");
+    setElementText("spotifySchedPlaylist", next.playlistname || "Untitled");
 }
 
-async function openSpotifyScheduleModal() {
-    openModal("spotifyScheduleModal");
-    await loadSchedules();
-    renderSpotifyCalendar();
-    renderSpotifyDaySchedules(spotifySelectedDate);
-    bindSpotifyScheduleModal();
-    bindSpotifyTemplateLoader();
-}
-
-function renderSpotifyCalendar() {
-    const grid = document.getElementById("spotifyCalendarGrid");
-    const label = document.getElementById("spotifyCalMonthLabel");
-    if (!grid || !label) return;
-
+function renderCalendar() {
+    setElementText(
+        "spotifyCalMonthLabel",
+        spotifyCalendarMonth
+            .toLocaleDateString("en-GB", {
+                month: "short",
+                year: "numeric",
+            })
+            .toUpperCase(),
+    );
     const y = spotifyCalendarMonth.getFullYear();
     const m = spotifyCalendarMonth.getMonth();
-
-    const monthName = spotifyCalendarMonth
-        .toLocaleDateString("en-GB", {
-            month: "short",
-            year: "numeric",
-        })
-        .toUpperCase();
-    label.textContent = monthName;
-
     const firstDay = new Date(y, m, 1);
     const startOffset = firstDay.getDay();
     const daysInMonth = new Date(y, m + 1, 0).getDate();
     const today = getTodayHKT();
-
     let html = "";
     for (let i = 0; i < startOffset; i++) {
         html += `<div class="spotify-calendar-cell empty"></div>`;
     }
-
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const dayEntries = schedules.filter(
@@ -2597,7 +2467,6 @@ function renderSpotifyCalendar() {
         );
         const isToday = dateStr === today;
         const isSelected = dateStr === spotifySelectedDate;
-
         let dotsHtml = "";
         if (dayEntries.length) {
             const types = new Set(dayEntries.map((s) => s.schedule_type));
@@ -2607,90 +2476,175 @@ function renderSpotifyCalendar() {
                 .join("");
             dotsHtml = `<div class="cal-dots">${dotSpans}</div>`;
         }
-
         html += `<button type="button" class="spotify-calendar-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" data-date="${dateStr}">${day}${dotsHtml}</button>`;
     }
-
-    grid.innerHTML = html;
-
-    grid.querySelectorAll(".spotify-calendar-cell[data-date]").forEach(
-        (cell) => {
-            cell.onclick = () => {
-                spotifySelectedDate = cell.dataset.date;
-                renderSpotifyCalendar();
-                renderSpotifyDaySchedules(spotifySelectedDate);
-            };
-        },
-    );
+    setElementHTML("spotifyCalendarGrid", html);
+    selectAllElements(
+        ".spotify-calendar-cell[data-date]",
+        "spotifyCalendarGrid",
+    ).forEach((cell) => {
+        cell.onclick = () => {
+            spotifySelectedDate = cell.dataset.date;
+            renderCalendar();
+            renderSchedule(spotifySelectedDate);
+        };
+    });
 }
 
-function renderSpotifyDaySchedules(dateStr) {
-    const label = document.getElementById("spotifySelectedDateLabel");
-    const list = document.getElementById("spotifyDaySchedules");
-    if (!label || !list) return;
-
-    label.textContent = dateStr;
-
+function renderSchedule(dateStr) {
+    setElementText("spotifySelectedDateLabel", dateStr);
     const items = schedules.filter((s) => s.scheduled_date === dateStr);
-
     if (!items.length) {
-        list.innerHTML = `<div class="spotify-day-row">
-      <div class="spotify-day-row-meta">No schedules for this day.</div>
-    </div>`;
+        setElementHTML(
+            "spotifyDaySchedules",
+            `<div class="spotify-day-row">
+                <div class="spotify-day-row-meta">No schedules for this day.</div>
+            </div>`,
+        );
         spotifySelectedScheduleId = null;
         spotifySelectedSchedule = null;
         return;
     }
-
-    list.innerHTML = items
-        .map(
-            (item) => `
-    <div class="spotify-day-row ${spotifySelectedScheduleId === item.id ? "selected" : ""}"
-         data-id="${item.id}">
-      <div class="spotify-day-row-title">
-        ${item.scheduled_time} · ${item.playlist_name || "Untitled"}
-      </div>
-      <div class="spotify-day-row-meta">
-        ${item.schedule_type}
-      </div>
-    </div>
-  `,
-        )
-        .join("");
-
-    list.querySelectorAll(".spotify-day-row[data-id]").forEach((row) => {
+    setElementHTML(
+        "spotifyDaySchedules",
+        items
+            .map(
+                (
+                    item,
+                ) => `<div class="spotify-day-row ${spotifySelectedScheduleId === item.id ? "selected" : ""}"data-id="${item.id}">
+                        <div class="spotify-day-row-title">
+                            ${item.scheduled_time} · ${item.playlist_name || "Untitled"}
+                        </div>
+                        <div class="spotify-day-row-meta">
+                            ${item.schedule_type}
+                        </div>
+                    </div>`,
+            )
+            .join(""),
+    );
+    selectAllElements(
+        ".spotify-day-row[data-id]",
+        "spotifyDaySchedules",
+    ).forEach((row) => {
         row.onclick = () => {
             const item = schedules.find((s) => String(s.id) === row.dataset.id);
             if (!item) return;
             spotifySelectedScheduleId = item.id;
             spotifySelectedSchedule = item;
-            renderSpotifyDaySchedules(dateStr);
+            renderSchedule(dateStr);
         };
     });
 }
+// ============================================================
+// #endregion
+// ============================================================
 
+// ============================================================
+// #region SPOTIFY MODALS
+// ============================================================
 async function populatePlaylistDropdown(elementId, selectedId = "") {
-    const sel = document.getElementById(elementId);
-    if (!sel) return;
-
-    sel.innerHTML = '<option value="">Loading...</option>';
-
+    setElementHTML(elementId, '<option value="">Loading...</option>');
     const playlists = spotifyPlaylists.length
         ? spotifyPlaylists
         : await fetchPlaylists();
-
     if (!playlists.length) {
-        sel.innerHTML = '<option value="">— no playlists found —</option>';
+        setElementHTML(
+            elementId,
+            '<option value="">— no playlists found —</option>',
+        );
         return;
     }
-
-    sel.innerHTML =
+    setElementHTML(
+        elementId,
         '<option value="">— select —</option>' +
-        playlists
-            .map((p) => `<option value="${p.id}">${p.name}</option>`)
-            .join("");
+            playlists
+                .map((p) => `<option value="${p.id}">${p.name}</option>`)
+                .join(""),
+    );
+    setElementValue(elementId, selectedId || "");
+}
 
-    sel.value = selectedId || "";
+async function openPlaylistModal() {
+    openModal("spotifyPlaylistModal");
+    const [playlists, slots] = await Promise.all([
+        fetchPlaylists(),
+        loadPlaylists(),
+    ]);
+    playlistSlots = slots;
+    selectAllElements(".spotify-slot-pick-btn", "spotifySlotPicker").forEach(
+        (btn) => {
+            const slot = Number(btn.dataset.slot);
+            const row = slots.find((r) => r.slot_number === slot);
+            btn.textContent = ensureTextIcon(row?.playlist_icon);
+            btn.classList.toggle("has-playlist", !!row?.playlist_id);
+            btn.classList.remove("active");
+        },
+    );
+    setElementHTML(
+        "spotifySlotPlaylistSelect",
+        '<option value="">— select —</option>' +
+            playlists
+                .map((pl) => `<option value="${pl.id}">${pl.name}</option>`)
+                .join(""),
+    );
+    setElementHTML(
+        "spotifyIconPicker",
+        ICONS.map(
+            (icon) =>
+                `<button type="button" class="spotify-icon-option" data-icon="${icon}">${icon}</button>`,
+        ).join(""),
+    );
+    selectAllElements(".spotify-icon-option", "spotifyIconPicker").forEach(
+        (el) => {
+            el.addEventListener("click", () => {
+                selectAllElements(
+                    ".spotify-icon-option",
+                    "spotifyIconPicker",
+                ).forEach((x) => x.classList.remove("active"));
+                el.classList.add("active");
+            });
+        },
+    );
+    activeSlot = null;
+    hideElement("spotifySlotEditor");
+    showElement("spotifySlotEditorPrompt", "block");
+    selectAllElements(".spotify-slot-pick-btn").forEach((btn) => {
+        btn.onclick = () => selectSlotForEdit(Number(btn.dataset.slot));
+    });
+    getElement("spotifySlotSaveBtn").onclick = saveSlotFromModal;
+}
+
+async function openSpotifyAddSchedule(dateStr) {
+    spotifySelectedScheduleId = null;
+    setElementText("spotifyScheduleFormTitle", "ADD SCHEDULE");
+    setElementValue("ssfDate", dateStr || getTodayHKT());
+    setElementValue("ssfTime", "");
+    setElementValue("ssfPlaylist", "");
+    hideElement("ssfDeleteBtn");
+    await populatePlaylistDropdown("ssfPlaylist");
+    openModal("spotifyScheduleFormModal");
+}
+
+async function openSpotifyEditSchedule(scheduleId) {
+    const item = schedules.find((s) => s.id === scheduleId);
+    if (!item) return;
+    spotifySelectedScheduleId = scheduleId;
+    spotifySelectedSchedule = item;
+    setElementText("spotifyScheduleFormTitle", "EDIT SCHEDULE");
+    setElementValue("ssfDate", item.scheduled_date || "");
+    setElementValue("ssfTime", item.scheduled_time?.slice(0, 5) || "");
+    showElement("ssfDeleteBtn", "block");
+    await populatePlaylistDropdown("ssfPlaylist", item.playlist_id);
+    openModal("spotifyScheduleFormModal");
+}
+
+async function openSpotifyScheduleModal() {
+    openModal("spotifyScheduleModal");
+    await loadSchedules();
+    renderCalendar();
+    renderSchedule(spotifySelectedDate);
+    setupScheduleModal();
+    setupTemplates();
 }
 // ============================================================
 // #endregion
@@ -2699,19 +2653,17 @@ async function populatePlaylistDropdown(elementId, selectedId = "") {
 // ============================================================
 // #region SPOTIFY ACTIONS
 // ============================================================
-function bindSpotifyAuth() {
-    const authBtn = document.getElementById("spotifyAuthBtn");
+function setupSpotifyAuth() {
+    const authBtn = getElement("spotifyAuthBtn");
     if (authBtn && !authBtn.dataset.bound) {
         authBtn.dataset.bound = "1";
         authBtn.addEventListener("click", spotifyAuth);
     }
-
-    const panel = document.querySelector('[data-section="spotify"]');
+    const panel = selectElement('[data-section="spotify"]');
     if (!panel) return;
-    const header = panel.querySelector(".panel-header");
+    const header = selectElement(".panel-header", panel);
     if (!header || header.dataset.spotifyBound) return;
     header.dataset.spotifyBound = "1";
-
     header.addEventListener("click", (e) => {
         if (header.classList.contains("spotify-header-error")) {
             e.stopPropagation();
@@ -2720,11 +2672,10 @@ function bindSpotifyAuth() {
     });
 }
 
-function bindPlaybackControls() {
-    const prevBtn = document.getElementById("spotifyPrevBtn");
-    const playBtn = document.getElementById("spotifyPlayBtn");
-    const nextBtn = document.getElementById("spotifyNextBtn");
-
+function setupPlaybackControls() {
+    const prevBtn = getElement("spotifyPrevBtn");
+    const playBtn = getElement("spotifyPlayBtn");
+    const nextBtn = getElement("spotifyNextBtn");
     if (prevBtn && !prevBtn.dataset.bound) {
         prevBtn.dataset.bound = "1";
         prevBtn.addEventListener("click", async (e) => {
@@ -2732,7 +2683,6 @@ function bindPlaybackControls() {
             if (spotifyPlayer) await spotifyPlayer.previousTrack();
         });
     }
-
     if (playBtn && !playBtn.dataset.bound) {
         playBtn.dataset.bound = "1";
         playBtn.addEventListener("click", async (e) => {
@@ -2740,7 +2690,6 @@ function bindPlaybackControls() {
             if (spotifyPlayer) await spotifyPlayer.togglePlay();
         });
     }
-
     if (nextBtn && !nextBtn.dataset.bound) {
         nextBtn.dataset.bound = "1";
         nextBtn.addEventListener("click", async (e) => {
@@ -2751,100 +2700,34 @@ function bindPlaybackControls() {
 }
 
 function setupVolumeControls() {
-    const volUp = document.getElementById("volUpBtn");
-    const volDown = document.getElementById("volDownBtn");
-    const volDisplay = document.getElementById("volDisplay");
-    if (!volUp || !volDown || !volDisplay || volUp.dataset.bound) return;
+    const volUp = getElement("volUpBtn");
+    const volDown = getElement("volDownBtn");
+    if (!volUp || !volDown || volUp.dataset.bound) return;
     volUp.dataset.bound = "1";
-
     volUp.addEventListener("click", async (e) => {
         e.stopPropagation();
         spotifyVolume = Math.min(100, spotifyVolume + 5);
-        volDisplay.textContent = spotifyVolume;
+        setElementText("volDisplay", spotifyVolume);
         if (spotifyPlayer) await spotifyPlayer.setVolume(spotifyVolume / 100);
     });
-
     volDown.addEventListener("click", async (e) => {
         e.stopPropagation();
         spotifyVolume = Math.max(0, spotifyVolume - 5);
-        volDisplay.textContent = spotifyVolume;
+        setElementText("volDisplay", spotifyVolume);
         if (spotifyPlayer) await spotifyPlayer.setVolume(spotifyVolume / 100);
     });
 }
 
-function ensureTextIcon(icon) {
-    return icon || "♫";
-}
-
-function selectSlotForEdit(slotNumber) {
-    activeSlot = slotNumber;
-
-    document.querySelectorAll(".spotify-slot-pick-btn").forEach((btn) => {
-        btn.classList.toggle("active", Number(btn.dataset.slot) === slotNumber);
-    });
-
-    document.getElementById("spotifySlotEditor").style.display = "block";
-    document.getElementById("spotifySlotEditorPrompt").style.display = "none";
-    document.getElementById("spotifySlotEditorLabel").textContent =
-        `Editing Slot ${slotNumber}`;
-
-    const existing = playlistSlots.find((r) => r.slot_number === slotNumber);
-    const select = document.getElementById("spotifySlotPlaylistSelect");
-    select.value = existing?.playlist_id || "";
-
-    const iconPicker = document.getElementById("spotifyIconPicker");
-    iconPicker.querySelectorAll(".spotify-icon-option").forEach((el) => {
-        el.classList.toggle(
-            "active",
-            el.dataset.icon === ensureTextIcon(existing?.playlist_icon),
-        );
-    });
-}
-
-async function saveSlotFromModal() {
-    if (!activeSlot) return;
-
-    const select = document.getElementById("spotifySlotPlaylistSelect");
-    const playlistId = select.value;
-    const playlistName = select.options[select.selectedIndex]?.text || "";
-    if (!playlistId) return;
-
-    const activeIcon = document.querySelector(".spotify-icon-option.active");
-    const icon = ensureTextIcon(activeIcon?.dataset.icon);
-
-    const { sb, user } = await getSupabaseContext();
-
-    const { error } = await sb.from("spotify_playlists").upsert(
-        {
-            user_id: user.id,
-            slot_number: activeSlot,
-            playlist_id: playlistId,
-            playlist_name: playlistName,
-            playlist_icon: icon,
-        },
-        { onConflict: "user_id,slot_number" },
-    );
-
-    if (error) {
-        console.error("Save slot failed:", error);
-        return;
-    }
-
-    await refreshSpotifyPlaylistSlots();
-    closeModal("spotifyPlaylistModal");
-}
-
-function bindSpotifyPlaylistUI() {
-    const label = document.getElementById("spotifyPlaylistsLabel");
+function setupSlots() {
+    const label = getElement("spotifyPlaylistsLabel");
     if (label && !label.dataset.bound) {
         label.dataset.bound = "1";
         label.addEventListener("click", (e) => {
             e.stopPropagation();
-            openSpotifyPlaylistModal();
+            openPlaylistModal();
         });
     }
-
-    document.querySelectorAll(".spotify-slot-btn").forEach((btn) => {
+    selectAllElements(".spotify-slot-btn").forEach((btn) => {
         if (btn.dataset.bound) return;
         btn.dataset.bound = "1";
         btn.addEventListener("click", async (e) => {
@@ -2856,17 +2739,64 @@ function bindSpotifyPlaylistUI() {
     });
 }
 
-function bindSpotifyScheduleForm() {
-    const form = document.getElementById("spotifyScheduleForm");
+function selectSlotForEdit(slotNumber) {
+    activeSlot = slotNumber;
+    selectAllElements(".spotify-slot-pick-btn").forEach((btn) => {
+        btn.classList.toggle("active", Number(btn.dataset.slot) === slotNumber);
+    });
+    showElement("spotifySlotEditor", "block");
+    hideElement("spotifySlotEditorPrompt");
+    setElementText("spotifySlotEditorLabel", `Editing Slot ${slotNumber}`);
+    const existing = playlistSlots.find((r) => r.slot_number === slotNumber);
+    setElementValue("spotifySlotPlaylistSelect", existing?.playlist_id || "");
+    selectAllElements(".spotify-icon-option", "spotifyIconPicker").forEach(
+        (el) => {
+            el.classList.toggle(
+                "active",
+                el.dataset.icon === ensureTextIcon(existing?.playlist_icon),
+            );
+        },
+    );
+}
+
+async function saveSlotFromModal() {
+    if (!activeSlot) return;
+    const select = getElement("spotifySlotPlaylistSelect");
+    const playlistId = select.value;
+    const playlistName = select.options[select.selectedIndex]?.text || "";
+    if (!playlistId) return;
+    const activeIcon = selectElement(".spotify-icon-option.active");
+    const icon = ensureTextIcon(activeIcon?.dataset.icon);
+    const { sb, user } = await getSupabaseContext();
+    const { error } = await sb.from("spotify_playlists").upsert(
+        {
+            user_id: user.id,
+            slot_number: activeSlot,
+            playlist_id: playlistId,
+            playlist_name: playlistName,
+            playlist_icon: icon,
+        },
+        { onConflict: "user_id,slot_number" },
+    );
+    if (error) {
+        console.error("saveSlotFromModal failed: ", error);
+        return;
+    }
+    await renderSlots();
+    closeModal("spotifyPlaylistModal");
+}
+
+function setupScheduleForm() {
+    const form = getElement("spotifyScheduleForm");
     if (!form || form.dataset.bound) return;
     form.dataset.bound = "1";
 
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const isEdit = !!spotifySelectedScheduleId;
-        const date = document.getElementById("ssfDate").value;
-        const time = document.getElementById("ssfTime").value;
-        const playlistSelect = document.getElementById("ssfPlaylist");
+        const date = getElement("ssfDate").value;
+        const time = getElement("ssfTime").value;
+        const playlistSelect = getElement("ssfPlaylist");
         const playlistId = playlistSelect.value;
         const playlistName =
             playlistSelect.options[playlistSelect.selectedIndex]?.text || "";
@@ -2874,7 +2804,6 @@ function bindSpotifyScheduleForm() {
         if (!date || !time || !playlistId) return;
 
         const { sb, user } = await getSupabaseContext();
-        if (!user) return;
 
         const record = {
             user_id: user.id,
@@ -2911,19 +2840,18 @@ function bindSpotifyScheduleForm() {
         closeModal("spotifyScheduleFormModal");
         await loadSchedules();
         renderNextSchedule();
-        renderSpotifyCalendar();
-        renderSpotifyDaySchedules(spotifySelectedDate);
+        renderCalendar();
+        renderSchedule(spotifySelectedDate);
     });
 
-    // Delete button
-    const deleteBtn = document.getElementById("ssfDeleteBtn");
+    const deleteBtn = getElement("ssfDeleteBtn");
     if (deleteBtn && !deleteBtn.dataset.bound) {
         deleteBtn.dataset.bound = "1";
         deleteBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
             if (!spotifySelectedScheduleId) return;
             if (!confirm("Delete this schedule?")) return;
-            const { sb } = await getSupabaseContext(false);
+            const { sb, user } = await getSupabaseContext();
             const { error } = await sb
                 .from("spotify_schedules")
                 .delete()
@@ -2935,15 +2863,46 @@ function bindSpotifyScheduleForm() {
             closeModal("spotifyScheduleFormModal");
             await loadSchedules();
             renderNextSchedule();
-            renderSpotifyCalendar();
-            renderSpotifyDaySchedules(spotifySelectedDate);
+            renderCalendar();
+            renderSchedule(spotifySelectedDate);
         });
     }
 }
 
-function bindSpotifyScheduleModal() {
-    const prevBtn = document.getElementById("spotifyCalPrevBtn");
-    const nextBtn = document.getElementById("spotifyCalNextBtn");
+function setupTemplates() {
+    const toggleFields = () => {
+        const type = getElement("spotifyTemplateType")?.value;
+        const weekly = getElement("spotifyWeeklyFields");
+        const shift = getElement("spotifyShiftFields");
+        if (weekly) weekly.style.display = type === "weekly" ? "block" : "none";
+        if (shift) shift.style.display = type === "shift" ? "block" : "none";
+    };
+
+    const typeEl = getElement("spotifyTemplateType");
+    if (typeEl && !typeEl.dataset.bound) {
+        typeEl.dataset.bound = "1";
+        typeEl.addEventListener("change", toggleFields);
+    }
+    toggleFields();
+
+    const cancelBtn = getElement("spotifyTemplateCancelBtn");
+    if (cancelBtn && !cancelBtn.dataset.bound) {
+        cancelBtn.dataset.bound = "1";
+        cancelBtn.addEventListener("click", () =>
+            hideElement("spotifyTemplateLoader"),
+        );
+    }
+
+    const generateBtn = getElement("spotifyTemplateGenerateBtn");
+    if (generateBtn && !generateBtn.dataset.bound) {
+        generateBtn.dataset.bound = "1";
+        generateBtn.addEventListener("click", generateSchedules);
+    }
+}
+
+function setupScheduleModal() {
+    const prevBtn = getElement("spotifyCalPrevBtn");
+    const nextBtn = getElement("spotifyCalNextBtn");
 
     if (prevBtn && !prevBtn.dataset.bound) {
         prevBtn.dataset.bound = "1";
@@ -2953,7 +2912,7 @@ function bindSpotifyScheduleModal() {
                 spotifyCalendarMonth.getMonth() - 1,
                 1,
             );
-            renderSpotifyCalendar();
+            renderCalendar();
         });
     }
 
@@ -2965,25 +2924,24 @@ function bindSpotifyScheduleModal() {
                 spotifyCalendarMonth.getMonth() + 1,
                 1,
             );
-            renderSpotifyCalendar();
+            renderCalendar();
         });
     }
 
-    document.getElementById("spotifyLoadTemplateBtn").onclick = async () => {
-        document.getElementById("spotifyTemplateLoader").style.display =
-            "block";
-        bindSpotifyTemplateLoader();
+    getElement("spotifyLoadTemplateBtn").onclick = async () => {
+        showElement("spotifyTemplateLoader", "block");
+        setupTemplates();
         await populatePlaylistDropdown("spotifyTemplatePlaylistSelect");
     };
 
-    const addBtn = document.getElementById("spotifyAddScheduleBtn");
-    const editBtn = document.getElementById("spotifyEditScheduleBtn");
-    const delBtn = document.getElementById("spotifyDeleteScheduleBtn");
+    const addBtn = getElement("spotifyAddScheduleBtn");
+    const editBtn = getElement("spotifyEditScheduleBtn");
+    const delBtn = getElement("spotifyDeleteScheduleBtn");
 
     if (addBtn && !addBtn.dataset.bound) {
         addBtn.dataset.bound = "1";
         addBtn.addEventListener("click", () => {
-            bindSpotifyScheduleForm();
+            setupScheduleForm();
             openSpotifyAddSchedule();
         });
     }
@@ -2992,7 +2950,7 @@ function bindSpotifyScheduleModal() {
         editBtn.dataset.bound = "1";
         editBtn.addEventListener("click", async () => {
             if (!spotifySelectedSchedule) return;
-            bindSpotifyScheduleForm();
+            setupScheduleForm();
             await openSpotifyEditSchedule(spotifySelectedScheduleId);
         });
     }
@@ -3002,7 +2960,7 @@ function bindSpotifyScheduleModal() {
         delBtn.addEventListener("click", async () => {
             if (!spotifySelectedScheduleId) return;
             if (!confirm("Delete this schedule?")) return;
-            const { sb } = await getSupabaseContext(false);
+            const { sb, user } = await getSupabaseContext();
             const { error } = await sb
                 .from("spotify_schedules")
                 .delete()
@@ -3014,136 +2972,82 @@ function bindSpotifyScheduleModal() {
             spotifySelectedScheduleId = null;
             spotifySelectedSchedule = null;
             await loadSchedules();
-            renderSpotifyCalendar();
-            renderSpotifyDaySchedules(spotifySelectedDate);
+            renderCalendar();
+            renderSchedule(spotifySelectedDate);
         });
     }
 }
 
-function bindSpotifySchedButtons() {
-    const skipBtn = document.getElementById("spotifySchedSkipBtn");
+function setupScheduleButtons() {
+    const skipBtn = getElement("spotifySchedSkipBtn");
     if (skipBtn && !skipBtn.dataset.bound) {
         skipBtn.dataset.bound = "1";
         skipBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
-            const todayStr = getTodayHKT();
-            const currentTime = new Date().toLocaleTimeString("en-GB", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Asia/Hong_Kong",
-            });
-            const next = schedules.find((s) => {
-                if (s.triggered) return false;
-                if (s.scheduled_date > todayStr) return true;
-                if (
-                    s.scheduled_date === todayStr &&
-                    s.scheduled_time > currentTime
-                )
-                    return true;
-                return false;
-            });
+
+            const next = getNextSchedule();
             if (!next) return;
+
             if (!confirm("Skip and delete this schedule?")) return;
-            const { sb } = await getSupabaseContext(false);
+
+            const { sb, user } = await getSupabaseContext();
             const { error } = await sb
-                .from("spotify_schedules")
+                .from("spotifyschedules")
                 .delete()
                 .eq("id", next.id);
+
             if (error) {
-                console.error("Skip schedule failed", error);
+                console.error("Skip schedule failed:", error);
                 return;
             }
+
+            if (spotifySelectedScheduleId === next.id) {
+                spotifySelectedScheduleId = null;
+                spotifySelectedSchedule = null;
+            }
+
             await loadSchedules();
             renderNextSchedule();
+            renderCalendar();
+            renderSchedule(spotifySelectedDate);
         });
     }
 
-    const addBtn = document.getElementById("spotifySchedAddBtn");
+    const addBtn = getElement("spotifySchedAddBtn");
     if (addBtn && !addBtn.dataset.bound) {
         addBtn.dataset.bound = "1";
         addBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            bindSpotifyScheduleForm();
+            setupScheduleForm();
             openSpotifyAddSchedule();
         });
     }
 
-    const editBtn = document.getElementById("spotifySchedEditBtn");
+    const editBtn = getElement("spotifySchedEditBtn");
     if (editBtn && !editBtn.dataset.bound) {
         editBtn.dataset.bound = "1";
         editBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
-            const todayStr = getTodayHKT();
-            const currentTime = new Date().toLocaleTimeString("en-GB", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Asia/Hong_Kong",
-            });
 
-            const next = schedules.find((s) => {
-                if (s.triggered) return false;
-                if (s.scheduled_date > todayStr) return true;
-                if (
-                    s.scheduled_date === todayStr &&
-                    s.scheduled_time > currentTime
-                )
-                    return true;
-                return false;
-            });
-
+            const next = getNextSchedule();
             if (!next) return;
+
             spotifySelectedSchedule = next;
             spotifySelectedScheduleId = next.id;
-            bindSpotifyScheduleForm();
+
+            setupScheduleForm();
             await openSpotifyEditSchedule(next.id);
         });
     }
 }
 
-function bindSpotifyTemplateLoader() {
-    const toggleFields = () => {
-        const type = document.getElementById("spotifyTemplateType")?.value;
-        const weekly = document.getElementById("spotifyWeeklyFields");
-        const shift = document.getElementById("spotifyShiftFields");
-        if (weekly) weekly.style.display = type === "weekly" ? "block" : "none";
-        if (shift) shift.style.display = type === "shift" ? "block" : "none";
-    };
-
-    const typeEl = document.getElementById("spotifyTemplateType");
-    if (typeEl && !typeEl.dataset.bound) {
-        typeEl.dataset.bound = "1";
-        typeEl.addEventListener("change", toggleFields);
-    }
-    toggleFields();
-
-    const cancelBtn = document.getElementById("spotifyTemplateCancelBtn");
-    if (cancelBtn && !cancelBtn.dataset.bound) {
-        cancelBtn.dataset.bound = "1";
-        cancelBtn.addEventListener("click", () => {
-            document.getElementById("spotifyTemplateLoader").style.display =
-                "none";
-        });
-    }
-
-    const generateBtn = document.getElementById("spotifyTemplateGenerateBtn");
-    if (generateBtn && !generateBtn.dataset.bound) {
-        generateBtn.dataset.bound = "1";
-        generateBtn.addEventListener("click", generateSpotifyTemplateSchedules);
-    }
-}
-
-async function generateSpotifyTemplateSchedules() {
-    const type = document.getElementById("spotifyTemplateType").value;
-    const startDateStr = document.getElementById(
-        "spotifyTemplateStartDate",
-    ).value;
-    const endDateStr = document.getElementById("spotifyTemplateEndDate").value;
+async function generateSchedules() {
+    const type = getElement("spotifyTemplateType").value;
+    const startDateStr = getElement("spotifyTemplateStartDate").value;
+    const endDateStr = getElement("spotifyTemplateEndDate").value;
     const overrideMode =
-        document.querySelector('input[name="spotifyOverride"]:checked')
-            ?.value || "add";
-    const playlistSelect = document.getElementById(
-        "spotifyTemplatePlaylistSelect",
-    );
+        selectElement('input[name="spotifyOverride"]:checked')?.value || "add";
+    const playlistSelect = getElement("spotifyTemplatePlaylistSelect");
     const playlistId = playlistSelect.value;
     const playlistName =
         playlistSelect.options[playlistSelect.selectedIndex]?.text || "";
@@ -3154,7 +3058,6 @@ async function generateSpotifyTemplateSchedules() {
     }
 
     const { sb, user } = await getSupabaseContext();
-    if (!user) return;
 
     // Resolve end date: default to 3 months from start
     let endDate;
@@ -3187,11 +3090,11 @@ async function generateSpotifyTemplateSchedules() {
 
     if (type === "weekly") {
         const checkedDays = [
-            ...document.querySelectorAll(
+            ...selectAllElements(
                 '#spotifyWeeklyFields input[type="checkbox"]:checked',
             ),
         ].map((cb) => parseInt(cb.value));
-        const time = document.getElementById("spotifyWeeklyTime").value;
+        const time = getElement("spotifyWeeklyTime").value;
         if (!checkedDays.length || !time) {
             alert("Please select at least one weekday and a time.");
             return;
@@ -3213,16 +3116,12 @@ async function generateSpotifyTemplateSchedules() {
             cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
     } else if (type === "shift") {
-        const day1Index = parseInt(
-            document.getElementById("spotifyShiftDay1Index").value,
-        );
+        const day1Index = parseInt(getElement("spotifyShiftDay1Index").value);
         const times = {
-            afternoon: document.getElementById("spotifyShiftAfternoonTime")
-                .value,
-            early: document.getElementById("spotifyShiftEarlyTime").value,
-            overnight: document.getElementById("spotifyShiftOvernightTime")
-                .value,
-            off: document.getElementById("spotifyShiftOffTime").value,
+            afternoon: getElement("spotifyShiftAfternoonTime").value,
+            early: getElement("spotifyShiftEarlyTime").value,
+            overnight: getElement("spotifyShiftOvernightTime").value,
+            off: getElement("spotifyShiftOffTime").value,
         };
         // Shift pattern: which time each day in the 10-day cycle uses
         const shiftPattern = [
@@ -3284,14 +3183,13 @@ async function generateSpotifyTemplateSchedules() {
 
     await loadSchedules();
     renderNextSchedule();
-    renderSpotifyCalendar();
-    if (spotifySelectedDate) renderSpotifyDaySchedules(spotifySelectedDate);
+    renderCalendar();
+    if (spotifySelectedDate) renderSchedule(spotifySelectedDate);
 
     // Hide template loader after success
-    document.getElementById("spotifyTemplateLoader").style.display = "none";
-    document.getElementById("spotifyLoadTemplateBtn").style.display = "block";
+    hideElement("spotifyTemplateLoader");
+    showElement("spotifyLoadTemplateBtn", "block");
 }
-
 // ============================================================
 // #endregion
 // ============================================================
@@ -3307,6 +3205,10 @@ function showLogin() {
     if (scheduleTickInterval) {
         clearInterval(scheduleTickInterval);
         scheduleTickInterval = null;
+    }
+    if (nowPlayingInterval) {
+        clearInterval(nowPlayingInterval);
+        nowPlayingInterval = null;
     }
 }
 
@@ -3343,6 +3245,67 @@ function startClock() {
     }, 100);
 }
 
+function renderSpotify() {
+    setElementHTML(
+        "spotifyContent",
+        `<div class="spotify-panel">
+            <div class="spotify-nowplaying">
+                <div class="spotify-art" id="spotifyArt">
+                    <div class="spotify-art-placeholder">♪</div>
+                </div>
+                <div class="spotify-track">
+                    <div class="spotify-track-title" id="spotifyTitle">—</div>
+                    <div class="spotify-track-artist" id="spotifyArtist">—</div>
+                    <div class="spotify-playback-row">
+                        <button class="spotify-btn" id="spotifyPrevBtn" type="button">⏮</button>
+                        <button class="spotify-btn spotify-btn-play" id="spotifyPlayBtn" type="button">▶</button>
+                        <button class="spotify-btn" id="spotifyNextBtn" type="button">⏭</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="spotify-shortcuts">
+                <span id="spotifyPlaylistsLabel">Playlists</span>
+                <button class="spotify-slot-btn" data-slot="1" type="button">1</button>
+                <button class="spotify-slot-btn" data-slot="2" type="button">2</button>
+                <button class="spotify-slot-btn" data-slot="3" type="button">3</button>
+                <button class="spotify-slot-btn" data-slot="4" type="button">4</button>
+                <button class="spotify-slot-btn" data-slot="5" type="button">5</button>
+            </div>
+
+            <div class="spotify-schedule">
+                <div class="spotify-schedule-title">NEXT SCHEDULE</div>
+                <div class="spotify-schedule-row" id="spotifySchedRow">
+                    <span class="spotify-schedule-date" id="spotifySchedDate">—</span>
+                    <span class="spotify-schedule-time" id="spotifySchedTime"></span>
+                    <span class="spotify-schedule-playlist" id="spotifySchedPlaylist"></span>
+                </div>
+                <div class="spotify-schedule-actions">
+                    <button class="spotify-schedule-action add"  type="button" id="spotifySchedAddBtn">Add</button>
+                    <button class="spotify-schedule-action edit" type="button" id="spotifySchedEditBtn">Edit</button>
+                    <button class="spotify-schedule-action skip" type="button" id="spotifySchedSkipBtn">Skip</button>
+                    <button class="spotify-schedule-action all" type="button" id="spotifySchedAllBtn">ALL</button>
+                </div>
+            </div>
+        </div>`,
+    );
+
+    setupPlaybackControls();
+    setupVolumeControls();
+    setupSlots();
+    renderSlots();
+    setupScheduleButtons();
+
+    const allBtn = getElement("spotifySchedAllBtn");
+    if (allBtn && !allBtn.dataset.bound) {
+        allBtn.dataset.bound = "1";
+        allBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openSpotifyScheduleModal();
+        });
+    }
+}
+
 async function showDashboard() {
     const blanker = getElement("screenBlanker");
     const clockHeader = getElement("datetimeHeader");
@@ -3358,6 +3321,7 @@ async function showDashboard() {
             blanker.classList.remove("active");
         });
     }
+
     hideElement("loginContainer");
     selectElement(".dashboard").style.display = "flex";
     [
@@ -3386,12 +3350,13 @@ async function showDashboard() {
         renderPanel,
     );
 
-    bindSpotifyAuth();
+    setupSpotifyAuth();
     await initSpotify();
-    await initSpotifyPlayer();
-    await refreshSpotifyPlaylistSlots();
-    await loadSchedules();
     renderSpotify();
+    await initSpotifyPlayer();
+    await renderSlots();
+    await loadSchedules();
+    await fetchNowPlaying();
     renderNextSchedule();
     startScheduleTicker();
 
@@ -3447,17 +3412,17 @@ async function dashboardLogin(email, password) {
 // #region INITIALISATION
 // ============================================================
 document.addEventListener("DOMContentLoaded", async () => {
-    document.querySelector(".dashboard").style.display = "none";
-    document.getElementById("loginContainer").style.display = "flex";
+    selectElement(".dashboard").style.display = "none";
+    showElement("loginContainer");
 
     await checkSession();
 
-    const loginForm = document.getElementById("loginForm");
+    const loginForm = getElement("loginForm");
     if (loginForm) {
         loginForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            const email = document.getElementById("loginEmail").value;
-            const password = document.getElementById("loginPassword").value;
+            const email = getElement("loginEmail").value;
+            const password = getElement("loginPassword").value;
             await dashboardLogin(email, password);
         });
     }
