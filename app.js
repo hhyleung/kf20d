@@ -2374,6 +2374,17 @@ async function getDeviceId() {
 
 async function playPlaylist(playlistId) {
     const token = await getValidSpotifyToken();
+    const targetDeviceId = await getDeviceId();
+    if (!targetDeviceId) {
+        console.error("Could not find Spotify device kf20d");
+        return;
+    }
+    spotifyDeviceId = targetDeviceId;
+    const body =
+        playlistId === SPOTIFY_LIKED_SONGS_ID
+            ? { context_uri: "spotify:collection:tracks" }
+            : { context_uri: `spotify:playlist:${playlistId}` };
+
     if (!token || !spotifyDeviceId || !playlistId) return false;
     try {
         const res = await fetch(
@@ -2394,6 +2405,11 @@ async function playPlaylist(playlistId) {
             console.error("playPlaylist failed:", res.status, text);
             return false;
         }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=true", {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}` },
+        });
         return true;
     } catch (err) {
         console.error("playPlaylist exception: ", err);
