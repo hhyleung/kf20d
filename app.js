@@ -2481,7 +2481,7 @@ function renderCalendar() {
     setElementHTML("spotifyCalendarGrid", html);
     selectAllElements(
         ".spotify-calendar-cell[data-date]",
-        "spotifyCalendarGrid",
+        getElement("spotifyCalendarGrid"),
     ).forEach((cell) => {
         cell.onclick = () => {
             spotifySelectedDate = cell.dataset.date;
@@ -2524,7 +2524,7 @@ function renderSchedule(dateStr) {
     );
     selectAllElements(
         ".spotify-day-row[data-id]",
-        "spotifyDaySchedules",
+        getElement("spotifyDaySchedules"),
     ).forEach((row) => {
         row.onclick = () => {
             const item = schedules.find((s) => String(s.id) === row.dataset.id);
@@ -2571,15 +2571,16 @@ async function openPlaylistModal() {
         loadPlaylists(),
     ]);
     playlistSlots = slots;
-    selectAllElements(".spotify-slot-pick-btn", "spotifySlotPicker").forEach(
-        (btn) => {
-            const slot = Number(btn.dataset.slot);
-            const row = slots.find((r) => r.slot_number === slot);
-            btn.textContent = ensureTextIcon(row?.playlist_icon);
-            btn.classList.toggle("has-playlist", !!row?.playlist_id);
-            btn.classList.remove("active");
-        },
-    );
+    selectAllElements(
+        ".spotify-slot-pick-btn",
+        getElement("spotifySlotPicker"),
+    ).forEach((btn) => {
+        const slot = Number(btn.dataset.slot);
+        const row = slots.find((r) => r.slot_number === slot);
+        btn.textContent = ensureTextIcon(row?.playlist_icon);
+        btn.classList.toggle("has-playlist", !!row?.playlist_id);
+        btn.classList.remove("active");
+    });
     setElementHTML(
         "spotifySlotPlaylistSelect",
         '<option value="">— select —</option>' +
@@ -2594,17 +2595,18 @@ async function openPlaylistModal() {
                 `<button type="button" class="spotify-icon-option" data-icon="${icon}">${icon}</button>`,
         ).join(""),
     );
-    selectAllElements(".spotify-icon-option", "spotifyIconPicker").forEach(
-        (el) => {
-            el.addEventListener("click", () => {
-                selectAllElements(
-                    ".spotify-icon-option",
-                    "spotifyIconPicker",
-                ).forEach((x) => x.classList.remove("active"));
-                el.classList.add("active");
-            });
-        },
-    );
+    selectAllElements(
+        ".spotify-icon-option",
+        getElement("spotifyIconPicker"),
+    ).forEach((el) => {
+        el.addEventListener("click", () => {
+            selectAllElements(
+                ".spotify-icon-option",
+                getElement("spotifyIconPicker"),
+            ).forEach((x) => x.classList.remove("active"));
+            el.classList.add("active");
+        });
+    });
     activeSlot = null;
     hideElement("spotifySlotEditor");
     showElement("spotifySlotEditorPrompt", "block");
@@ -2749,7 +2751,7 @@ function selectSlotForEdit(slotNumber) {
     setElementText("spotifySlotEditorLabel", `Editing Slot ${slotNumber}`);
     const existing = playlistSlots.find((r) => r.slot_number === slotNumber);
     setElementValue("spotifySlotPlaylistSelect", existing?.playlist_id || "");
-    selectAllElements(".spotify-icon-option", "spotifyIconPicker").forEach(
+    selectAllElements(".spotify-icon-option", getElement("spotifyIconPicker")).forEach(
         (el) => {
             el.classList.toggle(
                 "active",
