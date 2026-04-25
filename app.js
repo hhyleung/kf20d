@@ -1917,7 +1917,7 @@ document.addEventListener("click", async (e) => {
 // ============================================================
 function activateSpotifyHeader(activate = true) {
     const panel = selectElement('[data-section="spotify"]');
-    const header = selectElement(".panel-header");
+    const header = panel.querySelector(".panel-header");
     header.classList.toggle("spotify-header-error", activate);
 }
 
@@ -2011,8 +2011,11 @@ async function getValidSpotifyToken(forceRefresh = false) {
 function isTablet() {
     if (DEV_MODE) return true;
     const ua = navigator.userAgent || "";
+    console.log(ua);
     const isFirefox = /Firefox\/\d+/i.test(ua);
     const isWindows81 = /Windows NT 6\.3/i.test(ua);
+    console.log(isFirefox);
+    console.log(isWindows81);
     return isFirefox && isWindows81;
 }
 
