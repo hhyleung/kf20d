@@ -2230,6 +2230,20 @@ async function initSpotifyPlayer() {
     await spotifyPlayer.connect();
 }
 
+async function getActiveDevice() {
+    const token = await getValidSpotifyToken();
+    if (!token) return null;
+    const res = await fetch("https://api.spotify.com/v1/me/player", {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 204) return null;
+    if (!res.ok) {
+        console.error("getActiveDevice failed: ", res.status, await res.text());
+        return null;
+    }
+    return await res.json();
+}
+
 async function makeActiveDevice(deviceId) {
     const token = await getValidSpotifyToken();
     if (!token || !deviceId || !spotifyPlayer) return false;
@@ -2266,14 +2280,20 @@ async function playSpotifyPlaylist(playlistId) {
     const token = await getValidSpotifyToken();
     if (!token) return;
     try {
-        const transferred = await makeActiveDevice(spotifyDeviceId);
-        if (!transferred) {
-            console.error("Could not transfer playback to dashboard");
-            return;
+        const playback = await getActiveDevice();
+        console.log(playback?.device?.id);
+        console.log(spotifyDeviceId);
+        const alreadyOnDashboard = playback?.device?.id === spotifyDeviceId;
+        if (!alreadyOnDashboard) {
+            const transferred = await makeActiveDevice(spotifyDeviceId);
+            if (!transferred) {
+                console.error("Could not activate dashboard device");
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 900));
         }
-        await new Promise((resolve) => setTimeout(resolve, 900));
         const playRes = await fetch(
-            "https://api.spotify.com/v1/me/player/play",
+            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
             {
                 method: "PUT",
                 headers: {
@@ -2281,7 +2301,6 @@ async function playSpotifyPlaylist(playlistId) {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    device_id: spotifyDeviceId,
                     context_uri: `spotify:playlist:${playlistId}`,
                 }),
             },
@@ -2290,26 +2309,8 @@ async function playSpotifyPlaylist(playlistId) {
             console.error("Play failed", playRes.status, await playRes.text());
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        const shuffleRes = await fetch(
-            "https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=" +
-                encodeURIComponent(spotifyDeviceId),
-            {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            },
-        );
-        if (!shuffleRes.ok) {
-            console.error(
-                "Shuffle failed",
-                shuffleRes.status,
-                await shuffleRes.text(),
-            );
-        }
     } catch (err) {
-        console.error("playSpotifyPlaylist failed: ", err);
+        console.error("playSpotifyPlaylist failed:", err);
     }
 }
 // ============================================================
