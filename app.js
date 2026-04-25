@@ -2230,14 +2230,49 @@ async function initSpotifyPlayer() {
     await spotifyPlayer.connect();
 }
 
+async function makeActiveDevice(deviceId) {
+    const token = await getValidSpotifyToken();
+    if (!token || !deviceId) return false;
+    try {
+        const res = await fetch("https://api.spotify.com/v1/me/player", {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                device_ids: [deviceId],
+                play: true,
+            }),
+        });
+        if (!res.ok) {
+            console.error(
+                "transferToDevice failed",
+                res.status,
+                await res.text(),
+            );
+            return false;
+        }
+        return true;
+    } catch (err) {
+        console.error("makeActiveDevice failed: ", err);
+        return false;
+    }
+}
+
 async function playSpotifyPlaylist(playlistId) {
-    if (!playlistId || !spotifyPlayer || !spotifyDeviceId) return;
+    if (!playlistId || !spotifyDeviceId) return;
     const token = await getValidSpotifyToken();
     if (!token) return;
     try {
-        await spotifyPlayer.activateElement();
-        let res = await fetch(
-            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
+        const transferred = await makeActiveDevice(spotifyDeviceId);
+        if (!transferred) {
+            console.error("Could not transfer playback to dashboard");
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        const playRes = await fetch(
+            "https://api.spotify.com/v1/me/player/play",
             {
                 method: "PUT",
                 headers: {
@@ -2249,48 +2284,15 @@ async function playSpotifyPlaylist(playlistId) {
                 }),
             },
         );
-        if (res.status === 404) {
-            const devicesRes = await fetch(
-                "https://api.spotify.com/v1/me/player/devices",
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                },
-            );
-            const devicesData = devicesRes.ok
-                ? await devicesRes.json()
-                : { devices: [] };
-            const exists = devicesData.devices?.some(
-                (d) => d.id === spotifyDeviceId,
-            );
-            if (!exists) {
-                console.error(
-                    "Spotify browser device is not listed yet",
-                    spotifyDeviceId,
-                );
-                alert(
-                    "Spotify browser player is not ready yet. Open Spotify once or pick this browser from Spotify Connect, then try again.",
-                );
-                return;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 600));
-            res = await fetch(
-                `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
-                {
-                    method: "PUT",
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        context_uri: `spotify:playlist:${playlistId}`,
-                    }),
-                },
-            );
-        }
-        if (!res.ok) {
-            console.error("Play failed", res.status, await res.text());
+        if (!playRes.ok) {
+            console.error("Play failed", playRes.status, await playRes.text());
             return;
         }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=true", {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}` },
+        });
     } catch (err) {
         console.error("playSpotifyPlaylist failed: ", err);
     }
@@ -2405,7 +2407,7 @@ function renderNowPlaying(state) {
         "spotifyArtist",
         track.artists.map((a) => a.name).join(", "),
     );
-    setElementText("spotifyPlayBtn", state.paused ? "❚❚" : "■");
+    setElementText("spotifyPlayBtn", state.paused ? "❚❚" : "▶");
 }
 
 async function renderSlots() {
