@@ -2232,8 +2232,9 @@ async function initSpotifyPlayer() {
 
 async function makeActiveDevice(deviceId) {
     const token = await getValidSpotifyToken();
-    if (!token || !deviceId) return false;
+    if (!token || !deviceId || !spotifyPlayer) return false;
     try {
+        await spotifyPlayer.activateElement();
         const res = await fetch("https://api.spotify.com/v1/me/player", {
             method: "PUT",
             headers: {
@@ -2247,7 +2248,7 @@ async function makeActiveDevice(deviceId) {
         });
         if (!res.ok) {
             console.error(
-                "transferToDevice failed",
+                "makeActiveDevice failed",
                 res.status,
                 await res.text(),
             );
@@ -2261,16 +2262,17 @@ async function makeActiveDevice(deviceId) {
 }
 
 async function playSpotifyPlaylist(playlistId) {
-    if (!playlistId || !spotifyDeviceId) return;
+    if (!playlistId || !spotifyDeviceId || !spotifyPlayer) return;
     const token = await getValidSpotifyToken();
     if (!token) return;
     try {
+        await spotifyPlayer.activateElement();
         const transferred = await makeActiveDevice(spotifyDeviceId);
         if (!transferred) {
             console.error("Could not transfer playback to dashboard");
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 700));
+        await new Promise((resolve) => setTimeout(resolve, 1200));
         const playRes = await fetch(
             "https://api.spotify.com/v1/me/player/play",
             {
@@ -2288,11 +2290,21 @@ async function playSpotifyPlaylist(playlistId) {
             console.error("Play failed", playRes.status, await playRes.text());
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=true", {
-            method: "PUT",
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        const shuffleRes = await fetch(
+            "https://api.spotify.com/v1/me/player/shuffle?state=true",
+            {
+                method: "PUT",
+                headers: { Authorization: `Bearer ${token}` },
+            },
+        );
+        if (!shuffleRes.ok) {
+            console.error(
+                "Shuffle failed",
+                shuffleRes.status,
+                await shuffleRes.text(),
+            );
+        }
     } catch (err) {
         console.error("playSpotifyPlaylist failed: ", err);
     }
@@ -2385,7 +2397,7 @@ function renderNowPlaying(state) {
                 ".spotify-art-placeholder",
                 artEl,
             );
-            showElement(placeholder);
+            if (placeholder) placeholder.style.display = "flex";
         }
         setElementText("spotifyTitle", "—");
         setElementText("spotifyArtist", "—");
@@ -2407,7 +2419,7 @@ function renderNowPlaying(state) {
         "spotifyArtist",
         track.artists.map((a) => a.name).join(", "),
     );
-    setElementText("spotifyPlayBtn", state.paused ? "❚❚" : "▶");
+    setElementText("spotifyPlayBtn", state.paused ? "▶" : "❚❚");
 }
 
 async function renderSlots() {
@@ -3007,7 +3019,7 @@ function setupScheduleButtons() {
 
             const { sb, user } = await getSupabaseContext();
             const { error } = await sb
-                .from("spotifyschedules")
+                .from("spotify_schedules")
                 .delete()
                 .eq("id", next.id);
 
