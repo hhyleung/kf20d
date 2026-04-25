@@ -2129,12 +2129,12 @@ function fetchNowPlaying() {
     }, 5000);
 }
 
-function parsePlaylistInput(input) {
+function parseSpotifyPlaylistInput(input) {
     const raw = String(input || "").trim();
     if (!raw) return "";
     if (/^[A-Za-z0-9]{22}$/.test(raw)) return raw;
-    const match = raw.match(/spotify\.com\/playlist\/([A-Za-z0-9]{22})/i);
-    if (match) return match[1];
+    const urlMatch = raw.match(/spotify\.com\/playlist\/([A-Za-z0-9]{22})/i);
+    if (urlMatch) return urlMatch[1];
     const uriMatch = raw.match(/^spotify:playlist:([A-Za-z0-9]{22})$/i);
     if (uriMatch) return uriMatch[1];
     return "";
@@ -2153,9 +2153,31 @@ async function fetchPlaylistById(playlistId) {
         if (!res.ok) return null;
         return await res.json();
     } catch (err) {
-        console.error("fetchPlaylistById failed: ", err);
+        console.error("fetchPlaylistById failed:", err);
         return null;
     }
+}
+
+async function resolveManualPlaylist(input) {
+    const playlistId = parseSpotifyPlaylistInput(input);
+    if (!playlistId) {
+        return { ok: false, reason: "invalid_format" };
+    }
+    const playlist = await fetchPlaylistById(playlistId);
+    if (playlist?.id) {
+        return {
+            ok: true,
+            playlistId: playlist.id,
+            playlistName: playlist.name || playlist.id,
+            fetched: true,
+        };
+    }
+    return {
+        ok: true,
+        playlistId,
+        playlistName: playlistId,
+        fetched: false,
+    };
 }
 
 async function fetchPlaylists() {
@@ -2346,43 +2368,32 @@ async function getDeviceId() {
     }
 }
 
-async function playSpotifyPlaylist(playlistId) {
-    if (!playlistId) return;
+async function playPlaylist(playlistId) {
     const token = await getValidSpotifyToken();
-    if (!token) return;
-    const targetDeviceId = await getKf20dDeviceId();
-    if (!targetDeviceId) {
-        console.error("Could not find Spotify device kf20d");
-        return;
-    }
-    const body =
-        playlistId === SPOTIFY_LIKED_SONGS_ID
-            ? { context_uri: "spotify:collection:tracks" }
-            : { context_uri: `spotify:playlist:${playlistId}` };
-
+    if (!token || !spotifyDeviceId || !playlistId) return false;
     try {
-        const playRes = await fetch(
-            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(targetDeviceId)}`,
+        const res = await fetch(
+            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
             {
                 method: "PUT",
                 headers: {
                     Authorization: `Bearer ${token}`,
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(body),
+                body: JSON.stringify({
+                    context_uri: `spotify:playlist:${playlistId}`,
+                }),
             },
         );
-        if (!playRes.ok) {
-            console.error("Play failed", playRes.status, await playRes.text());
-            return;
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            console.error("playPlaylist failed:", res.status, text);
+            return false;
         }
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=true", {
-            method: "PUT",
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        return true;
     } catch (err) {
-        console.error("playSpotifyPlaylist failed: ", err);
+        console.error("playPlaylist exception: ", err);
+        return false;
     }
 }
 // ============================================================
@@ -2441,7 +2452,7 @@ async function checkAndTriggerSchedule() {
         }
         if (entry.playlist_id) lastPlaylistId = entry.playlist_id;
     }
-    if (lastPlaylistId) await playSpotifyPlaylist(lastPlaylistId);
+    if (lastPlaylistId) await playPlaylist(lastPlaylistId);
     await loadSchedules();
     renderNextSchedule();
 }
@@ -2839,7 +2850,7 @@ function setupSlots() {
             e.stopPropagation();
             const playlistId = btn.dataset.playlistId;
             if (!playlistId) return;
-            await playSpotifyPlaylist(playlistId);
+            await playPlaylist(playlistId);
         });
     });
 }
@@ -2870,27 +2881,23 @@ async function saveSlotFromModal() {
     if (!activeSlot) return;
     const select = getElement("spotifySlotPlaylistSelect");
     const manualInput = getElement("spotifySlotPlaylistManual");
-    const manualId = parsePlaylistInput(manualInput?.value || "");
-    let playlistId = manualId || select.value;
+    let playlistId = "";
     let playlistName = "";
-    if (!playlistId) {
-        alert("Please select a playlist or paste a playlist URL / ID.");
-        return;
-    }
-    if (manualInput?.value && !manualId) {
-        alert("Invalid Spotify playlist URL / ID.");
-        return;
-    }
-    if (manualId) {
-        const playlist = await fetchPlaylistById(manualId);
-        if (!playlist?.id) {
-            alert("Could not find that playlist.");
+    if (manualInput?.value.trim()) {
+        const resolved = await resolveManualPlaylist(manualInput.value);
+        if (!resolved.ok) {
+            alert("Invalid Spotify playlist URL / ID.");
             return;
         }
-        playlistId = playlist.id;
-        playlistName = playlist.name || "Untitled";
+        playlistId = resolved.playlistId;
+        playlistName = resolved.playlistName;
     } else {
+        playlistId = select.value;
         playlistName = select.options[select.selectedIndex]?.text || "Untitled";
+    }
+    if (!playlistId) {
+        alert("Select or enter playlist URL / ID");
+        return;
     }
     const activeIcon = selectElement(".spotify-icon-option.active");
     const icon = ensureTextIcon(activeIcon?.dataset.icon);
@@ -2906,7 +2913,8 @@ async function saveSlotFromModal() {
         { onConflict: "user_id,slot_number" },
     );
     if (error) {
-        console.error("saveSlotFromModal failed:", error);
+        console.error("saveSlotFromModal failed: ", error);
+        alert(`Save slot failed: ${error.message}`);
         return;
     }
     if (manualInput) manualInput.value = "";
@@ -2928,32 +2936,27 @@ function setupScheduleForm() {
         const playlistSelect = getElement("ssfPlaylist");
         const manualInput = getElement("ssfPlaylistManual");
 
-        const manualId = parsePlaylistInput(manualInput?.value || "");
-        let playlistId = manualId || playlistSelect.value;
+        let playlistId = "";
         let playlistName = "";
+
+        if (manualInput?.value.trim()) {
+            const resolved = await resolveManualPlaylist(manualInput.value);
+            if (!resolved.ok) {
+                alert("Invalid Spotify playlist URL / ID.");
+                return;
+            }
+            playlistId = resolved.playlistId;
+            playlistName = resolved.playlistName;
+        } else {
+            playlistId = playlistSelect.value;
+            playlistName =
+                playlistSelect.options[playlistSelect.selectedIndex]?.text ||
+                "Untitled";
+        }
 
         if (!date || !time || !playlistId) {
             alert("Please set date, time, and playlist.");
             return;
-        }
-
-        if (manualInput?.value && !manualId) {
-            alert("Invalid Spotify playlist URL / ID.");
-            return;
-        }
-
-        if (manualId) {
-            const playlist = await fetchPlaylistById(manualId);
-            if (!playlist?.id) {
-                alert("Could not find that playlist.");
-                return;
-            }
-            playlistId = playlist.id;
-            playlistName = playlist.name || "Untitled";
-        } else {
-            playlistName =
-                playlistSelect.options[playlistSelect.selectedIndex]?.text ||
-                "Untitled";
         }
 
         const { sb, user } = await getSupabaseContext();
@@ -2986,6 +2989,7 @@ function setupScheduleForm() {
 
         if (error) {
             console.error("Save schedule failed:", error);
+            alert(`Save schedule failed: ${error.message}`);
             return;
         }
 
@@ -2993,8 +2997,8 @@ function setupScheduleForm() {
         closeModal("spotifyScheduleFormModal");
         await loadSchedules();
         renderNextSchedule();
-        renderCalendar();
-        renderSchedule(spotifySelectedDate);
+        renderSpotifyCalendar();
+        renderSpotifyScheduleList(spotifySelectedDate);
     });
 
     const deleteBtn = getElement("ssfDeleteBtn");
@@ -3014,6 +3018,7 @@ function setupScheduleForm() {
 
             if (error) {
                 console.error("Delete schedule failed:", error);
+                alert(`Delete schedule failed: ${error.message}`);
                 return;
             }
 
@@ -3022,8 +3027,8 @@ function setupScheduleForm() {
             spotifySelectedSchedule = null;
             await loadSchedules();
             renderNextSchedule();
-            renderCalendar();
-            renderSchedule(spotifySelectedDate);
+            renderSpotifyCalendar();
+            renderSpotifyScheduleList(spotifySelectedDate);
         });
     }
 }
@@ -3212,32 +3217,27 @@ async function generateSchedules() {
     const playlistSelect = getElement("spotifyTemplatePlaylistSelect");
     const manualInput = getElement("spotifyTemplatePlaylistManual");
 
-    const manualId = parsePlaylistInput(manualInput?.value || "");
-    let playlistId = manualId || playlistSelect.value;
+    let playlistId = "";
     let playlistName = "";
+
+    if (manualInput?.value.trim()) {
+        const resolved = await resolveManualPlaylist(manualInput.value);
+        if (!resolved.ok) {
+            alert("Invalid Spotify playlist URL / ID.");
+            return;
+        }
+        playlistId = resolved.playlistId;
+        playlistName = resolved.playlistName;
+    } else {
+        playlistId = playlistSelect.value;
+        playlistName =
+            playlistSelect.options[playlistSelect.selectedIndex]?.text ||
+            "Untitled";
+    }
 
     if (!startDateStr || !playlistId) {
         alert("Please set a start date and playlist.");
         return;
-    }
-
-    if (manualInput?.value && !manualId) {
-        alert("Invalid Spotify playlist URL / ID.");
-        return;
-    }
-
-    if (manualId) {
-        const playlist = await fetchPlaylistById(manualId);
-        if (!playlist?.id) {
-            alert("Could not find that playlist.");
-            return;
-        }
-        playlistId = playlist.id;
-        playlistName = playlist.name || "Untitled";
-    } else {
-        playlistName =
-            playlistSelect.options[playlistSelect.selectedIndex]?.text ||
-            "Untitled";
     }
 
     const { sb, user } = await getSupabaseContext();
@@ -3269,6 +3269,7 @@ async function generateSchedules() {
 
         if (error) {
             console.error("Replace-range delete failed:", error);
+            alert(`Replace-range failed: ${error.message}`);
             return;
         }
     }
@@ -3362,6 +3363,7 @@ async function generateSchedules() {
         const { error } = await sb.from("spotify_schedules").insert(batch);
         if (error) {
             console.error("Insert schedules failed:", error);
+            alert(`Insert schedules failed: ${error.message}`);
             return;
         }
     }
@@ -3369,8 +3371,8 @@ async function generateSchedules() {
     if (manualInput) manualInput.value = "";
     await loadSchedules();
     renderNextSchedule();
-    renderCalendar();
-    if (spotifySelectedDate) renderSchedule(spotifySelectedDate);
+    renderSpotifyCalendar();
+    renderSpotifyScheduleList(spotifySelectedDate);
     hideElement("spotifyTemplateLoader");
     showElement("spotifyLoadTemplateBtn", "block");
 }
