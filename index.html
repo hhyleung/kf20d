@@ -704,6 +704,9 @@
             <div class="modal-content modal-narrow">
                 <header>
                     <h2>Playlists</h2>
+                    <button onclick="closeModal('spotifyPlaylistModal')">
+                        &times;
+                    </button>
                 </header>
                 <div style="padding: 1.5rem">
                     <div class="spotify-slot-picker" id="spotifySlotPicker">
@@ -1090,13 +1093,6 @@
                                 id="spotifyAddScheduleBtn"
                             >
                                 Add
-                            </button>
-                            <button
-                                type="button"
-                                class="submit-btn"
-                                id="spotifyEditScheduleBtn"
-                            >
-                                Edit
                             </button>
                             <button
                                 type="button"

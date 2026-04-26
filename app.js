@@ -47,7 +47,7 @@ let isRealtimeSetup = false;
 let subscriptions = [];
 
 const panelData = {
-    fridgeStock: [],
+    pantry: [],
     chores: [],
     changeLog: [],
     bills: [],
@@ -106,7 +106,7 @@ const PANEL_CONFIGS = {
         data: {
             table: "fridge_stock",
             store: (d) => {
-                panelData.fridgeStock = d;
+                panelData.pantry = d;
             },
             orderCol: "item_name",
             extraOrder: {
@@ -114,7 +114,7 @@ const PANEL_CONFIGS = {
                 ascending: false,
                 nullsLast: true,
             },
-            label: "fridgeStock",
+            label: "pantry",
         },
 
         render: {
@@ -148,7 +148,7 @@ const PANEL_CONFIGS = {
                 setElementText("mealPrepLastUpdated", "");
             },
 
-            findItem: (id) => panelData.fridgeStock.find((i) => i.id === id),
+            findItem: (id) => panelData.pantry.find((i) => i.id === id),
 
             populateFields: (item) => {
                 setElementValue("mealPrepItemName", item.item_name);
@@ -1059,7 +1059,7 @@ function fridgeItemRow(item, showZero = false) {
 }
 
 function buildMealPrepHTML(showZero) {
-    const items = panelData.fridgeStock.filter(
+    const items = panelData.pantry.filter(
         (i) =>
             (showZero || i.portions > 0) &&
             !FRIDGE_STOCK_CATS.includes(i.category),
@@ -1103,7 +1103,7 @@ function buildMealPrepHTML(showZero) {
 }
 
 function buildFridgeStockHTML(showZero = false) {
-    const items = panelData.fridgeStock
+    const items = panelData.pantry
         .filter(
             (i) =>
                 (showZero || i.portions > 0) &&
@@ -1302,7 +1302,7 @@ function openDetailModal(panelKey, itemId = null) {
     if (cfg.editIdInput) setElementValue(cfg.editIdInput, itemId || "");
 
     if (cfg.titleId) {
-        setElementValue(cfg.titleId, isEditing ? cfg.editTitle : cfg.addTitle);
+        setElementText(cfg.titleId, isEditing ? cfg.editTitle : cfg.addTitle);
     }
 
     if (cfg.resetFields) cfg.resetFields();
@@ -1547,14 +1547,11 @@ function setupFormHandlers() {
             const modalCfg = panelCfg.detailModal;
             const delCfg = panelCfg.deleteConfig;
             const stateKey = panelCfg.stateKey;
-            const panelKey = panelCfg.key;
-
+            const renderKey = panelCfg.renderKey ?? panelCfg.key;
             const btn = getElement(modalCfg.deleteBtnId);
             if (!btn) return;
 
             btn.addEventListener("click", async () => {
-                if (!confirm(delCfg.confirmMsg)) return;
-
                 const itemId = stateKey
                     ? panelState[stateKey]?.editingId
                     : null;
@@ -1650,7 +1647,7 @@ function setupFormHandlers() {
                 return;
             }
 
-            const plant = plants.find((p) => p.id === plantId);
+            const plant = panelData.plants.find((p) => p.id === plantId);
             if (!plant) {
                 alert("Plant not found");
                 return;
@@ -1724,7 +1721,7 @@ const ACTION_HANDLERS = {
         const id = btn.dataset.id;
         const delta = parseInt(btn.dataset.delta, 10) || 0;
         if (!id || !delta) return;
-        const item = panelData.fridgeStock.find((i) => i.id === id);
+        const item = panelData.pantry.find((i) => i.id === id);
         if (!item) return;
         const newPortions = Math.max(0, (item.portions || 0) + delta);
         await saveRecord(
@@ -2274,6 +2271,7 @@ window.onSpotifyWebPlaybackSDKReady = function () {
 };
 
 async function initSpotifyPlayer() {
+    if (!isTablet()) return;
     let token = null;
     for (let i = 0; i < 10; i++) {
         token = await getValidSpotifyToken();
@@ -2316,37 +2314,6 @@ async function initSpotifyPlayer() {
     spotifyPlayer.addListener("player_state_changed", renderNowPlaying);
 
     await spotifyPlayer.connect();
-}
-
-async function makeActiveDevice(deviceId) {
-    const token = await getValidSpotifyToken();
-    if (!token || !deviceId || !spotifyPlayer) return false;
-    try {
-        await spotifyPlayer.activateElement();
-        const res = await fetch("https://api.spotify.com/v1/me/player", {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                device_ids: [deviceId],
-                play: true,
-            }),
-        });
-        if (!res.ok) {
-            console.error(
-                "makeActiveDevice failed",
-                res.status,
-                await res.text(),
-            );
-            return false;
-        }
-        return true;
-    } catch (err) {
-        console.error("makeActiveDevice failed: ", err);
-        return false;
-    }
 }
 
 async function getDeviceId() {
@@ -2410,9 +2377,17 @@ async function playPlaylist(playlistId) {
             method: "PUT",
             headers: { Authorization: `Bearer ${token}` },
         });
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await fetch(
+            "https://api.spotify.com/v1/me/player/repeat?state=context",
+            {
+                method: "PUT",
+                headers: { Authorization: `Bearer ${token}` },
+            },
+        );
         return true;
     } catch (err) {
-        console.error("playPlaylist exception: ", err);
+        console.error("playPlaylist failed: ", err);
         return false;
     }
 }
@@ -2575,22 +2550,23 @@ function renderCalendar() {
     setElementText(
         "spotifyCalMonthLabel",
         spotifyCalendarMonth
-            .toLocaleDateString("en-GB", {
-                month: "short",
-                year: "numeric",
-            })
+            .toLocaleDateString("en-GB", { month: "short", year: "numeric" })
             .toUpperCase(),
     );
+
     const y = spotifyCalendarMonth.getFullYear();
     const m = spotifyCalendarMonth.getMonth();
     const firstDay = new Date(y, m, 1);
     const startOffset = firstDay.getDay();
     const daysInMonth = new Date(y, m + 1, 0).getDate();
     const today = getTodayHKT();
+
     let html = "";
+
     for (let i = 0; i < startOffset; i++) {
         html += `<div class="spotify-calendar-cell empty"></div>`;
     }
+
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const dayEntries = schedules.filter(
@@ -2598,6 +2574,7 @@ function renderCalendar() {
         );
         const isToday = dateStr === today;
         const isSelected = dateStr === spotifySelectedDate;
+
         let dotsHtml = "";
         if (dayEntries.length) {
             const types = new Set(dayEntries.map((s) => s.schedule_type));
@@ -2607,9 +2584,17 @@ function renderCalendar() {
                 .join("");
             dotsHtml = `<div class="cal-dots">${dotSpans}</div>`;
         }
-        html += `<button type="button" class="spotify-calendar-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" data-date="${dateStr}">${day}${dotsHtml}</button>`;
+
+        html += `
+            <button type="button" class="spotify-calendar-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" data-date="${dateStr}">
+                ${day}
+                ${dotsHtml}
+            </button>
+        `;
     }
+
     setElementHTML("spotifyCalendarGrid", html);
+
     selectAllElements(
         ".spotify-calendar-cell[data-date]",
         getElement("spotifyCalendarGrid"),
@@ -2622,9 +2607,18 @@ function renderCalendar() {
     });
 }
 
+function refreshScheduleActionState() {
+    const delBtn = getElement("spotifyDeleteScheduleBtn");
+    if (delBtn) {
+        delBtn.disabled = !spotifySelectedScheduleId;
+    }
+}
+
 function renderSchedule(dateStr) {
     setElementText("spotifySelectedDateLabel", dateStr);
+
     const items = schedules.filter((s) => s.scheduled_date === dateStr);
+
     if (!items.length) {
         setElementHTML(
             "spotifyDaySchedules",
@@ -2634,37 +2628,40 @@ function renderSchedule(dateStr) {
         );
         spotifySelectedScheduleId = null;
         spotifySelectedSchedule = null;
+        refreshScheduleActionState?.();
         return;
     }
+
     setElementHTML(
         "spotifyDaySchedules",
         items
             .map(
-                (
-                    item,
-                ) => `<div class="spotify-day-row ${spotifySelectedScheduleId === item.id ? "selected" : ""}"data-id="${item.id}">
-                        <div class="spotify-day-row-title">
-                            ${item.scheduled_time} · ${item.playlist_name || "Untitled"}
-                        </div>
-                        <div class="spotify-day-row-meta">
-                            ${item.schedule_type}
-                        </div>
-                    </div>`,
+                (item) => `
+            <div class="spotify-day-row ${spotifySelectedScheduleId === item.id ? "selected" : ""}" data-id="${item.id}">
+                <div class="spotify-day-row-title">${item.scheduled_time} ${item.playlist_name || "Untitled"}</div>
+                <div class="spotify-day-row-meta">${item.schedule_type}</div>
+            </div>
+        `,
             )
             .join(""),
     );
+
     selectAllElements(
         ".spotify-day-row[data-id]",
         getElement("spotifyDaySchedules"),
     ).forEach((row) => {
-        row.onclick = () => {
+        row.onclick = async () => {
             const item = schedules.find((s) => String(s.id) === row.dataset.id);
             if (!item) return;
             spotifySelectedScheduleId = item.id;
             spotifySelectedSchedule = item;
-            renderSchedule(dateStr);
+            refreshScheduleActionState?.();
+            setupScheduleForm();
+            await openSpotifyEditSchedule(item.id);
         };
     });
+
+    refreshScheduleActionState?.();
 }
 // ============================================================
 // #endregion
@@ -2781,6 +2778,7 @@ async function openSpotifyScheduleModal() {
     renderSchedule(spotifySelectedDate);
     setupScheduleModal();
     setupTemplates();
+    refreshScheduleActionState?.();
 }
 // ============================================================
 // #endregion
@@ -3019,6 +3017,7 @@ function setupScheduleForm() {
         renderNextSchedule();
         renderCalendar();
         renderSchedule(spotifySelectedDate);
+        refreshScheduleActionState();
     });
 
     const deleteBtn = getElement("ssfDeleteBtn");
@@ -3049,6 +3048,7 @@ function setupScheduleForm() {
             renderNextSchedule();
             renderCalendar();
             renderSchedule(spotifySelectedDate);
+            refreshScheduleActionState();
         });
     }
 }
@@ -3089,8 +3089,8 @@ function setupScheduleModal() {
     const nextBtn = getElement("spotifyCalNextBtn");
 
     if (prevBtn && !prevBtn.dataset.bound) {
-        prevBtn.dataset.bound = "1";
-        prevBtn.addEventListener("click", () => {
+        prevBtn.dataset.bound = 1;
+        prevBtn.addEventListener("click", async () => {
             spotifyCalendarMonth = new Date(
                 spotifyCalendarMonth.getFullYear(),
                 spotifyCalendarMonth.getMonth() - 1,
@@ -3101,8 +3101,8 @@ function setupScheduleModal() {
     }
 
     if (nextBtn && !nextBtn.dataset.bound) {
-        nextBtn.dataset.bound = "1";
-        nextBtn.addEventListener("click", () => {
+        nextBtn.dataset.bound = 1;
+        nextBtn.addEventListener("click", async () => {
             spotifyCalendarMonth = new Date(
                 spotifyCalendarMonth.getFullYear(),
                 spotifyCalendarMonth.getMonth() + 1,
@@ -3120,45 +3120,59 @@ function setupScheduleModal() {
     };
 
     const addBtn = getElement("spotifyAddScheduleBtn");
-    const editBtn = getElement("spotifyEditScheduleBtn");
     const delBtn = getElement("spotifyDeleteScheduleBtn");
 
     if (addBtn && !addBtn.dataset.bound) {
-        addBtn.dataset.bound = "1";
-        addBtn.addEventListener("click", () => {
+        addBtn.dataset.bound = 1;
+        addBtn.addEventListener("click", async () => {
             setupScheduleForm();
-            openSpotifyAddSchedule();
-        });
-    }
-
-    if (editBtn && !editBtn.dataset.bound) {
-        editBtn.dataset.bound = "1";
-        editBtn.addEventListener("click", async () => {
-            if (!spotifySelectedSchedule) return;
-            setupScheduleForm();
-            await openSpotifyEditSchedule(spotifySelectedScheduleId);
+            await openSpotifyAddSchedule(spotifySelectedDate || getTodayHKT());
         });
     }
 
     if (delBtn && !delBtn.dataset.bound) {
-        delBtn.dataset.bound = "1";
+        delBtn.dataset.bound = 1;
         delBtn.addEventListener("click", async () => {
             if (!spotifySelectedScheduleId) return;
             if (!confirm("Delete this schedule?")) return;
+
             const { sb, user } = await getSupabaseContext();
             const { error } = await sb
-                .from("spotify_schedules")
+                .from("spotifyschedules")
                 .delete()
-                .eq("id", spotifySelectedScheduleId);
+                .eq("id", spotifySelectedScheduleId)
+                .eq("userid", user.id);
+
             if (error) {
-                console.error(error);
+                console.error("Delete schedule failed:", error);
+                alert(`Delete schedule failed: ${error.message}`);
                 return;
             }
+
             spotifySelectedScheduleId = null;
             spotifySelectedSchedule = null;
+
             await loadSchedules();
+            renderNextSchedule();
             renderCalendar();
             renderSchedule(spotifySelectedDate);
+            refreshScheduleActionState();
+        });
+    }
+
+    refreshScheduleActionState();
+
+    const schedRow = getElement("spotifySchedRow");
+    if (schedRow && !schedRow.dataset.bound) {
+        schedRow.dataset.bound = 1;
+        schedRow.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const next = getNextSchedule();
+            if (!next) return;
+            spotifySelectedScheduleId = next.id;
+            spotifySelectedSchedule = next;
+            setupScheduleForm();
+            await openSpotifyEditSchedule(next.id);
         });
     }
 }
@@ -3195,31 +3209,31 @@ function setupScheduleButtons() {
             renderNextSchedule();
             renderCalendar();
             renderSchedule(spotifySelectedDate);
+            refreshScheduleActionState();
         });
     }
 
     const addBtn = getElement("spotifySchedAddBtn");
     if (addBtn && !addBtn.dataset.bound) {
-        addBtn.dataset.bound = "1";
-        addBtn.addEventListener("click", (e) => {
+        addBtn.dataset.bound = 1;
+        addBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
             setupScheduleForm();
-            openSpotifyAddSchedule();
+            await openSpotifyAddSchedule(spotifySelectedDate || getTodayHKT());
         });
     }
 
-    const editBtn = getElement("spotifySchedEditBtn");
-    if (editBtn && !editBtn.dataset.bound) {
-        editBtn.dataset.bound = "1";
-        editBtn.addEventListener("click", async (e) => {
+    const schedRow = getElement("spotifySchedRow");
+    if (schedRow && !schedRow.dataset.bound) {
+        schedRow.dataset.bound = 1;
+        schedRow.addEventListener("click", async (e) => {
             e.stopPropagation();
-
             const next = getNextSchedule();
             if (!next) return;
 
             spotifySelectedSchedule = next;
             spotifySelectedScheduleId = next.id;
-
+            refreshScheduleActionState();
             setupScheduleForm();
             await openSpotifyEditSchedule(next.id);
         });
@@ -3393,6 +3407,7 @@ async function generateSchedules() {
     renderNextSchedule();
     renderCalendar();
     renderSchedule(spotifySelectedDate);
+    refreshScheduleActionState();
     hideElement("spotifyTemplateLoader");
     showElement("spotifyLoadTemplateBtn", "block");
 }
@@ -3488,7 +3503,6 @@ function renderSpotify() {
                 </div>
                 <div class="spotify-schedule-actions">
                     <button class="spotify-schedule-action add"  type="button" id="spotifySchedAddBtn">Add</button>
-                    <button class="spotify-schedule-action edit" type="button" id="spotifySchedEditBtn">Edit</button>
                     <button class="spotify-schedule-action skip" type="button" id="spotifySchedSkipBtn">Skip</button>
                     <button class="spotify-schedule-action all" type="button" id="spotifySchedAllBtn">ALL</button>
                 </div>
@@ -3499,12 +3513,11 @@ function renderSpotify() {
     setupPlaybackControls();
     setupVolumeControls();
     setupSlots();
-    renderSlots();
     setupScheduleButtons();
 
     const allBtn = getElement("spotifySchedAllBtn");
     if (allBtn && !allBtn.dataset.bound) {
-        allBtn.dataset.bound = "1";
+        allBtn.dataset.bound = 1;
         allBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             openSpotifyScheduleModal();
@@ -3559,12 +3572,15 @@ async function showDashboard() {
     setupSpotifyAuth();
     await initSpotify();
     renderSpotify();
-    await initSpotifyPlayer();
     await renderSlots();
     await loadSchedules();
-    await fetchNowPlaying();
     renderNextSchedule();
-    startScheduleTicker();
+
+    if (isTablet()) {
+        await initSpotifyPlayer();
+        await fetchNowPlaying();
+        startScheduleTicker();
+    }
 
     if (!isRealtimeSetup) {
         isRealtimeSetup = true;

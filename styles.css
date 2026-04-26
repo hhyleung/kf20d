@@ -19,6 +19,7 @@
     --btn-red-bg: #fde8ea;
     --btn-red-hover: #f5c6cb;
     --btn-red-color: #c82333;
+    --spotify: #279019;
     --btn-radius: 10px;
     --btn-size: 44px;
     --btn-font: 1.2rem;
@@ -82,7 +83,7 @@ body {
     opacity: 1 !important;
     width: 100%;
     padding: 1rem;
-    background: var(--primary-color, #e4e6ea);
+    background: #e4e6ea;
     color: white;
     border: none;
     border-radius: 4px;
@@ -1384,4 +1385,56 @@ form::-webkit-scrollbar-thumb:hover {
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+}
+
+.spotify-schedule-row,
+.spotify-day-row {
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    body {
+        height: auto;
+        overflow-y: auto;
+    }
+    .dashboard {
+        padding: 1rem;
+        height: auto;
+        min-height: 100dvh;
+    }
+    .grid {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+    }
+    .sub-col {
+        display: contents;
+    }
+    .panel .panel-content {
+        display: none !important;
+    }
+    .panel-header {
+        border-bottom: none;
+    }
+    .panel[data-section="mealprep"],
+    .panel[data-section="notes"] {
+        grid-column: unset !important;
+        grid-row: unset !important;
+        height: auto !important;
+    }
+    :root {
+        --item-font: 1.2rem;
+        --title-font: 1.4rem;
+    }
+    .modal {
+        padding: 1rem;
+    }
+    .modal-wide,
+    .modal-full {
+        max-width: 100% !important;
+        max-height: 92% !important;
+    }
+    .spotify-vol-header {
+        display: none;
+    }
 }
