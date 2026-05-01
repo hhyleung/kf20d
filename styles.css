@@ -1,29 +1,31 @@
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap");
 
-/* GLOBAL */
+/* #region GLOBAL */
 :root {
+    --border: #e2e5ea;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     --bg-primary: #f0f2f5;
     --bg-secondary: #ffffff;
     --text-primary: #222222;
     --text-secondary: #888888;
-    --border: #e2e5ea;
-    --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    --red: #c82333;
+    --blue: #0056b3;
+    --green: #1e7e34;
+    --yellow: #c98900;
     --btn-bg: #e4e6ea;
     --btn-bg-hover: #d0d3d9;
-    --btn-green-bg: #e0fce8;
-    --btn-green-hover: #c3e6cb;
-    --btn-green-color: #1e7e34;
-    --btn-blue-bg: #def0ff;
-    --btn-blue-hover: #b3d9ff;
-    --btn-blue-color: #0056b3;
     --btn-red-bg: #fde8ea;
     --btn-red-hover: #f5c6cb;
-    --btn-red-color: #c82333;
-    --spotify: #279019;
+    --btn-blue-bg: #def0ff;
+    --btn-blue-hover: #b3d9ff;
+    --btn-green-bg: #e0fce8;
+    --btn-green-hover: #c3e6cb;
     --btn-radius: 10px;
     --btn-size: 44px;
     --btn-font: 1.2rem;
     --btn-weight: 600;
+    --primary-font: "Roboto", sans-serif;
+    --mono-font: "Roboto Mono", monospace;
     --item-font: 1.6rem;
     --title-font: 1.8rem;
     --gap: 1.6rem;
@@ -36,7 +38,7 @@
 }
 
 body {
-    font-family: "Roboto", sans-serif;
+    font-family: var(--primary-font);
     background: var(--bg-secondary);
     color: var(--text-primary);
     line-height: 1.4;
@@ -44,8 +46,259 @@ body {
     height: 100vh;
     overflow: hidden;
 }
+/* #endregion */
 
-/* LOGIN PAGE */
+/* #region OVERALL */
+.warning {
+    color: var(--yellow) !important;
+}
+
+.danger {
+    color: var(--red) !important;
+}
+
+.list-last-updated {
+    display: block;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    margin-top: 0.25rem;
+    min-height: 1.4em;
+}
+/* #endregion */
+
+/* #region TABLET */
+@media (max-width: 1920px) and (max-height: 1200px) {
+    .action-btn,
+    .add-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    .grid {
+        gap: 1.2rem;
+    }
+}
+
+/* #endregion */
+
+/* #region MOBILE */
+@media (max-width: 768px) {
+    body {
+        height: auto;
+        overflow-y: auto;
+    }
+    .dashboard {
+        padding: 1rem;
+        height: auto;
+        min-height: 100dvh;
+    }
+    .grid {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+    }
+    .sub-col {
+        display: contents;
+    }
+    .panel .panel-content {
+        display: none !important;
+    }
+    .panel-header {
+        border-bottom: none;
+    }
+    .panel[data-section="mealprep"],
+    .panel[data-section="notes"] {
+        grid-column: unset !important;
+        grid-row: unset !important;
+        height: auto !important;
+    }
+    :root {
+        --item-font: 1.2rem;
+        --title-font: 1.4rem;
+    }
+    .modal {
+        padding: 1rem;
+    }
+    .modal-wide,
+    .modal-full {
+        max-width: 100% !important;
+        max-height: 92% !important;
+    }
+    .spotify-vol-header {
+        display: none;
+    }
+}
+/* #endregion */
+
+/* #region WEBKIT FALLBACK */
+.panel-content::-webkit-scrollbar,
+#fullListContent::-webkit-scrollbar,
+form::-webkit-scrollbar {
+    width: 4px;
+}
+
+.panel-content::-webkit-scrollbar-track,
+#fullListContent::-webkit-scrollbar-track,
+form::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.panel-content::-webkit-scrollbar-thumb,
+#fullListContent::-webkit-scrollbar-thumb,
+form::-webkit-scrollbar-thumb {
+    background: #d0d3d9;
+    border-radius: 2px;
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover,
+#fullListContent::-webkit-scrollbar-thumb:hover,
+form::-webkit-scrollbar-thumb:hover {
+    background: #b0b3b9;
+}
+/* #endregion */
+
+/* #region BUTTONS */
+button {
+    cursor: pointer;
+}
+
+.add-btn,
+.action-btn,
+.modal header button {
+    background: var(--btn-bg);
+    color: var(--text-secondary);
+    border: none;
+    width: var(--btn-size);
+    height: var(--btn-size);
+    border-radius: var(--btn-radius);
+    cursor: pointer;
+    font-size: var(--btn-font);
+    font-weight: var(--btn-weight);
+    flex-shrink: 0;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s ease,
+        transform 0.1s ease;
+}
+
+.add-btn:hover,
+.action-btn:hover:not(:disabled),
+.modal header button:hover {
+    background: var(--btn-bg-hover);
+}
+
+.add-btn:active,
+.action-btn:active {
+    transform: scale(0.95);
+}
+
+.modal-actions {
+    display: flex !important;
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    margin-top: 1.8rem;
+    flex-wrap: wrap;
+}
+
+.modal-actions button {
+    flex: 1;
+    min-height: 52px !important;
+    padding: 1rem 1.2rem;
+    font-size: var(--item-font);
+    font-weight: 500;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s ease,
+        transform 0.1s ease;
+}
+
+.btn-grey {
+    color: var(--text-primary) !important;
+    background: var(--btn-bg) !important;
+}
+
+.btn-grey:hover {
+    background: var(--btn-bg-hover) !important;
+}
+
+.btn-red {
+    color: var(--red) !important;
+    background: var(--btn-red-bg) !important;
+}
+
+.btn-red:hover {
+    background: var(--btn-red-hover) !important;
+}
+
+.btn-blue {
+    color: var(--blue) !important;
+    background: var(--btn-blue-bg) !important;
+}
+
+.btn-blue:hover {
+    background: var(--btn-blue-hover) !important;
+}
+
+.btn-green {
+    color: var(--green) !important;
+    background: var(--btn-green-bg) !important;
+}
+
+.btn-green:hover {
+    background: var(--btn-green-hover) !important;
+}
+
+button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+/* #endregion */
+
+/* #region SCREEN BLANKER */
+#screenBlanker {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000000;
+    z-index: 9999;
+}
+
+#screenBlanker.active {
+    display: block;
+}
+/* #endregion */
+
+/* DATETIME PANEL */
+.panel[data-section="datetime"] .panel-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+#datetimeContent {
+    padding: 0.6rem 1.4rem 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+#clockDisplay {
+    font-size: var(--title-font);
+    text-transform: uppercase;
+    color: var(--text-primary);
+    font-family: var(--mono-font);
+}
+/* #endregion */
+
+/* #region LOGIN PAGE */
 #loginContainer {
     display: none;
     position: fixed;
@@ -90,7 +343,9 @@ body {
     font-size: 1.1rem;
 }
 
-/* DASHBOARD */
+/* #endregion */
+
+/* #region DASHBOARD */
 .dashboard {
     display: none;
     height: 100vh;
@@ -109,7 +364,7 @@ body {
     width: 100%;
 }
 
-.panel[data-section="meal_prep"] {
+.panel[data-section="mealPrep"] {
     grid-column: 1 / 2 !important;
     grid-row: 1 / 3 !important;
     height: 100%;
@@ -149,150 +404,9 @@ body {
     height: 100%;
 }
 
-/* BUTTONS */
-.add-btn,
-.action-btn,
-.modal header button {
-    background: var(--btn-bg);
-    color: var(--text-secondary);
-    border: none;
-    width: var(--btn-size);
-    height: var(--btn-size);
-    border-radius: var(--btn-radius);
-    cursor: pointer;
-    font-size: var(--btn-font);
-    font-weight: var(--btn-weight);
-    flex-shrink: 0;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition:
-        background 0.15s ease,
-        transform 0.1s ease;
-}
+/* #endregion */
 
-.add-btn:hover,
-.action-btn:hover:not(:disabled),
-.modal header button:hover {
-    background: var(--btn-bg-hover);
-}
-
-.add-btn:active,
-.action-btn:active {
-    transform: scale(0.95);
-}
-
-[data-action="done"],
-[data-action="changed"],
-[data-action="paid"] {
-    background: var(--btn-green-bg);
-    color: var(--btn-green-color);
-}
-
-[data-action="done"]:hover,
-[data-action="changed"]:hover,
-[data-action="paid"]:hover {
-    background: var(--btn-green-hover) !important;
-}
-
-[data-action="plant-log"] {
-    background: var(--btn-blue-bg);
-    color: var(--btn-blue-color);
-}
-
-[data-action="plant-log"]:hover {
-    background: var(--btn-blue-hover) !important;
-}
-
-[data-action="note-delete"] {
-    background: var(--btn-red-bg);
-    color: var(--btn-red-color);
-}
-
-[data-action="note-delete"]:hover {
-    background: var(--btn-red-hover) !important;
-}
-
-.modal-actions {
-    display: flex !important;
-    gap: 1rem;
-    padding: 1.5rem 2rem;
-    margin-top: 1.8rem;
-    flex-wrap: wrap;
-}
-
-.modal-actions button {
-    flex: 1;
-    min-height: 52px !important;
-    padding: 1rem 1.2rem;
-    font-size: var(--item-font);
-    font-weight: 500;
-    border-radius: 12px;
-    border: none;
-    cursor: pointer;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    transition:
-        background 0.15s ease,
-        transform 0.1s ease;
-}
-
-.submit-btn {
-    background: var(--btn-green-bg) !important;
-    color: var(--btn-green-color) !important;
-}
-
-.submit-btn:hover {
-    background: var(--btn-green-hover) !important;
-}
-
-.delete-btn {
-    background: var(--btn-red-bg) !important;
-    color: var(--btn-red-color) !important;
-}
-
-.delete-btn:hover {
-    background: var(--btn-red-hover) !important;
-}
-
-.cancel-btn {
-    background: var(--btn-bg) !important;
-    color: var(--text-primary) !important;
-}
-
-.cancel-btn:hover {
-    background: var(--btn-bg-hover) !important;
-}
-
-.archive-btn {
-    background: var(--btn-blue-bg) !important;
-    color: var(--btn-blue-color) !important;
-}
-
-.archive-btn:hover {
-    background: var(--btn-blue-hover) !important;
-}
-
-button:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-
-/* TABLET TOUCH */
-@media (max-width: 1920px) and (max-height: 1200px) {
-    .action-btn,
-    .add-btn {
-        min-height: 44px;
-        min-width: 44px;
-    }
-    .grid {
-        gap: 1.2rem;
-    }
-}
-
-/* PANELS */
+/* #region PANELS */
 .panel {
     background: var(--bg-secondary);
     border: 1.5px solid var(--border);
@@ -383,7 +497,7 @@ button:disabled {
 .item-meta {
     color: var(--text-primary);
     font-size: 1.3rem;
-    font-family: "Roboto Mono", monospace;
+    font-family: var(--mono-font);
     line-height: 1.3;
     display: flex;
     align-items: center;
@@ -392,7 +506,9 @@ button:disabled {
     min-width: 4rem;
 }
 
-/* MODALS */
+/* #endregion */
+
+/* #region MODALS */
 #mealPrepDetailModal,
 #choreDetailModal,
 #changeLogDetailModal,
@@ -461,7 +577,9 @@ button:disabled {
     margin: 0;
 }
 
-/* FORMS */
+/* #endregion */
+
+/* #region FORMS */
 #fullListContent,
 form {
     padding: 2.2rem;
@@ -551,51 +669,9 @@ form {
     scrollbar-color: #d0d3d9 transparent;
 }
 
-/* WebKit fallback (Chrome/Edge 等) */
-.panel-content::-webkit-scrollbar,
-#fullListContent::-webkit-scrollbar,
-form::-webkit-scrollbar {
-    width: 4px;
-}
+/* #endregion */
 
-.panel-content::-webkit-scrollbar-track,
-#fullListContent::-webkit-scrollbar-track,
-form::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.panel-content::-webkit-scrollbar-thumb,
-#fullListContent::-webkit-scrollbar-thumb,
-form::-webkit-scrollbar-thumb {
-    background: #d0d3d9;
-    border-radius: 2px;
-}
-
-.panel-content::-webkit-scrollbar-thumb:hover,
-#fullListContent::-webkit-scrollbar-thumb:hover,
-form::-webkit-scrollbar-thumb:hover {
-    background: #b0b3b9;
-}
-
-/* OVERALL */
-.warning {
-    color: #c8860a;
-}
-
-.danger {
-    color: #c82333;
-}
-
-.list-last-updated {
-    display: block;
-    font-size: 1.1rem;
-    color: var(--text-secondary);
-    font-weight: 400;
-    margin-top: 0.25rem;
-    min-height: 1.4em;
-}
-
-/* FRIDGE STOCK */
+/* #region FRIDGE STOCK */
 .two-col-list {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -633,7 +709,7 @@ form::-webkit-scrollbar-thumb:hover {
 .meal-prep-cat-total {
     font-size: 1rem;
     color: var(--text-primary);
-    font-family: "Roboto Mono", monospace;
+    font-family: var(--mono-font);
     padding-right: 8px;
 }
 
@@ -664,7 +740,9 @@ form::-webkit-scrollbar-thumb:hover {
     text-decoration: line-through;
 }
 
-/* PLANTS */
+/* #endregion */
+
+/* #region PLANTS */
 .plant-name-input {
     flex: 1;
     margin: 0 !important;
@@ -818,43 +896,11 @@ form::-webkit-scrollbar-thumb:hover {
     overflow: hidden;
 }
 
-.screen-off-btn {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    font-size: 1.8rem;
-    background: var(--btn-bg);
-    color: var(--text-secondary);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition:
-        background 0.15s ease,
-        transform 0.1s ease;
-}
+/* #endregion */
 
-.screen-off-btn:hover {
-    background: var(--btn-bg-hover);
-}
-
-.screen-off-btn:active {
-    transform: scale(0.95);
-}
-
-/* SCREEN BLANKER */
-#screenBlanker {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: #000000;
-    z-index: 9999;
-    cursor: pointer;
-}
-
-#screenBlanker.active {
-    display: block;
+/* #region SPOTIFY */
+.spotify-header-error h3 {
+    color: var(--red) !important;
 }
 
 .spotify-panel {
@@ -974,7 +1020,7 @@ form::-webkit-scrollbar-thumb:hover {
 
 .spotify-btn-play {
     background: var(--btn-green-bg);
-    color: var(--btn-green-color);
+    color: var(--green);
 }
 
 .spotify-btn-play:hover {
@@ -995,7 +1041,7 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-slot-btn.active {
-    border-color: var(--spotify);
+    border-color: var(--green);
     background: #e8f9ee;
     color: #0f6b30;
 }
@@ -1020,14 +1066,12 @@ form::-webkit-scrollbar-thumb:hover {
 .spotify-schedule-date {
     font-size: 1.4rem;
     color: var(--text-secondary);
-    font-family: "Roboto Mono", monospace;
     min-width: 5.6rem;
 }
 
 .spotify-schedule-time {
     font-size: 1.4rem;
     color: var(--text-primary);
-    font-family: "Roboto Mono", monospace;
     min-width: 4.8rem;
 }
 
@@ -1059,26 +1103,6 @@ form::-webkit-scrollbar-thumb:hover {
     text-transform: uppercase;
 }
 
-.spotify-schedule-action.add {
-    background: var(--btn-green-bg);
-    color: var(--btn-green-color);
-}
-
-.spotify-schedule-action.edit {
-    background: var(--btn-bg);
-    color: var(--text-primary);
-}
-
-.spotify-schedule-action.skip {
-    background: var(--btn-red-bg);
-    color: var(--btn-red-color);
-}
-
-.spotify-schedule-action.all {
-    background: var(--btn-blue-bg);
-    color: var(--btn-blue-color);
-}
-
 .spotify-vol-header {
     display: flex;
     align-items: center;
@@ -1091,31 +1115,6 @@ form::-webkit-scrollbar-thumb:hover {
     color: var(--text-primary);
     min-width: 2.5rem;
     text-align: center;
-}
-
-/* DATETIME PANEL */
-.panel[data-section="datetime"] .panel-header {
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.15s ease;
-}
-
-#datetimeContent {
-    padding: 0.6rem 1.4rem 0.8rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-}
-
-#clockDisplay {
-    font-size: var(--title-font);
-    text-transform: uppercase;
-    color: var(--text-primary);
-    font-family: "Roboto Mono", monospace;
-}
-
-.spotify-header-error h3 {
-    color: var(--btn-red-color) !important;
 }
 
 /* SPOTIFY PLAYLIST MODAL */
@@ -1137,8 +1136,8 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-slot-pick-btn.active {
-    border-color: var(--spotify);
-    color: var(--spotify);
+    border-color: var(--green);
+    color: var(--green);
     background: var(--bg-primary);
 }
 
@@ -1166,7 +1165,7 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-icon-option.active {
-    border-color: var(--spotify);
+    border-color: var(--green);
     background: var(--bg-primary);
 }
 
@@ -1234,7 +1233,7 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .spotify-calendar-cell.today {
-    border-color: var(--spotify);
+    border-color: var(--green);
 }
 
 .spotify-calendar-cell .cal-dots {
@@ -1254,10 +1253,10 @@ form::-webkit-scrollbar-thumb:hover {
 }
 
 .cal-dot.dot-weekly {
-    background: var(--btn-blue-color);
+    background: var(--blue);
 }
 .cal-dot.dot-shift {
-    background: var(--spotify);
+    background: var(--green);
 }
 .cal-dot.dot-once {
     background: var(--text-secondary);
@@ -1265,7 +1264,7 @@ form::-webkit-scrollbar-thumb:hover {
 
 .spotify-calendar-cell.selected {
     background: rgba(29, 185, 84, 0.15);
-    border-color: var(--spotify);
+    border-color: var(--green);
 }
 
 .spotify-selected-date-label {
@@ -1348,7 +1347,7 @@ form::-webkit-scrollbar-thumb:hover {
     width: 1.8rem;
     height: 1.8rem;
     cursor: pointer;
-    accent-color: var(--spotify);
+    accent-color: var(--green);
     flex-shrink: 0;
     margin: 0;
     padding: 0;
@@ -1392,49 +1391,4 @@ form::-webkit-scrollbar-thumb:hover {
     cursor: pointer;
 }
 
-@media (max-width: 768px) {
-    body {
-        height: auto;
-        overflow-y: auto;
-    }
-    .dashboard {
-        padding: 1rem;
-        height: auto;
-        min-height: 100dvh;
-    }
-    .grid {
-        display: flex;
-        flex-direction: column;
-        height: auto;
-    }
-    .sub-col {
-        display: contents;
-    }
-    .panel .panel-content {
-        display: none !important;
-    }
-    .panel-header {
-        border-bottom: none;
-    }
-    .panel[data-section="mealprep"],
-    .panel[data-section="notes"] {
-        grid-column: unset !important;
-        grid-row: unset !important;
-        height: auto !important;
-    }
-    :root {
-        --item-font: 1.2rem;
-        --title-font: 1.4rem;
-    }
-    .modal {
-        padding: 1rem;
-    }
-    .modal-wide,
-    .modal-full {
-        max-width: 100% !important;
-        max-height: 92% !important;
-    }
-    .spotify-vol-header {
-        display: none;
-    }
-}
+/* #endregion */

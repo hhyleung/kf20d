@@ -21,7 +21,7 @@
                     <input type="email" id="loginEmail" required />
                     <label>Password</label>
                     <input type="password" id="loginPassword" required />
-                    <button type="submit" class="submit-btn">Login</button>
+                    <button type="submit" class="btn-green">Login</button>
                 </form>
             </div>
         </div>
@@ -29,7 +29,7 @@
         <!-- DASHBOARD -->
         <div class="dashboard">
             <div class="grid">
-                <div class="panel" data-section="meal_prep">
+                <div class="panel" data-section="mealPrep">
                     <div class="panel-header">
                         <h3>Meal Prep</h3>
                         <button class="add-btn" title="Add item">+</button>
@@ -40,7 +40,7 @@
                 <div class="sub-col">
                     <div
                         class="panel"
-                        data-section="fridge_stock"
+                        data-section="fridgeStock"
                         style="flex: 3"
                     >
                         <div class="panel-header">
@@ -102,7 +102,7 @@
                     </div>
                     <div
                         class="panel header-only"
-                        data-section="change_log"
+                        data-section="changeLog"
                         style="flex: 0 0 auto"
                     >
                         <div class="panel-header">
@@ -158,11 +158,11 @@
         </div>
 
         <!--  MEAL PREP -->
-        <div class="modal" id="mealPrepDetailModal">
+        <div class="modal" id="mealPrepItemModal">
             <div class="modal-content modal-wide">
                 <header>
-                    <h2 id="mealPrepDetailTitle">Meal Prep Details</h2>
-                    <button onclick="closeModal('mealPrepDetailModal')">
+                    <h2 id="mealPrepItemTitle">Meal Prep Details</h2>
+                    <button onclick="closeModal('mealPrepItemModal')">
                         &times;
                     </button>
                 </header>
@@ -246,19 +246,19 @@
                     </div>
 
                     <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
+                        <button type="submit" class="btn-green">Save</button>
                         <button
                             type="button"
                             id="mealPrepDeleteBtn"
-                            class="delete-btn"
+                            class="btn-red"
                             hidden
                         >
                             Delete
                         </button>
                         <button
                             type="button"
-                            onclick="closeModal('mealPrepDetailModal')"
-                            class="cancel-btn"
+                            onclick="closeModal('mealPrepItemModal')"
+                            class="btn-grey"
                         >
                             Cancel
                         </button>
@@ -268,11 +268,11 @@
         </div>
 
         <!-- CHORES -->
-        <div class="modal" id="choreDetailModal">
+        <div class="modal" id="choreItemModal">
             <div class="modal-content modal-wide">
                 <header>
-                    <h2 id="choreDetailTitle">Chore Details</h2>
-                    <button onclick="closeModal('choreDetailModal')">
+                    <h2 id="choreItemTitle">Chore Details</h2>
+                    <button onclick="closeModal('choreItemModal')">
                         &times;
                     </button>
                 </header>
@@ -300,73 +300,19 @@
                     </label>
                     <input type="date" id="choreNextDueDate" />
                     <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
+                        <button type="submit" class="btn-green">Save</button>
                         <button
                             type="button"
                             id="choreDeleteBtn"
-                            class="delete-btn"
+                            class="btn-red"
                             hidden
                         >
                             Delete
                         </button>
                         <button
                             type="button"
-                            onclick="closeModal('choreDetailModal')"
-                            class="cancel-btn"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- CHANGE LOG -->
-        <div class="modal" id="changeLogDetailModal">
-            <div class="modal-content modal-wide">
-                <header>
-                    <h2 id="changeLogDetailTitle">Change Item Details</h2>
-                    <button onclick="closeModal('changeLogDetailModal')">
-                        &times;
-                    </button>
-                </header>
-                <form id="changeLogForm">
-                    <input type="hidden" id="changeLogEditId" />
-                    <label class="form-label">Item Name</label>
-                    <input type="text" id="changeLogItemName" required />
-                    <label class="form-label">Last Changed</label>
-                    <input type="date" id="changeLogLastChanged" />
-                    <label class="form-label">Interval (months)</label>
-                    <input
-                        type="number"
-                        id="changeLogIntervalMonths"
-                        min="1"
-                        value="6"
-                    />
-                    <label class="form-label">
-                        Next Change Date
-                        <span
-                            id="nextChangeAutoLabel"
-                            class="field-auto-tag"
-                            style="display: none"
-                            >auto</span
-                        >
-                    </label>
-                    <input type="date" id="changeLogNextChangeDate" />
-                    <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
-                        <button
-                            type="button"
-                            id="changeLogDeleteBtn"
-                            class="delete-btn"
-                            hidden
-                        >
-                            Delete
-                        </button>
-                        <button
-                            type="button"
-                            onclick="closeModal('changeLogDetailModal')"
-                            class="cancel-btn"
+                            onclick="closeModal('choreItemModal')"
+                            class="btn-grey"
                         >
                             Cancel
                         </button>
@@ -376,11 +322,11 @@
         </div>
 
         <!-- BILLS -->
-        <div class="modal" id="billDetailModal">
+        <div class="modal" id="billItemModal">
             <div class="modal-content modal-wide">
                 <header>
-                    <h2 id="billDetailTitle">Bill Details</h2>
-                    <button onclick="closeModal('billDetailModal')">
+                    <h2 id="billItemTitle">Bill Details</h2>
+                    <button onclick="closeModal('billItemModal')">
                         &times;
                     </button>
                 </header>
@@ -408,19 +354,73 @@
                     </label>
                     <input type="date" id="billNextBillDate" />
                     <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
+                        <button type="submit" class="btn-green">Save</button>
                         <button
                             type="button"
                             id="billDeleteBtn"
-                            class="delete-btn"
+                            class="btn-red"
                             hidden
                         >
                             Delete
                         </button>
                         <button
                             type="button"
-                            onclick="closeModal('billDetailModal')"
-                            class="cancel-btn"
+                            onclick="closeModal('billItemModal')"
+                            class="btn-grey"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- CHANGE LOG -->
+        <div class="modal" id="changeLogItemModal">
+            <div class="modal-content modal-wide">
+                <header>
+                    <h2 id="changeLogItemTitle">Change Item Details</h2>
+                    <button onclick="closeModal('changeLogItemModal')">
+                        &times;
+                    </button>
+                </header>
+                <form id="changeLogForm">
+                    <input type="hidden" id="changeLogEditId" />
+                    <label class="form-label">Item Name</label>
+                    <input type="text" id="changeLogItemName" required />
+                    <label class="form-label">Last Changed</label>
+                    <input type="date" id="changeLogLastChanged" />
+                    <label class="form-label">Interval (months)</label>
+                    <input
+                        type="number"
+                        id="changeLogIntervalMonths"
+                        min="1"
+                        value="6"
+                    />
+                    <label class="form-label">
+                        Next Change Date
+                        <span
+                            id="nextChangeAutoLabel"
+                            class="field-auto-tag"
+                            style="display: none"
+                            >auto</span
+                        >
+                    </label>
+                    <input type="date" id="changeLogNextChangeDate" />
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-green">Save</button>
+                        <button
+                            type="button"
+                            id="changeLogDeleteBtn"
+                            class="btn-red"
+                            hidden
+                        >
+                            Delete
+                        </button>
+                        <button
+                            type="button"
+                            onclick="closeModal('changeLogItemModal')"
+                            class="btn-grey"
                         >
                             Cancel
                         </button>
@@ -433,7 +433,7 @@
         <div class="modal" id="plantAddModal">
             <div class="modal-content modal-narrow">
                 <header>
-                    <h2>Add Plant</h2>
+                    <h2>Add New Plant</h2>
                     <button onclick="closeModal('plantAddModal')">
                         &times;
                     </button>
@@ -451,11 +451,11 @@
                         min="1"
                     />
                     <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
+                        <button type="submit" class="btn-green">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('plantAddModal')"
-                            class="cancel-btn"
+                            class="btn-grey"
                         >
                             Cancel
                         </button>
@@ -464,11 +464,11 @@
             </div>
         </div>
 
-        <div class="modal" id="plantDetailModal">
+        <div class="modal" id="plantItemModal">
             <div class="modal-content modal-wide">
                 <header>
-                    <h2 id="plantDetailTitle">Plant Details</h2>
-                    <button onclick="closeModal('plantDetailModal')">
+                    <h2 id="plantItemTitle">Plant Details</h2>
+                    <button onclick="closeModal('plantItemModal')">
                         &times;
                     </button>
                 </header>
@@ -501,7 +501,7 @@
                         data-action="plant-log"
                         data-id=""
                         id="pdLogEventBtn"
-                        class="action-btn"
+                        class="action-btn btn-blue"
                     >
                         Log Event
                     </button>
@@ -537,7 +537,7 @@
                         data-action="plant-archive"
                         data-id=""
                         id="pdArchiveBtn"
-                        class="archive-btn"
+                        class="btn-blue"
                     >
                         Archive
                     </button>
@@ -546,14 +546,14 @@
                         data-action="plant-delete"
                         data-id=""
                         id="pdDeleteBtn"
-                        class="delete-btn"
+                        class="btn-red"
                     >
                         Delete
                     </button>
                     <button
                         type="button"
-                        onclick="closeModal('plantDetailModal')"
-                        class="cancel-btn"
+                        onclick="closeModal('plantItemModal')"
+                        class="btn-grey"
                     >
                         Cancel
                     </button>
@@ -616,11 +616,11 @@
                         rows="3"
                     ></textarea>
                     <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
+                        <button type="submit" class="btn-green">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('plantEventModal')"
-                            class="cancel-btn"
+                            class="btn-grey"
                         >
                             Cancel
                         </button>
@@ -633,7 +633,7 @@
         <div class="modal" id="noteAddModal">
             <div class="modal-content modal-narrow">
                 <header>
-                    <h2>Add Note</h2>
+                    <h2>Add New Note</h2>
                     <button onclick="closeModal('noteAddModal')">
                         &times;
                     </button>
@@ -642,11 +642,11 @@
                     <label class="form-label">Note</label>
                     <textarea id="addNoteContent" rows="4" required></textarea>
                     <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
+                        <button type="submit" class="btn-green">Save</button>
                         <button
                             type="button"
                             onclick="closeModal('noteAddModal')"
-                            class="cancel-btn"
+                            class="btn-grey"
                         >
                             Cancel
                         </button>
@@ -684,14 +684,14 @@
                         <button
                             type="button"
                             id="spotifyAuthBtn"
-                            class="submit-btn"
+                            class="btn-green"
                         >
                             Connect
                         </button>
                         <button
                             type="button"
                             onclick="closeModal('spotifyAuthModal')"
-                            class="cancel-btn"
+                            class="btn-grey"
                         >
                             Cancel
                         </button>
@@ -793,14 +793,14 @@
                         <div class="modal-actions" style="margin-top: 1.5rem">
                             <button
                                 type="button"
-                                class="submit-btn"
+                                class="btn-green"
                                 id="spotifySlotSaveBtn"
                             >
                                 Save
                             </button>
                             <button
                                 type="button"
-                                class="cancel-btn"
+                                class="btn-grey"
                                 onclick="closeModal('spotifyPlaylistModal')"
                             >
                                 Close
@@ -854,9 +854,9 @@
                             </button>
                         </div>
                         <div class="spotify-calendar-weekdays">
-                            <span>Sun</span><span>Mon</span><span>Tue</span
-                            ><span>Wed</span><span>Thu</span><span>Fri</span
-                            ><span>Sat</span>
+                            <span>Mon</span><span>Tue</span><span>Wed</span
+                            ><span>Thu</span><span>Fri</span><span>Sat</span
+                            ><span>Sun</span>
                         </div>
                         <div
                             id="spotifyCalendarGrid"
@@ -1062,14 +1062,14 @@
                             <div class="modal-actions">
                                 <button
                                     type="button"
-                                    class="submit-btn"
+                                    class="btn-green"
                                     id="spotifyTemplateGenerateBtn"
                                 >
                                     Generate
                                 </button>
                                 <button
                                     type="button"
-                                    class="cancel-btn"
+                                    class="btn-grey"
                                     id="spotifyTemplateCancelBtn"
                                 >
                                     Cancel
@@ -1082,28 +1082,28 @@
                         >
                             <button
                                 type="button"
-                                class="submit-btn"
+                                class="btn-green"
                                 id="spotifyLoadTemplateBtn"
                             >
                                 Load Template
                             </button>
                             <button
                                 type="button"
-                                class="submit-btn"
+                                class="btn-green"
                                 id="spotifyAddScheduleBtn"
                             >
                                 Add
                             </button>
                             <button
                                 type="button"
-                                class="delete-btn"
+                                class="btn-red"
                                 id="spotifyDeleteScheduleBtn"
                             >
                                 Delete
                             </button>
                             <button
                                 type="button"
-                                class="cancel-btn"
+                                class="btn-grey"
                                 onclick="closeModal('spotifyScheduleModal')"
                             >
                                 Close
@@ -1150,17 +1150,17 @@
                         />
                     </div>
                     <div class="modal-actions">
-                        <button type="submit" class="submit-btn">Save</button>
+                        <button type="submit" class="btn-green">Save</button>
                         <button
                             type="button"
-                            class="cancel-btn"
+                            class="btn-grey"
                             onclick="closeModal('spotifyScheduleFormModal')"
                         >
                             Cancel
                         </button>
                         <button
                             type="button"
-                            class="delete-btn"
+                            class="btn-red"
                             id="ssfDeleteBtn"
                             style="display: none"
                         >

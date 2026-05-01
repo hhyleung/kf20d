@@ -19,18 +19,20 @@ const SPOTIFY_SCOPES = [
     "playlist-read-collaborative",
     "user-library-read",
 ];
-const SPOTIFY_LIKED_SONGS_ID = "__liked_songs__";
 
-const PANEL_TABLES = [
-    "fridge_stock",
+const PANELS = [
+    "mealPrep",
+    "fridgeStock",
     "chores",
-    "change_log",
     "bills",
+    "changeLog",
     "plants",
     "notes",
 ];
+
 const MEAL_PREP_CATS = ["Carbs", "Veggies", "Proteins", "Fruits", "Others"];
 const FRIDGE_STOCK_CATS = ["Fridge", "Freezer"];
+const FULL_WIDTH_CATS = ["Proteins"];
 
 const ICONS = ["♫", "☼", "☁", "❄", "☆", "♡", "⚐", "⚓", "☕\uFE0E"];
 // ============================================================
@@ -40,7 +42,6 @@ const ICONS = ["♫", "☼", "☁", "❄", "☆", "♡", "⚐", "⚓", "☕\uFE0
 // ============================================================
 // #region STATES
 // ============================================================
-// SUPABASE
 let supabaseClient = null;
 let isAuthenticated = false;
 let isRealtimeSetup = false;
@@ -49,20 +50,22 @@ let subscriptions = [];
 const panelData = {
     pantry: [],
     chores: [],
-    changeLog: [],
     bills: [],
+    changeLog: [],
     plants: [],
     plantHistory: [],
     notes: [],
 };
+
 const panelState = {
-    fridge_stock: { editingId: null, manualDate: false },
+    pantry: { editingId: null, manualDate: false },
     chores: { editingId: null, manualDate: false },
-    change_log: { editingId: null, manualDate: false },
     bills: { editingId: null, manualDate: false },
+    changeLog: { editingId: null, manualDate: false },
 };
-let listMetadata = Object.fromEntries(PANEL_TABLES.map((k) => [k, null]));
+
 let activePanel = null;
+let panelMetadata = Object.fromEntries(PANELS.map((k) => [k, null]));
 
 let clockInterval = null;
 let scheduleTickInterval = null;
@@ -90,53 +93,56 @@ let spotifySelectedSchedule = null;
 // #region PANEL CONFIGS
 // ============================================================
 const PANEL_CONFIGS = {
-    meal_prep: {
+    mealPrep: {
         contentId: "mealPrepContent",
-        buildFn: () => buildMealPrepHTML(false),
-        fullBuildFn: () => buildMealPrepHTML(true),
-        after: () => renderPanel("fridge_stock"),
-        addAction: () => openDetailModal("fridge_stock"),
+        panelHTML: () => buildMealPrepHTML(false),
+        fullHTML: () => buildMealPrepHTML(true),
+        after: () => renderPanel("fridgeStock"),
+
+        key: "mealPrep",
+
+        render: {
+            contentId: "mealPrepContent",
+            panelHTML: () => buildMealPrepHTML(false),
+            fullHTML: () => buildMealPrepHTML(true),
+        },
+
+        functions: {
+            addItem: () => openItemModal("fridgeStock"),
+            editItem: (id) => openItemModal("fridgeStock", id),
+        },
     },
 
-    fridge_stock: {
-        key: "fridge_stock",
-        renderKey: "meal_prep",
-        stateKey: "fridge_stock",
+    fridgeStock: {
+        key: "fridgeStock",
+        renderKey: "mealPrep",
+        deleteMsg: "Delete this pantry item permanently?",
 
         data: {
-            table: "fridge_stock",
+            table: "pantry_db",
             store: (d) => {
                 panelData.pantry = d;
             },
-            orderCol: "item_name",
-            extraOrder: {
-                col: "last_updated",
-                ascending: false,
-                nullsLast: true,
-            },
-            label: "pantry",
+            orderCol: "food_name",
         },
 
         render: {
             contentId: "fridgeStockContent",
-            buildFn: () => buildFridgeStockHTML(false),
-            fullBuildFn: () => buildFridgeStockHTML(true),
+            panelHTML: () => buildFridgeStockHTML(false),
+            fullHTML: () => buildFridgeStockHTML(true),
         },
 
-        rowOpen: {
-            enabled: true,
-            open: (id) => openDetailModal("fridge_stock", id),
+        functions: {
+            addItem: () => openItemModal("fridgeStock"),
+            editItem: (id) => openItemModal("fridgeStock", id),
         },
 
-        addAction: () => openDetailModal("fridge_stock"),
-
-        detailModal: {
-            modalId: "mealPrepDetailModal",
-            titleId: "mealPrepDetailTitle",
+        itemModal: {
+            modalId: "mealPrepItemModal",
+            titleId: "mealPrepItemTitle",
             editIdInput: "mealPrepEditId",
             deleteBtnId: "mealPrepDeleteBtn",
-            addTitle: "ADD MEAL PREP ITEM",
-            editTitle: "EDIT MEAL PREP ITEM",
+            addTitle: "Add new pantry item",
 
             resetFields: () => {
                 setElementValue("mealPrepItemName", "");
@@ -151,7 +157,7 @@ const PANEL_CONFIGS = {
             findItem: (id) => panelData.pantry.find((i) => i.id === id),
 
             populateFields: (item) => {
-                setElementValue("mealPrepItemName", item.item_name);
+                setElementValue("mealPrepItemName", item.food_name);
                 setElementValue("mealPrepCategory", item.category || "Carbs");
                 setElementValue("mealPrepPortions", item.portions || 0);
                 setElementValue(
@@ -160,24 +166,26 @@ const PANEL_CONFIGS = {
                 );
                 setElementValue(
                     "mealPrepCreatedAt",
-                    formatDateInput(item.created_at),
+                    formatDateInput(item.creation_date),
                 );
                 setElementValue(
                     "mealPrepExpiryDate",
-                    formatDateInput(item.expiry_date),
+                    formatDateInput(item.expiration_date),
                 );
                 setElementText(
                     "mealPrepLastUpdated",
-                    item.last_updated ? formatShortDate(item.last_updated) : "",
+                    item.last_updated_date
+                        ? formatShortDate(item.last_updated_date)
+                        : "",
                 );
             },
 
             getExpectedAutoDate: (item) =>
-                item.created_at && item.shelf_life_days
-                    ? addDays(item.created_at, item.shelf_life_days)
+                item.creation_date && item.shelf_life_days
+                    ? addDays(item.creation_date, item.shelf_life_days)
                     : null,
 
-            getActualAutoDate: (item) => item.expiry_date || null,
+            getActualAutoDate: (item) => item.expiration_date || null,
         },
 
         autoDate: {
@@ -186,8 +194,10 @@ const PANEL_CONFIGS = {
             resultId: "mealPrepExpiryDate",
             autoLabelId: "expiryAutoLabel",
             unit: "days",
-            manualFlag: () => panelState.fridge_stock.manualDate,
-            setManual: (v) => (panelState.fridge_stock.manualDate = v),
+            get manualFlag() {
+                return panelState.pantry.manualDate;
+            },
+            setManual: (v) => (panelState.pantry.manualDate = v),
             clearResult: () => setElementValue("mealPrepExpiryDate", ""),
         },
 
@@ -197,65 +207,59 @@ const PANEL_CONFIGS = {
                 const shelfLifeDays =
                     parseInt(getElement("mealPrepShelfLife").value, 10) || null;
                 const createdAt = getElement("mealPrepCreatedAt").value || null;
-                const expiryDate = panelState.fridge_stock.manualDate
+                const expiryDate = panelState.pantry.manualDate
                     ? getElement("mealPrepExpiryDate").value || null
                     : createdAt && shelfLifeDays
                       ? addDays(createdAt, shelfLifeDays)
                       : null;
 
                 return {
-                    id: isUpdate ? panelState.fridge_stock.editingId : null,
-                    item_name: getElement("mealPrepItemName").value.trim(),
+                    id: isUpdate ? panelState.pantry.editingId : null,
+                    food_name: getElement("mealPrepItemName").value.trim(),
                     category: getElement("mealPrepCategory").value,
                     portions:
                         parseInt(getElement("mealPrepPortions").value, 10) || 0,
                     shelf_life_days: shelfLifeDays,
-                    created_at: createdAt,
-                    expiry_date: expiryDate,
-                    last_updated: getTodayHKT(),
+                    creation_date: createdAt,
+                    expiration_date: expiryDate,
+                    last_updated_date: getTodayHKT(),
                 };
             },
-        },
-
-        deleteConfig: {
-            confirmMsg: "Delete this fridge item permanently?",
         },
     },
 
     chores: {
         key: "chores",
-        stateKey: "chores",
+        deleteMsg: "Delete this task permanently?",
 
         data: {
-            table: "chores",
+            table: "chores_db",
             store: (d) => {
                 panelData.chores = d;
             },
             orderCol: "task_name",
-            label: "chores",
         },
 
         render: {
             contentId: "choresContent",
-            buildFn: buildChoresHTML,
-            fullBuildFn: buildChoresHTML,
+            panelHTML: buildChoresHTML,
+            fullHTML: buildChoresHTML,
         },
 
-        rowOpen: {
-            enabled: true,
-            open: (id) => openDetailModal("chores", id),
+        functions: {
+            addItem: () => openItemModal("chores"),
+            editItem: (id) => openItemModal("chores", id),
         },
 
-        addAction: () => openDetailModal("chores"),
-
-        detailModal: {
-            modalId: "choreDetailModal",
-            titleId: "choreDetailTitle",
+        itemModal: {
+            // html element id
+            modalId: "choreItemModal",
+            titleId: "choreItemTitle",
             editIdInput: "choreEditId",
             deleteBtnId: "choreDeleteBtn",
-            addTitle: "ADD CHORE",
-            editTitle: "EDIT CHORE",
+            addTitle: "Add new task",
 
+            // reset html input
             resetFields: () => {
                 setElementValue("choreTaskName", "");
                 setElementValue("choreLastDoneDate", "");
@@ -263,42 +267,55 @@ const PANEL_CONFIGS = {
                 setElementValue("choreNextDueDate", "");
             },
 
+            // panelData
             findItem: (id) => panelData.chores.find((c) => c.id === id),
 
+            // display panelData
             populateFields: (item) => {
                 setElementValue("choreTaskName", item.task_name);
                 setElementValue(
                     "choreLastDoneDate",
                     formatDateInput(item.last_done_date),
                 );
-                setElementValue("choreIntervalDays", item.interval_days || "7");
+                setElementValue(
+                    "choreIntervalDays",
+                    item.chore_interval_days || "7",
+                );
                 setElementValue(
                     "choreNextDueDate",
                     formatDateInput(item.next_due_date),
                 );
             },
 
+            // display auto date
             getExpectedAutoDate: (item) =>
-                item.last_done_date && item.interval_days
-                    ? addDays(item.last_done_date, item.interval_days)
+                item.last_done_date && item.chore_interval_days
+                    ? addDays(item.last_done_date, item.chore_interval_days)
                     : null,
 
             getActualAutoDate: (item) => item.next_due_date || null,
         },
 
         autoDate: {
+            // html element id
             fromId: "choreLastDoneDate",
             intervalId: "choreIntervalDays",
             resultId: "choreNextDueDate",
             autoLabelId: "nextDueAutoLabel",
+            // settings
             unit: "days",
-            manualFlag: () => panelState.chores.manualDate,
+            // functions
+            get manualFlag() {
+                return panelState.chores.manualDate;
+            },
             setManual: (v) => (panelState.chores.manualDate = v),
             clearResult: () => setElementValue("choreNextDueDate", ""),
         },
 
         form: {
+            // add / edit modal
             formId: "choreForm",
+            // initial display?
             buildRecord: (isUpdate) => {
                 const lastDoneDate =
                     getElement("choreLastDoneDate").value || null;
@@ -314,157 +331,42 @@ const PANEL_CONFIGS = {
                     id: isUpdate ? panelState.chores.editingId : null,
                     task_name: getElement("choreTaskName").value.trim(),
                     last_done_date: lastDoneDate,
-                    interval_days: intervalDays,
+                    chore_interval_days: intervalDays,
                     next_due_date: nextDueDate,
                 };
             },
-        },
-
-        deleteConfig: {
-            confirmMsg: "Delete this chore?",
-        },
-    },
-
-    change_log: {
-        key: "change_log",
-        stateKey: "change_log",
-
-        data: {
-            table: "change_log",
-            store: (d) => {
-                panelData.changeLog = d;
-            },
-            orderCol: "item_name",
-            label: "changeLog",
-        },
-
-        render: {
-            contentId: "changeLogContent",
-            buildFn: "",
-            fullBuildFn: buildChangeLogHTML,
-        },
-
-        rowOpen: {
-            enabled: true,
-            open: (id) => openDetailModal("change_log", id),
-        },
-
-        addAction: () => openDetailModal("change_log"),
-
-        detailModal: {
-            modalId: "changeLogDetailModal",
-            titleId: "changeLogDetailTitle",
-            editIdInput: "changeLogEditId",
-            deleteBtnId: "changeLogDeleteBtn",
-            addTitle: "ADD CHANGE LOG",
-            editTitle: "EDIT CHANGE LOG",
-
-            resetFields: () => {
-                setElementValue("changeLogItemName", "");
-                setElementValue("changeLogLastChanged", "");
-                setElementValue("changeLogIntervalMonths", "3");
-                setElementValue("changeLogNextChangeDate", "");
-            },
-
-            findItem: (id) => panelData.changeLog.find((c) => c.id === id),
-
-            populateFields: (item) => {
-                setElementValue("changeLogItemName", item.item_name);
-                setElementValue(
-                    "changeLogLastChanged",
-                    formatDateInput(item.last_changed_date),
-                );
-                setElementValue(
-                    "changeLogIntervalMonths",
-                    item.interval_months || "6",
-                );
-                setElementValue(
-                    "changeLogNextChangeDate",
-                    formatDateInput(item.next_change_due),
-                );
-            },
-
-            getExpectedAutoDate: (item) =>
-                item.last_changed_date && item.interval_months
-                    ? addMonths(item.last_changed_date, item.interval_months)
-                    : null,
-
-            getActualAutoDate: (item) => item.next_change_due || null,
-        },
-
-        autoDate: {
-            fromId: "changeLogLastChanged",
-            intervalId: "changeLogIntervalMonths",
-            resultId: "changeLogNextChangeDate",
-            autoLabelId: "nextChangeAutoLabel",
-            unit: "months",
-            manualFlag: () => panelState.change_log.manualDate,
-            setManual: (v) => (panelState.change_log.manualDate = v),
-            clearResult: () => setElementValue("changeLogNextChangeDate", ""),
-        },
-
-        form: {
-            formId: "changeLogForm",
-            buildRecord: (isUpdate) => {
-                const lastChangedDate =
-                    getElement("changeLogLastChanged").value || null;
-                const intervalMonths =
-                    parseInt(getElement("changeLogIntervalMonths").value, 10) ||
-                    null;
-                const nextChangeDue = panelState.change_log.manualDate
-                    ? getElement("changeLogNextChangeDate").value || null
-                    : lastChangedDate && intervalMonths
-                      ? addMonths(lastChangedDate, intervalMonths)
-                      : null;
-
-                return {
-                    id: isUpdate ? panelState.change_log.editingId : null,
-                    item_name: getElement("changeLogItemName").value.trim(),
-                    last_changed_date: lastChangedDate,
-                    interval_months: intervalMonths,
-                    next_change_due: nextChangeDue,
-                };
-            },
-        },
-
-        deleteConfig: {
-            confirmMsg: "Delete this change item?",
         },
     },
 
     bills: {
         key: "bills",
-        stateKey: "bills",
+        deleteMsg: "Delete this bill permanently?",
 
         data: {
-            table: "bills",
+            table: "bills_db",
             store: (d) => {
                 panelData.bills = d;
             },
             orderCol: "bill_name",
-            label: "bills",
         },
 
         render: {
             contentId: "billsContent",
-            buildFn: "",
-            fullBuildFn: buildBillsHTML,
+            panelHTML: "",
+            fullHTML: buildBillsHTML,
         },
 
-        rowOpen: {
-            enabled: true,
-            open: (id) => openDetailModal("bills", id),
+        functions: {
+            addItem: () => openItemModal("bills"),
+            editItem: (id) => openItemModal("bills", id),
         },
 
-        addAction: () => openDetailModal("bills"),
-
-        detailModal: {
-            modalId: "billDetailModal",
-            titleId: "billDetailTitle",
+        itemModal: {
+            modalId: "billItemModal",
+            titleId: "billItemTitle",
             editIdInput: "billEditId",
             deleteBtnId: "billDeleteBtn",
-            addTitle: "ADD BILL",
-            editTitle: "EDIT BILL",
+            addTitle: "Add new bill",
 
             resetFields: () => {
                 setElementValue("billBillName", "");
@@ -483,7 +385,7 @@ const PANEL_CONFIGS = {
                 );
                 setElementValue(
                     "billIntervalMonths",
-                    item.interval_months || "1",
+                    item.bill_interval_months || "1",
                 );
                 setElementValue(
                     "billNextBillDate",
@@ -492,8 +394,8 @@ const PANEL_CONFIGS = {
             },
 
             getExpectedAutoDate: (item) =>
-                item.last_bill_date && item.interval_months
-                    ? addMonths(item.last_bill_date, item.interval_months)
+                item.last_bill_date && item.bill_interval_months
+                    ? addMonths(item.last_bill_date, item.bill_interval_months)
                     : null,
 
             getActualAutoDate: (item) => item.next_bill_date || null,
@@ -505,7 +407,9 @@ const PANEL_CONFIGS = {
             resultId: "billNextBillDate",
             autoLabelId: "nextBillAutoLabel",
             unit: "months",
-            manualFlag: () => panelState.bills.manualDate,
+            get manualFlag() {
+                return panelState.bills.manualDate;
+            },
             setManual: (v) => (panelState.bills.manualDate = v),
             clearResult: () => setElementValue("billNextBillDate", ""),
         },
@@ -528,14 +432,114 @@ const PANEL_CONFIGS = {
                     id: isUpdate ? panelState.bills.editingId : null,
                     bill_name: getElement("billBillName").value.trim(),
                     last_bill_date: lastBillDate,
-                    interval_months: intervalMonths,
+                    bill_interval_months: intervalMonths,
                     next_bill_date: nextBillDate,
                 };
             },
         },
+    },
 
-        deleteConfig: {
-            confirmMsg: "Delete this bill?",
+    changeLog: {
+        key: "changeLog",
+        deleteMsg: "Delete this change item permanently?",
+
+        data: {
+            table: "change_log_db",
+            store: (d) => {
+                panelData.changeLog = d;
+            },
+            orderCol: "item_name",
+        },
+
+        render: {
+            contentId: "changeLogContent",
+            panelHTML: "",
+            fullHTML: buildChangeLogHTML,
+        },
+
+        functions: {
+            addItem: () => openItemModal("changeLog"),
+            editItem: (id) => openItemModal("changeLog", id),
+        },
+
+        itemModal: {
+            modalId: "changeLogItemModal",
+            titleId: "changeLogItemTitle",
+            editIdInput: "changeLogEditId",
+            deleteBtnId: "changeLogDeleteBtn",
+            addTitle: "Add new change item",
+
+            resetFields: () => {
+                setElementValue("changeLogItemName", "");
+                setElementValue("changeLogLastChanged", "");
+                setElementValue("changeLogIntervalMonths", "3");
+                setElementValue("changeLogNextChangeDate", "");
+            },
+
+            findItem: (id) => panelData.changeLog.find((c) => c.id === id),
+
+            populateFields: (item) => {
+                setElementValue("changeLogItemName", item.item_name);
+                setElementValue(
+                    "changeLogLastChanged",
+                    formatDateInput(item.last_changed_date),
+                );
+                setElementValue(
+                    "changeLogIntervalMonths",
+                    item.change_interval_months || "6",
+                );
+                setElementValue(
+                    "changeLogNextChangeDate",
+                    formatDateInput(item.next_change_date),
+                );
+            },
+
+            getExpectedAutoDate: (item) =>
+                item.last_changed_date && item.change_interval_months
+                    ? addMonths(
+                          item.last_changed_date,
+                          item.change_interval_months,
+                      )
+                    : null,
+
+            getActualAutoDate: (item) => item.next_change_date || null,
+        },
+
+        autoDate: {
+            fromId: "changeLogLastChanged",
+            intervalId: "changeLogIntervalMonths",
+            resultId: "changeLogNextChangeDate",
+            autoLabelId: "nextChangeAutoLabel",
+            unit: "months",
+            get manualFlag() {
+                return panelState.changeLog.manualDate;
+            },
+            setManual: (v) => (panelState.changeLog.manualDate = v),
+            clearResult: () => setElementValue("changeLogNextChangeDate", ""),
+        },
+
+        form: {
+            formId: "changeLogForm",
+            buildRecord: (isUpdate) => {
+                const lastChangedDate =
+                    getElement("changeLogLastChanged").value || null;
+                const intervalMonths =
+                    parseInt(getElement("changeLogIntervalMonths").value, 10) ||
+                    null;
+                const nextChangeDue = panelState.changeLog.manualDate
+                    ? getElement("changeLogNextChangeDate").value || null
+                    : lastChangedDate && intervalMonths
+                      ? addMonths(lastChangedDate, intervalMonths)
+                      : null;
+
+                return {
+                    id: isUpdate ? panelState.changeLog.editingId : null,
+                    item_name: getElement("changeLogItemName").value.trim(),
+                    last_changed_date: lastChangedDate,
+                    change_interval_months: intervalMonths,
+                    next_change_date: nextChangeDue,
+                };
+            },
         },
     },
 
@@ -543,62 +547,60 @@ const PANEL_CONFIGS = {
         key: "plants",
 
         data: {
-            table: "plants",
+            table: "plants_db",
             store: (d) => {
                 panelData.plants = d;
             },
             orderCol: "plant_name",
-            label: "plants",
         },
 
         render: {
             contentId: "plantsContent",
-            buildFn: () => buildPlantsHTML(false),
-            fullBuildFn: () => buildPlantsHTML(true),
+            panelHTML: () => buildPlantsHTML(false),
+            fullHTML: () => buildPlantsHTML(true),
         },
 
-        rowOpen: {
-            enabled: true,
-            open: (id) => openPlantDetail(id),
+        functions: {
+            addItem: () => openPlantAddModal(),
+            editItem: (id) => openPlantDetail(id),
         },
-
-        addAction: () => openPlantAddModal(),
-    },
-
-    notes: {
-        key: "notes",
-
-        data: {
-            table: "notes",
-            store: (d) => {
-                panelData.notes = d;
-            },
-            orderCol: "created_at",
-            label: "notes",
-        },
-
-        render: {
-            contentId: "notesContent",
-            buildFn: buildNotesHTML,
-            fullBuildFn: buildNotesHTML,
-        },
-
-        addAction: () => openModal("noteAddModal"),
     },
 
     plant_history: {
         key: "plant_history",
 
         data: {
-            table: "plant_history",
+            table: "plant_history_db",
             store: (d) => {
                 panelData.plantHistory = d;
             },
-            orderCol: "event_date",
+            orderCol: "event_timestamp",
             orderAscending: false,
             orderNulls: { nullsLast: true },
             noUserFilter: true,
             label: "plantHistory",
+        },
+    },
+
+    notes: {
+        key: "notes",
+
+        data: {
+            table: "notes_db",
+            store: (d) => {
+                panelData.notes = d;
+            },
+            orderCol: "creation_date",
+        },
+
+        render: {
+            contentId: "notesContent",
+            panelHTML: buildNotesHTML,
+            fullHTML: buildNotesHTML,
+        },
+
+        functions: {
+            addItem: () => openModal("noteAddModal"),
         },
     },
 };
@@ -824,15 +826,16 @@ async function loadSupabaseData(configs = getDataConfigs()) {
                 try {
                     if (!user?.id) return;
                     const { data, error } = await sb
-                        .from("list_metadata")
-                        .select("list_name, last_updated")
+                        .from("panel_metadata")
+                        .select("panel_name, last_updated_timestamp")
                         .eq("user_id", user.id);
                     if (error) throw error;
                     data.forEach((row) => {
-                        listMetadata[row.list_name] = row.last_updated;
+                        panelMetadata[row.panel_name] =
+                            row.last_updated_timestamp;
                     });
                 } catch (err) {
-                    console.error("Load list_metadata error: ", err);
+                    console.error("Load panel_metadata error: ", err);
                 }
             })(),
         ]);
@@ -880,9 +883,9 @@ async function setupRealtime() {
             subscribeToTable(sb, tableName, async () => {
                 await loadSupabaseData();
                 [
-                    "meal_prep",
+                    "mealPrep",
                     "chores",
-                    "change_log",
+                    "changeLog",
                     "bills",
                     "plants",
                     "notes",
@@ -910,19 +913,19 @@ async function runMutation(label, fn) {
     }
 }
 
-async function updateListMetadata(listName) {
+async function updateListMetadata(panel) {
     const timestamp = new Date().toISOString();
-    listMetadata[listName] = timestamp;
+    panelMetadata[panel] = timestamp;
     refreshListMetadata();
     try {
         const { sb, user } = await getSupabaseContext();
-        await sb.from("list_metadata").upsert(
+        await sb.from("panel_metadata").upsert(
             {
-                list_name: listName,
-                last_updated: timestamp,
+                panel_name: panel,
+                last_updated_timestamp: timestamp,
                 user_id: user.id,
             },
-            { onConflict: "user_id,list_name" },
+            { onConflict: "user_id,panel_name" },
         );
     } catch (err) {
         console.error("updateListMetadata failed: ", err);
@@ -958,7 +961,7 @@ async function saveRecord(
         );
         if (cfg?.data) await loadSupabaseData([cfg.data]);
         renderPanel(render);
-        updateListMetadata(table);
+        updateListMetadata(cfg.key);
     });
 }
 
@@ -976,7 +979,7 @@ async function deleteRecord(table, render, id, confirmMsg) {
         );
         if (cfg?.data) await loadSupabaseData([cfg.data]);
         renderPanel(render);
-        updateListMetadata(table);
+        updateListMetadata(cfg.key);
     });
 }
 
@@ -984,11 +987,11 @@ async function deletePlant(plantId) {
     if (!confirm("Delete this plant and all its history permanently?")) return;
     await runMutation("Delete plant", async (sb, userId) => {
         const { error: e1 } = await sb
-            .from("plant_history")
+            .from("plant_history_db")
             .delete()
             .eq("plant_id", plantId);
         const { error: e2 } = await sb
-            .from("plants")
+            .from("plants_db")
             .delete()
             .eq("id", plantId)
             .eq("user_id", userId);
@@ -1003,7 +1006,7 @@ async function deletePlant(plantId) {
 
 async function savePlantHistory(historyItem) {
     await runMutation("Save plant_history", async (sb) => {
-        const { error } = await sb.from("plant_history").insert(historyItem);
+        const { error } = await sb.from("plant_history_db").insert(historyItem);
         if (error) throw error;
         const plantCfg = PANEL_CONFIGS.plants.data;
         const historyCfg = PANEL_CONFIGS.plant_history.data;
@@ -1013,9 +1016,12 @@ async function savePlantHistory(historyItem) {
 }
 
 async function deletePlantHistory(id, plantId) {
-    if (!confirm("Delete this history entry?")) return;
+    if (!confirm("Delete this event permanently?")) return;
     await runMutation("Delete plant history", async (sb) => {
-        const { error } = await sb.from("plant_history").delete().eq("id", id);
+        const { error } = await sb
+            .from("plant_history_db")
+            .delete()
+            .eq("id", id);
         if (error) throw error;
         const plantCfg = PANEL_CONFIGS.plants.data;
         const historyCfg = PANEL_CONFIGS.plant_history.data;
@@ -1043,17 +1049,17 @@ function getUrgencyClass(dateStr, warningDays = 3) {
 }
 
 function fridgeItemRow(item, showZero = false) {
-    const expiryClass = getUrgencyClass(item.expiry_date, 7);
+    const expiryClass = getUrgencyClass(item.expiration_date, 7);
     const portionClass =
         item.portions === 0 && showZero ? "portion-zero" : "portion-number";
     const portionsDisplay = `<span class="${portionClass}">${item.portions}</span>`;
     const zeroClass = item.portions === 0 ? " zero-portions" : "";
-    return `<li class="item-row${zeroClass}" data-open-type="fridge_stock" data-id="${item.id}">
-                <span class="item-key ${expiryClass}">${item.item_name}</span>
+    return `<li class="item-row${zeroClass}" data-open-type="fridgeStock" data-id="${item.id}">
+                <span class="item-key ${expiryClass}">${item.food_name}</span>
                 <span class="item-value">
-                    <button class="action-btn" data-action="meal-prep-portions" data-id="${item.id}" data-delta="1">+</button>
+                    <button class="action-btn btn-grey" data-action="meal-prep-portions" data-id="${item.id}" data-delta="1">+</button>
                     ${portionsDisplay}
-                    <button class="action-btn" data-action="meal-prep-portions" data-id="${item.id}" data-delta="-1">-</button>
+                    <button class="action-btn btn-grey" data-action="meal-prep-portions" data-id="${item.id}" data-delta="-1">-</button>
                 </span>
             </li>`;
 }
@@ -1071,13 +1077,12 @@ function buildMealPrepHTML(showZero) {
             : "Others";
         grouped[cat].push(item);
     });
-    const forceFullWidth = ["Proteins"];
     const alwaysHalfWidth = ["Carbs", "Veggies", "Fruits", "Others"];
     let html = '<div class="meal-prep-inner-grid">';
     MEAL_PREP_CATS.forEach((cat) => {
         const catItems = grouped[cat];
         const isAlwaysHalf = alwaysHalfWidth.includes(cat);
-        const isForceFull = forceFullWidth.includes(cat);
+        const isForceFull = FULL_WIDTH_CATS.includes(cat);
         const wide = isForceFull || (!isAlwaysHalf && catItems.length >= 3);
         const cls = wide ? "col-full" : "col-half";
         const totalPortions = catItems.reduce(
@@ -1109,7 +1114,7 @@ function buildFridgeStockHTML(showZero = false) {
                 (showZero || i.portions > 0) &&
                 FRIDGE_STOCK_CATS.includes(i.category),
         )
-        .sort((a, b) => a.item_name.localeCompare(b.item_name));
+        .sort((a, b) => a.food_name.localeCompare(b.food_name));
     if (!items.length) return "";
     let html = '<ul class="item-list">';
     items.forEach((item) => {
@@ -1130,7 +1135,7 @@ function buildChoresHTML() {
                     <span class="item-key ${dueClass}">${chore.task_name}</span>
                     <span class="item-value">
                         <span class="item-meta">${lastDoneText}</span>
-                        <button class="action-btn" data-action="done" data-id="${chore.id}">✓</button>
+                        <button class="action-btn btn-green" data-action="done" data-id="${chore.id}">✓</button>
                     </span>
                 </li>`;
     });
@@ -1141,7 +1146,7 @@ function buildChoresHTML() {
 function buildChangeLogHTML() {
     let html = '<ul class="item-list">';
     panelData.changeLog.forEach((cl) => {
-        const dueClass = getUrgencyClass(cl.next_change_due);
+        const dueClass = getUrgencyClass(cl.next_change_date);
         const lastChangedText = cl.last_changed_date
             ? formatShortDate(cl.last_changed_date)
             : "Never";
@@ -1149,7 +1154,7 @@ function buildChangeLogHTML() {
                     <span class="item-key ${dueClass}">${cl.item_name}</span>
                     <span class="item-value">
                         <span class="item-meta">${lastChangedText}</span>
-                        <button class="action-btn" data-action="changed" data-id="${cl.id}">✓</button>
+                        <button class="action-btn btn-green" data-action="changed" data-id="${cl.id}">✓</button>
                     </span>
                 </li>`;
     });
@@ -1168,7 +1173,7 @@ function buildBillsHTML() {
                     <span class="item-key ${dueClass}">${bill.bill_name}</span>
                     <span class="item-value">
                         <span class="item-meta">${nextDueText}</span>
-                        <button class="action-btn" data-action="paid" data-id="${bill.id}">✓</button>
+                        <button class="action-btn btn-green" data-action="paid" data-id="${bill.id}">✓</button>
                     </span>
                 </li>`;
     });
@@ -1192,7 +1197,7 @@ function buildPlantsHTML(showArchived = false) {
                             ${p.pot_size ? `<span class="plant-meta-pot">${p.pot_size} cm</span>` : ""}
                             ${lastEventText}
                         </span>
-                        <button class="action-btn" data-action="plant-log" data-id="${p.id}">+</button>
+                        <button class="action-btn btn-blue" data-action="plant-log" data-id="${p.id}">+</button>
                     </span>
                 </li>`;
     });
@@ -1204,10 +1209,10 @@ function buildNotesHTML() {
     let html = '<ul class="item-list">';
     panelData.notes.forEach((note) => {
         html += `<li class="item-row">
-                    <span class="item-key">${note.content}</span>
+                    <span class="item-key">${note.note}</span>
                     <span class="item-value">
                         <span class="item-meta">&nbsp;</span>
-                        <button class="action-btn" data-action="note-delete" data-id="${note.id}" title="Delete note">&times;</button>
+                        <button class="action-btn btn-red" data-action="note-delete" data-id="${note.id}" title="Delete note">&times;</button>
                     </span>
                 </li>`;
     });
@@ -1215,21 +1220,21 @@ function buildNotesHTML() {
     return html;
 }
 
-function renderPanel(section) {
-    const cfg = PANEL_CONFIGS[section];
-    if (!cfg) return;
-    const renderCfg = cfg.render ?? cfg;
-    if (!renderCfg.contentId || !renderCfg.buildFn) return;
-    setElementHTML(renderCfg.contentId, renderCfg.buildFn());
-    const fullListOwner = cfg.renderKey ?? cfg.key ?? section;
-    if (activePanel === section || activePanel === fullListOwner) {
+function renderPanel(panel) {
+    const panelCfg = PANEL_CONFIGS[panel];
+    if (!panelCfg) return;
+    const renderCfg = panelCfg.render ?? panelCfg;
+    if (!renderCfg.contentId || !renderCfg.panelHTML) return;
+    setElementHTML(renderCfg.contentId, renderCfg.panelHTML());
+    const fullListOwner = panelCfg.renderKey ?? panelCfg.key ?? panel;
+    if (activePanel === panel || activePanel === fullListOwner) {
         const activeCfg = PANEL_CONFIGS[activePanel];
         const activeRenderCfg = activeCfg?.render ?? activeCfg;
-        if (activeRenderCfg?.fullBuildFn) {
-            setElementHTML("fullListContent", activeRenderCfg.fullBuildFn());
+        if (activeRenderCfg?.fullHTML) {
+            setElementHTML("fullListContent", activeRenderCfg.fullHTML());
         }
     }
-    if (cfg.after) cfg.after();
+    if (panelCfg.after) panelCfg.after();
 }
 // ============================================================
 // #endregion
@@ -1249,8 +1254,8 @@ function closeModal(id) {
 
 function openRowItem(type, id) {
     const cfg = PANEL_CONFIGS[type];
-    if (!cfg?.rowOpen?.open) return;
-    cfg.rowOpen.open(id);
+    if (!cfg?.details?.open) return;
+    cfg.functions.editItem(id);
 }
 
 function refreshAutoDate(cfg) {
@@ -1282,57 +1287,63 @@ function refreshListMetadata() {
     if (!activePanel) return;
     setElementText(
         "listLastUpdated",
-        formatMetaTimestamp(listMetadata[activePanel]),
+        formatMetaTimestamp(panelMetadata[activePanel]),
     );
 }
 
-function openDetailModal(panelKey, itemId = null) {
-    const panelCfg = PANEL_CONFIGS[panelKey];
-    const cfg = panelCfg?.detailModal;
-    if (!cfg) return;
+function openItemModal(panel, itemId = null) {
+    const panelCfg = PANEL_CONFIGS[panel];
+    const modalCfg = panelCfg?.itemModal;
+    if (!panelCfg) return;
 
     const isEditing = !!itemId;
-    const stateKey = panelCfg.stateKey;
-    const deleteBtn = cfg.deleteBtnId ? getElement(cfg.deleteBtnId) : null;
+    const deleteBtn = modalCfg.deleteBtnId
+        ? getElement(modalCfg.deleteBtnId)
+        : null;
 
-    if (stateKey && panelState[stateKey]) {
-        panelState[stateKey].editingId = itemId;
+    if (panelState[panel]) panelState[panel].editingId = itemId;
+
+    if (modalCfg.editIdInput)
+        setElementValue(modalCfg.editIdInput, itemId || "");
+
+    if (modalCfg.titleId) {
+        setElementText(
+            modalCfg.titleId,
+            isEditing ? "Editing " : modalCfg.addTitle,
+        );
     }
 
-    if (cfg.editIdInput) setElementValue(cfg.editIdInput, itemId || "");
-
-    if (cfg.titleId) {
-        setElementText(cfg.titleId, isEditing ? cfg.editTitle : cfg.addTitle);
-    }
-
-    if (cfg.resetFields) cfg.resetFields();
+    if (modalCfg.resetFields) modalCfg.resetFields();
 
     if (isEditing) {
-        const item = cfg.findItem ? cfg.findItem(itemId) : null;
+        const item = modalCfg.findItem ? modalCfg.findItem(itemId) : null;
         if (!item) return;
 
-        if (cfg.populateFields) cfg.populateFields(item);
+        if (modalCfg.populateFields) modalCfg.populateFields(item);
 
-        if (stateKey && panelState[stateKey]) {
-            const actualDate = cfg.getActualAutoDate
-                ? cfg.getActualAutoDate(item)
+        if (panelState[panel]) {
+            const actualDate = modalCfg.getActualAutoDate
+                ? modalCfg.getActualAutoDate(item)
                 : null;
-            const expectedDate = cfg.getExpectedAutoDate
-                ? cfg.getExpectedAutoDate(item)
+            const expectedDate = modalCfg.getExpectedAutoDate
+                ? modalCfg.getExpectedAutoDate(item)
                 : null;
-            panelState[stateKey].manualDate = !!(
+            panelState[panel].manualDate = !!(
                 actualDate && actualDate !== expectedDate
             );
         }
-    } else if (stateKey && panelState[stateKey]) {
-        panelState[stateKey].manualDate = false;
+    } else if (panelState[panel]) {
+        panelState[panel].manualDate = false;
     }
 
     if (deleteBtn) deleteBtn.hidden = !isEditing;
 
-    if (panelCfg.autoDate) refreshAutoDate(panelCfg.autoDate);
+    if (panelCfg.autoDate) {
+        setupAutoDateListeners(panelCfg.autoDate);
+        refreshAutoDate(panelCfg.autoDate);
+    }
 
-    openModal(cfg.modalId);
+    openModal(modalCfg.modalId);
 }
 
 function openPlantAddModal() {
@@ -1345,7 +1356,7 @@ function openPlantAddModal() {
 function openPlantDetail(plantId) {
     const plant = panelData.plants.find((p) => p.id === plantId);
     if (!plant) return;
-    setElementText("plantDetailTitle", plant.plant_name.toUpperCase());
+    setElementText("plantItemTitle", plant.plant_name.toUpperCase());
     setElementValue("pdPlantNameInput", plant.plant_name);
     getElement("pdSaveNameBtn").dataset.id = plantId;
     setElementValue(
@@ -1367,7 +1378,9 @@ function openPlantDetail(plantId) {
     getElement("pdLogEventBtn").dataset.id = plantId;
     const history = panelData.plantHistory
         .filter((h) => h.plant_id === plantId)
-        .sort((a, b) => new Date(b.event_date) - new Date(a.event_date));
+        .sort(
+            (a, b) => new Date(b.event_timestamp) - new Date(a.event_timestamp),
+        );
     if (!history.length) {
         setElementHTML(
             "pdHistoryBody",
@@ -1379,14 +1392,14 @@ function openPlantDetail(plantId) {
             history
                 .map(
                     (h) => `<tr>
-                                <td>${formatShortDate(h.event_date)}</td>
+                                <td>${formatShortDate(h.event_timestamp)}</td>
                                 <td>${h.pot_size ? `${h.pot_size}cm` : ""}</td>
                                 <td class="${h.watered ? "check-yes" : "check-no"}">${h.watered ? "✓" : ""}</td>
                                 <td class="${h.fertilised ? "check-yes" : "check-no"}">${h.fertilised ? "✓" : ""}</td>
                                 <td>${h.fertiliser_used || ""}</td>
-                                <td>${h.notes || ""}</td>
+                                <td>${h.event_notes || ""}</td>
                                 <td>
-                                <button class="action-btn" data-action="plant-history-delete" 
+                                <button class="action-btn btn-red" data-action="plant-history-delete" 
                                         data-id="${h.id}" data-plantid="${plantId}"
                                         style="font-size: 0.9rem; width: 32px; height: 32px;">&times;</button>
                                 </td>
@@ -1400,7 +1413,7 @@ function openPlantDetail(plantId) {
     setElementText("pdArchiveBtn", plant.archived ? "Unarchive" : "Archive");
     archiveBtn.classList.toggle("is-archived", !!plant.archived);
     getElement("pdDeleteBtn").dataset.id = plantId;
-    openModal("plantDetailModal");
+    openModal("plantItemModal");
 }
 
 function openPlantEventModal(plantId) {
@@ -1437,7 +1450,7 @@ function setupPanelEvents() {
             activePanel = section;
             const cfg = PANEL_CONFIGS[section];
             const renderCfg = cfg.render ?? cfg;
-            setElementHTML("fullListContent", renderCfg.fullBuildFn?.() ?? "");
+            setElementHTML("fullListContent", renderCfg.fullHTML?.() ?? "");
             refreshListMetadata();
             openModal("fullListModal");
         });
@@ -1448,13 +1461,13 @@ function setupPanelEvents() {
             e.stopPropagation();
             const section = btn.closest(".panel")?.dataset.section;
             const cfg = PANEL_CONFIGS[section];
-            if (cfg?.addAction) cfg.addAction();
+            if (cfg?.functions.addItem) cfg.functions.addItem();
         });
     });
 
     getElement("fullListAddBtn")?.addEventListener("click", () => {
         const cfg = PANEL_CONFIGS[activePanel];
-        if (cfg?.addAction) cfg.addAction();
+        if (cfg?.functions.addItem) cfg.functions.addItem();
     });
 }
 
@@ -1464,10 +1477,11 @@ function setupAutoDateListeners(cfg) {
     const resultEl = getElement(cfg.resultId);
     if (!fromEl || !intervalEl || !resultEl) return;
 
+    if (fromEl.dataset.autoDateBound) return;
+    fromEl.dataset.autoDateBound = "1";
+
     const onSourceChange = () => {
-        if (!cfg.manualFlag()) {
-            refreshAutoDate(cfg);
-        }
+        if (!cfg.manualFlag) refreshAutoDate(cfg);
     };
     fromEl.addEventListener("change", onSourceChange);
     intervalEl.addEventListener("input", onSourceChange);
@@ -1499,16 +1513,12 @@ function setupFormHandlers() {
     setupFormHandlers.bound = true;
 
     Object.values(PANEL_CONFIGS)
-        .filter((cfg) => cfg.autoDate)
-        .forEach((cfg) => setupAutoDateListeners(cfg.autoDate));
-
-    Object.values(PANEL_CONFIGS)
-        .filter((cfg) => cfg.form && cfg.detailModal)
+        .filter((cfg) => cfg.form && cfg.itemModal)
         .forEach((panelCfg) => {
+            const panel = panelCfg.key;
             const formCfg = panelCfg.form;
-            const modalCfg = panelCfg.detailModal;
-            const stateKey = panelCfg.stateKey;
-            const renderKey = panelCfg.renderKey ?? panelCfg.key;
+            const modalCfg = panelCfg.itemModal;
+            const renderKey = panelCfg.renderKey ?? panel;
 
             const formEl = getElement(formCfg.formId);
             if (!formEl) return;
@@ -1516,7 +1526,7 @@ function setupFormHandlers() {
             formEl.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const isUpdate = !!(
-                    stateKey && panelState[stateKey]?.editingId
+                    panel && panelState[panel]?.editingId
                 );
                 const record = formCfg.buildRecord(isUpdate);
 
@@ -1526,34 +1536,33 @@ function setupFormHandlers() {
                     record,
                     isUpdate,
                     () => {
-                        if (stateKey && panelState[stateKey]) {
-                            panelState[stateKey].manualDate = false;
+                        if (panel && panelState[panel]) {
+                            panelState[panel].manualDate = false;
                         }
                     },
                 );
 
                 closeModal(modalCfg.modalId);
 
-                if (stateKey && panelState[stateKey]) {
-                    panelState[stateKey].editingId = null;
-                    panelState[stateKey].manualDate = false;
+                if (panel && panelState[panel]) {
+                    panelState[panel].editingId = null;
+                    panelState[panel].manualDate = false;
                 }
             });
         });
 
     Object.values(PANEL_CONFIGS)
-        .filter((cfg) => cfg.detailModal?.deleteBtnId && cfg.deleteConfig)
+        .filter((cfg) => cfg.itemModal?.deleteBtnId && cfg.deleteMsg)
         .forEach((panelCfg) => {
-            const modalCfg = panelCfg.detailModal;
-            const delCfg = panelCfg.deleteConfig;
-            const stateKey = panelCfg.stateKey;
-            const renderKey = panelCfg.renderKey ?? panelCfg.key;
+            const panel = panelCfg.key;
+            const modalCfg = panelCfg.itemModal;
+            const renderKey = panelCfg.renderKey ?? panel;
             const btn = getElement(modalCfg.deleteBtnId);
             if (!btn) return;
 
             btn.addEventListener("click", async () => {
-                const itemId = stateKey
-                    ? panelState[stateKey]?.editingId
+                const itemId = panel
+                    ? panelState[panel]?.editingId
                     : null;
                 if (!itemId) return;
 
@@ -1561,14 +1570,14 @@ function setupFormHandlers() {
                     panelCfg.data.table,
                     renderKey,
                     itemId,
-                    delCfg.confirmMsg,
+                    panelCfg.deleteMsg,
                 );
 
                 closeModal(modalCfg.modalId);
 
-                if (stateKey && panelState[stateKey]) {
-                    panelState[stateKey].editingId = null;
-                    panelState[stateKey].manualDate = false;
+                if (panel && panelState[panel]) {
+                    panelState[panel].editingId = null;
+                    panelState[panel].manualDate = false;
                 }
             });
         });
@@ -1580,13 +1589,13 @@ function setupFormHandlers() {
             e.preventDefault();
             const name = getElement("addPlantName").value.trim();
             const startingDate =
-                document.getElement("addPlantStartingDate").value || null;
+                getElement("addPlantStartingDate").value || null;
             const potSize =
                 parseInt(getElement("addPlantPotSize").value, 10) || null;
             if (!name) return;
 
             await saveRecord(
-                "plants",
+                "plants_db",
                 "plants",
                 {
                     plant_name: name,
@@ -1678,16 +1687,16 @@ function setupFormHandlers() {
                     plant.last_fertiliser_used || null;
             }
 
-            await saveRecord("plants", "plants", plantUpdates, true);
+            await saveRecord("plants_db", "plants", plantUpdates, true);
 
             await savePlantHistory({
                 plant_id: plantId,
-                event_date: eventDate,
+                event_timestamp: eventDate,
                 watered,
                 fertilised,
                 fertiliser_used: fertiliserUsed,
                 pot_size: potSize,
-                notes,
+                event_notes: notes,
             });
 
             closeModal("plantEventModal");
@@ -1701,13 +1710,16 @@ function setupFormHandlers() {
         noteForm.dataset.bound = "1";
         noteForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            const content = getElement("addNoteContent").value.trim();
-            if (!content) return;
+            const noteContent = getElement("addNoteContent").value.trim();
+            if (!noteContent) return;
 
             await saveRecord(
+                "notes_db",
                 "notes",
-                "notes",
-                { content, created_at: getTodayHKT() },
+                {
+                    note: noteContent,
+                    creation_date: getTodayHKT(),
+                },
                 false,
             );
             setElementValue("addNoteContent", "");
@@ -1725,12 +1737,12 @@ const ACTION_HANDLERS = {
         if (!item) return;
         const newPortions = Math.max(0, (item.portions || 0) + delta);
         await saveRecord(
-            "fridge_stock",
-            "meal_prep",
+            "pantry_db",
+            "mealPrep",
             {
                 id,
                 portions: newPortions,
-                last_updated: getTodayHKT(),
+                last_updated_date: getTodayHKT(),
             },
             true,
         );
@@ -1744,15 +1756,15 @@ const ACTION_HANDLERS = {
         if (!chore) return;
         const today = getTodayHKT();
         await saveRecord(
-            "chores",
+            "chores_db",
             "chores",
             {
                 id,
                 task_name: chore.task_name,
                 last_done_date: today,
-                interval_days: chore.interval_days,
-                next_due_date: chore.interval_days
-                    ? addDays(today, chore.interval_days)
+                chore_interval_days: chore.chore_interval_days,
+                next_due_date: chore.chore_interval_days
+                    ? addDays(today, chore.chore_interval_days)
                     : null,
             },
             true,
@@ -1766,15 +1778,15 @@ const ACTION_HANDLERS = {
         if (!cl) return;
         const today = getTodayHKT();
         await saveRecord(
-            "change_log",
-            "change_log",
+            "change_log_db",
+            "changeLog",
             {
                 id,
                 item_name: cl.item_name,
                 last_changed_date: today,
-                interval_months: cl.interval_months,
-                next_change_due: cl.interval_months
-                    ? addMonths(today, cl.interval_months)
+                change_interval_months: cl.change_interval_months,
+                next_change_date: cl.change_interval_months
+                    ? addMonths(today, cl.change_interval_months)
                     : null,
             },
             true,
@@ -1788,15 +1800,15 @@ const ACTION_HANDLERS = {
         if (!bill) return;
         const today = getTodayHKT();
         await saveRecord(
-            "bills",
+            "bills_db",
             "bills",
             {
                 id,
                 bill_name: bill.bill_name,
                 last_bill_date: today,
-                interval_months: bill.interval_months,
-                next_bill_date: bill.interval_months
-                    ? addMonths(today, bill.interval_months)
+                bill_interval_months: bill.bill_interval_months,
+                next_bill_date: bill.bill_interval_months
+                    ? addMonths(today, bill.bill_interval_months)
                     : null,
             },
             true,
@@ -1821,7 +1833,7 @@ const ACTION_HANDLERS = {
             return;
         }
         await saveRecord(
-            "plants",
+            "plants_db",
             "plants",
             {
                 id,
@@ -1846,7 +1858,7 @@ const ACTION_HANDLERS = {
         );
         if (!ok) return;
         await saveRecord(
-            "plants",
+            "plants_db",
             "plants",
             { id, archived: archiveNow },
             true,
@@ -1858,7 +1870,7 @@ const ACTION_HANDLERS = {
         const id = btn.dataset.id;
         if (!id) return;
         await deletePlant(id);
-        closeModal("plantDetailModal");
+        closeModal("plantItemModal");
     },
 
     "plant-history-delete": async (btn) => {
@@ -1871,7 +1883,12 @@ const ACTION_HANDLERS = {
     "note-delete": async (btn) => {
         const id = btn.dataset.id;
         if (!id) return;
-        await deleteRecord("notes", "notes", id, "Delete this note?");
+        await deleteRecord(
+            "notes_db",
+            "notes",
+            id,
+            "Delete this note permanently?",
+        );
     },
 };
 
@@ -1897,8 +1914,8 @@ document.addEventListener("click", async (e) => {
         const id = row.dataset.id;
         if (openType && id) {
             const panelCfg = PANEL_CONFIGS[openType];
-            if (panelCfg?.rowOpen?.open) {
-                panelCfg.rowOpen.open(id);
+            if (panelCfg?.functions?.editItem) {
+                panelCfg.functions.editItem(id);
             }
         }
     }
@@ -2212,7 +2229,7 @@ async function fetchPlaylists() {
         } catch (_) {}
         spotifyPlaylists = [
             {
-                id: SPOTIFY_LIKED_SONGS_ID,
+                id: "__liked_songs__",
                 name: "Liked Songs",
                 uri: "spotify:collection:tracks",
                 owner: { display_name: "You" },
@@ -2348,7 +2365,7 @@ async function playPlaylist(playlistId) {
     }
     spotifyDeviceId = targetDeviceId;
     const body =
-        playlistId === SPOTIFY_LIKED_SONGS_ID
+        playlistId === "__liked_songs__"
             ? { context_uri: "spotify:collection:tracks" }
             : { context_uri: `spotify:playlist:${playlistId}` };
 
@@ -2557,7 +2574,7 @@ function renderCalendar() {
     const y = spotifyCalendarMonth.getFullYear();
     const m = spotifyCalendarMonth.getMonth();
     const firstDay = new Date(y, m, 1);
-    const startOffset = firstDay.getDay();
+    const startOffset = (firstDay.getDay() + 6) % 7;
     const daysInMonth = new Date(y, m + 1, 0).getDate();
     const today = getTodayHKT();
 
@@ -2747,7 +2764,7 @@ async function openPlaylistModal() {
 async function openSpotifyAddSchedule(dateStr) {
     spotifySelectedScheduleId = null;
     spotifySelectedSchedule = null;
-    setElementText("spotifyScheduleFormTitle", "ADD SCHEDULE");
+    setElementText("spotifyScheduleFormTitle", "Add new schedule");
     setElementValue("ssfDate", dateStr || getTodayHKT());
     setElementValue("ssfTime", "");
     setElementValue("ssfPlaylist", "");
@@ -2840,13 +2857,13 @@ function setupVolumeControls() {
     volUp.dataset.bound = "1";
     volUp.addEventListener("click", async (e) => {
         e.stopPropagation();
-        spotifyVolume = Math.min(100, spotifyVolume + 5);
+        spotifyVolume = Math.min(100, spotifyVolume + 15);
         setElementText("volDisplay", spotifyVolume);
         if (spotifyPlayer) await spotifyPlayer.setVolume(spotifyVolume / 100);
     });
     volDown.addEventListener("click", async (e) => {
         e.stopPropagation();
-        spotifyVolume = Math.max(0, spotifyVolume - 5);
+        spotifyVolume = Math.max(0, spotifyVolume - 15);
         setElementText("volDisplay", spotifyVolume);
         if (spotifyPlayer) await spotifyPlayer.setVolume(spotifyVolume / 100);
     });
@@ -3502,9 +3519,9 @@ function renderSpotify() {
                     <span class="spotify-schedule-playlist" id="spotifySchedPlaylist"></span>
                 </div>
                 <div class="spotify-schedule-actions">
-                    <button class="spotify-schedule-action add"  type="button" id="spotifySchedAddBtn">Add</button>
-                    <button class="spotify-schedule-action skip" type="button" id="spotifySchedSkipBtn">Skip</button>
-                    <button class="spotify-schedule-action all" type="button" id="spotifySchedAllBtn">ALL</button>
+                    <button class="spotify-schedule-action btn-green"  type="button" id="spotifySchedAddBtn">Add</button>
+                    <button class="spotify-schedule-action btn-red" type="button" id="spotifySchedSkipBtn">Skip</button>
+                    <button class="spotify-schedule-action btn-blue" type="button" id="spotifySchedAllBtn">ALL</button>
                 </div>
             </div>
         </div>`,
@@ -3545,11 +3562,11 @@ async function showDashboard() {
     selectElement(".dashboard").style.display = "flex";
     [
         "fullListModal",
-        "mealPrepDetailModal",
-        "choreDetailModal",
-        "changeLogDetailModal",
-        "billDetailModal",
-        "plantDetailModal",
+        "mealPrepItemModal",
+        "choreItemModal",
+        "changeLogItemModal",
+        "billItemModal",
+        "plantItemModal",
         "plantAddModal",
         "plantEventModal",
         "noteAddModal",
@@ -3565,7 +3582,7 @@ async function showDashboard() {
     startClock();
 
     await loadSupabaseData();
-    ["meal_prep", "chores", "change_log", "bills", "plants", "notes"].forEach(
+    ["mealPrep", "chores", "changeLog", "bills", "plants", "notes"].forEach(
         renderPanel,
     );
 
