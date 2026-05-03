@@ -669,6 +669,17 @@ form {
     scrollbar-color: #d0d3d9 transparent;
 }
 
+.form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 2rem;
+}
+
+.form-row-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0 2rem;
+}
 /* #endregion */
 
 /* #region FRIDGE STOCK */

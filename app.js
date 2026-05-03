@@ -67,6 +67,7 @@ const panelState = {
 let activePanel = null;
 let panelMetadata = Object.fromEntries(PANELS.map((k) => [k, null]));
 
+let lastKnownDate = getTodayHKT();
 let clockInterval = null;
 let scheduleTickInterval = null;
 
@@ -94,28 +95,8 @@ let spotifySelectedSchedule = null;
 // ============================================================
 const PANEL_CONFIGS = {
     mealPrep: {
-        contentId: "mealPrepContent",
-        panelHTML: () => buildMealPrepHTML(false),
-        fullHTML: () => buildMealPrepHTML(true),
-        after: () => renderPanel("fridgeStock"),
-
         key: "mealPrep",
-
-        render: {
-            contentId: "mealPrepContent",
-            panelHTML: () => buildMealPrepHTML(false),
-            fullHTML: () => buildMealPrepHTML(true),
-        },
-
-        functions: {
-            addItem: () => openItemModal("fridgeStock"),
-            editItem: (id) => openItemModal("fridgeStock", id),
-        },
-    },
-
-    fridgeStock: {
-        key: "fridgeStock",
-        renderKey: "mealPrep",
+        after: () => renderPanel("fridgeStock"),
         deleteMsg: "Delete this pantry item permanently?",
 
         data: {
@@ -127,14 +108,14 @@ const PANEL_CONFIGS = {
         },
 
         render: {
-            contentId: "fridgeStockContent",
-            panelHTML: () => buildFridgeStockHTML(false),
-            fullHTML: () => buildFridgeStockHTML(true),
+            contentId: "mealPrepContent",
+            panelHTML: () => buildMealPrepHTML(false),
+            fullHTML: () => buildMealPrepHTML(true),
         },
 
         functions: {
-            addItem: () => openItemModal("fridgeStock"),
-            editItem: (id) => openItemModal("fridgeStock", id),
+            addItem: () => openItemModal("mealPrep"),
+            editItem: (id) => openItemModal("mealPrep", id),
         },
 
         itemModal: {
@@ -228,6 +209,22 @@ const PANEL_CONFIGS = {
         },
     },
 
+    fridgeStock: {
+        key: "fridgeStock",
+        renderKey: "mealPrep",
+
+        render: {
+            contentId: "fridgeStockContent",
+            panelHTML: () => buildFridgeStockHTML(false),
+            fullHTML: () => buildFridgeStockHTML(true),
+        },
+
+        functions: {
+            addItem: () => openItemModal("mealPrep"),
+            editItem: (id) => openItemModal("mealPrep", id),
+        },
+    },
+
     chores: {
         key: "chores",
         deleteMsg: "Delete this task permanently?",
@@ -242,7 +239,7 @@ const PANEL_CONFIGS = {
 
         render: {
             contentId: "choresContent",
-            panelHTML: buildChoresHTML,
+            panelHTML: buildChoresPanel,
             fullHTML: buildChoresHTML,
         },
 
@@ -352,7 +349,7 @@ const PANEL_CONFIGS = {
 
         render: {
             contentId: "billsContent",
-            panelHTML: "",
+            panelHTML: buildBillsPanel,
             fullHTML: buildBillsHTML,
         },
 
@@ -453,7 +450,7 @@ const PANEL_CONFIGS = {
 
         render: {
             contentId: "changeLogContent",
-            panelHTML: "",
+            panelHTML: buildChangeLogPanel,
             fullHTML: buildChangeLogHTML,
         },
 
@@ -486,7 +483,7 @@ const PANEL_CONFIGS = {
                 );
                 setElementValue(
                     "changeLogIntervalMonths",
-                    item.change_interval_months || "6",
+                    item.change_interval_months || "3",
                 );
                 setElementValue(
                     "changeLogNextChangeDate",
@@ -584,6 +581,7 @@ const PANEL_CONFIGS = {
 
     notes: {
         key: "notes",
+        deleteMsg: "Delete this note permanently?",
 
         data: {
             table: "notes_db",
@@ -1124,7 +1122,7 @@ function buildFridgeStockHTML(showZero = false) {
     return html;
 }
 
-function buildChoresHTML() {
+function buildChoresPanel() {
     let html = '<ul class="item-list">';
     panelData.chores.forEach((chore) => {
         const dueClass = getUrgencyClass(chore.next_due_date);
@@ -1143,18 +1141,29 @@ function buildChoresHTML() {
     return html;
 }
 
-function buildChangeLogHTML() {
-    let html = '<ul class="item-list">';
-    panelData.changeLog.forEach((cl) => {
-        const dueClass = getUrgencyClass(cl.next_change_date);
-        const lastChangedText = cl.last_changed_date
-            ? formatShortDate(cl.last_changed_date)
+function buildChoresHTML() {
+    let html = `<ul class="item-list">
+                    <li class="item-row">
+                        <span class="item-key"></span>
+                        <span class="item-value">
+                            <span class="item-meta">LAST DONE</span>
+                            <span class="item-meta">NEXT DUE</span>
+                        </span>
+                    </li>`;
+    panelData.chores.forEach((chore) => {
+        const dueClass = getUrgencyClass(chore.next_due_date);
+        const lastDoneText = chore.last_done_date
+            ? formatShortDate(chore.last_done_date)
             : "Never";
-        html += `<li class="item-row" data-open-type="change_log" data-id="${cl.id}">
-                    <span class="item-key ${dueClass}">${cl.item_name}</span>
+        const nextDueText = chore.next_due_date
+            ? formatShortDate(chore.next_due_date)
+            : "N/A";
+        html += `<li class="item-row" data-open-type="chores" data-id="${chore.id}">
+                    <span class="item-key ${dueClass}">${chore.task_name}</span>
                     <span class="item-value">
-                        <span class="item-meta">${lastChangedText}</span>
-                        <button class="action-btn btn-green" data-action="changed" data-id="${cl.id}">✓</button>
+                        <span class="item-meta">${lastDoneText}</span>
+                        <span class="item-meta">${nextDueText}</span>
+                        <button class="action-btn btn-green" data-action="done" data-id="${chore.id}">✓</button>
                     </span>
                 </li>`;
     });
@@ -1162,10 +1171,32 @@ function buildChangeLogHTML() {
     return html;
 }
 
+function buildBillsPanel() {
+    let headerClass = "";
+    const header = getElement("billsHeader");
+    header.classList.remove("danger", "warning");
+    panelData.bills.forEach((bill) => {
+        const dueClass = getUrgencyClass(bill.next_bill_date);
+        if (dueClass === "danger") headerClass = "danger";
+        else if (dueClass === "warning" && headerClass !== "danger") {
+            headerClass = "warning";
+        }
+    });
+    if (headerClass) header.classList.add(headerClass);
+    return "";
+}
+
 function buildBillsHTML() {
+    let headerClass = "";
+    const header = getElement("billsHeader");
+    header.classList.remove("danger", "warning");
     let html = '<ul class="item-list">';
     panelData.bills.forEach((bill) => {
         const dueClass = getUrgencyClass(bill.next_bill_date);
+        if (dueClass === "danger") headerClass = "danger";
+        else if (dueClass === "warning" && headerClass !== "danger") {
+            headerClass = "warning";
+        }
         const nextDueText = bill.next_bill_date
             ? formatShortDate(bill.next_bill_date)
             : "";
@@ -1178,6 +1209,49 @@ function buildBillsHTML() {
                 </li>`;
     });
     html += "</ul>";
+    if (headerClass) header.classList.add(headerClass);
+    return html;
+}
+
+function buildChangeLogPanel() {
+    let headerClass = "";
+    const header = getElement("changeLogHeader");
+    header.classList.remove("danger", "warning");
+    panelData.changeLog.forEach((cl) => {
+        const dueClass = getUrgencyClass(cl.next_change_date);
+        if (dueClass === "danger") headerClass = "danger";
+        else if (dueClass === "warning" && headerClass !== "danger") {
+            headerClass = "warning";
+        }
+    });
+    if (headerClass) header.classList.add(headerClass);
+    return "";
+}
+
+function buildChangeLogHTML() {
+    let headerClass = "";
+    const header = getElement("changeLogHeader");
+    header.classList.remove("danger", "warning");
+    let html = '<ul class="item-list">';
+    panelData.changeLog.forEach((cl) => {
+        const dueClass = getUrgencyClass(cl.next_change_date);
+        if (dueClass === "danger") headerClass = "danger";
+        else if (dueClass === "warning" && headerClass !== "danger") {
+            headerClass = "warning";
+        }
+        const lastChangedText = cl.last_changed_date
+            ? formatShortDate(cl.last_changed_date)
+            : "Never";
+        html += `<li class="item-row" data-open-type="changeLog" data-id="${cl.id}">
+                    <span class="item-key ${dueClass}">${cl.item_name}</span>
+                    <span class="item-value">
+                        <span class="item-meta">${lastChangedText}</span>
+                        <button class="action-btn btn-green" data-action="changed" data-id="${cl.id}">✓</button>
+                    </span>
+                </li>`;
+    });
+    html += "</ul>";
+    if (headerClass) header.classList.add(headerClass);
     return html;
 }
 
@@ -1525,9 +1599,7 @@ function setupFormHandlers() {
 
             formEl.addEventListener("submit", async (e) => {
                 e.preventDefault();
-                const isUpdate = !!(
-                    panel && panelState[panel]?.editingId
-                );
+                const isUpdate = !!(panel && panelState[panel]?.editingId);
                 const record = formCfg.buildRecord(isUpdate);
 
                 await saveRecord(
@@ -1561,9 +1633,7 @@ function setupFormHandlers() {
             if (!btn) return;
 
             btn.addEventListener("click", async () => {
-                const itemId = panel
-                    ? panelState[panel]?.editingId
-                    : null;
+                const itemId = panel ? panelState[panel]?.editingId : null;
                 if (!itemId) return;
 
                 await deleteRecord(
@@ -1798,17 +1868,16 @@ const ACTION_HANDLERS = {
         if (!id) return;
         const bill = panelData.bills.find((b) => b.id === id);
         if (!bill) return;
-        const today = getTodayHKT();
         await saveRecord(
             "bills_db",
             "bills",
             {
                 id,
                 bill_name: bill.bill_name,
-                last_bill_date: today,
+                last_bill_date: bill.next_bill_date,
                 bill_interval_months: bill.bill_interval_months,
                 next_bill_date: bill.bill_interval_months
-                    ? addMonths(today, bill.bill_interval_months)
+                    ? addMonths(bill.next_bill_date, bill.bill_interval_months)
                     : null,
             },
             true,
@@ -2857,13 +2926,13 @@ function setupVolumeControls() {
     volUp.dataset.bound = "1";
     volUp.addEventListener("click", async (e) => {
         e.stopPropagation();
-        spotifyVolume = Math.min(100, spotifyVolume + 15);
+        spotifyVolume = Math.min(100, spotifyVolume + 25);
         setElementText("volDisplay", spotifyVolume);
         if (spotifyPlayer) await spotifyPlayer.setVolume(spotifyVolume / 100);
     });
     volDown.addEventListener("click", async (e) => {
         e.stopPropagation();
-        spotifyVolume = Math.max(0, spotifyVolume - 15);
+        spotifyVolume = Math.max(0, spotifyVolume - 25);
         setElementText("volDisplay", spotifyVolume);
         if (spotifyPlayer) await spotifyPlayer.setVolume(spotifyVolume / 100);
     });
@@ -3155,10 +3224,10 @@ function setupScheduleModal() {
 
             const { sb, user } = await getSupabaseContext();
             const { error } = await sb
-                .from("spotifyschedules")
+                .from("spotify_schedules")
                 .delete()
                 .eq("id", spotifySelectedScheduleId)
-                .eq("userid", user.id);
+                .eq("user_id", user.id);
 
             if (error) {
                 console.error("Delete schedule failed:", error);
@@ -3396,7 +3465,6 @@ async function generateSchedules() {
                     playlist_id: playlistId,
                     playlist_name: playlistName,
                     triggered: false,
-                    cycle_day: cycleDay + 1,
                 });
             }
 
@@ -3473,6 +3541,12 @@ function tickClock() {
         "clockDisplay",
         `${weekday}\u00A0\u00A0${day} ${month} ${year}\u00A0\u00A0${hour}:${minute}`,
     );
+
+    const todayHKT = getTodayHKT();
+    if (todayHKT !== lastKnownDate) {
+        lastKnownDate = todayHKT;
+        PANELS.forEach(renderPanel);
+    }
 }
 
 function startClock() {

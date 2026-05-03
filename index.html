@@ -96,7 +96,7 @@
                         style="flex: 0 0 auto"
                     >
                         <div class="panel-header">
-                            <h3>Bills</h3>
+                            <h3 id="billsHeader">Bills</h3>
                         </div>
                         <div class="panel-content" id="billsContent"></div>
                     </div>
@@ -106,7 +106,7 @@
                         style="flex: 0 0 auto"
                     >
                         <div class="panel-header">
-                            <h3>Change Log</h3>
+                            <h3 id="changeLogHeader">Change Log</h3>
                         </div>
                         <div class="panel-content" id="changeLogContent"></div>
                     </div>
@@ -180,20 +180,19 @@
                         />
                     </div>
 
-                    <div>
-                        <label>Category</label>
-                        <select id="mealPrepCategory" name="category">
-                            <option value="Carbs">Carbs</option>
-                            <option value="Veggies">Veggies</option>
-                            <option value="Proteins">Proteins</option>
-                            <option value="Fruits">Fruits</option>
-                            <option value="Others">Others</option>
-                            <option value="Fridge">Fridge</option>
-                            <option value="Freezer">Freezer</option>
-                        </select>
-                    </div>
-
-                    <div>
+                    <div class="form-row-2">
+                        <div>
+                            <label>Category</label>
+                            <select id="mealPrepCategory" name="category">
+                                <option value="Carbs">Carbs</option>
+                                <option value="Veggies">Veggies</option>
+                                <option value="Proteins">Proteins</option>
+                                <option value="Fruits">Fruits</option>
+                                <option value="Others">Others</option>
+                                <option value="Fridge">Fridge</option>
+                                <option value="Freezer">Freezer</option>
+                            </select>
+                        </div>
                         <div>
                             <label>Portions</label>
                             <input
@@ -204,17 +203,9 @@
                                 value="5"
                             />
                         </div>
-                        <div>
-                            <label>Shelf Life (days)</label>
-                            <input
-                                type="number"
-                                id="mealPrepShelfLife"
-                                name="shelf_life_days"
-                                min="0"
-                            />
-                        </div>
                     </div>
-                    <div>
+
+                    <div class="form-row-3">
                         <div>
                             <label>Creation Date</label>
                             <input
@@ -222,6 +213,15 @@
                                 id="mealPrepCreatedAt"
                                 name="created_at"
                                 required
+                            />
+                        </div>
+                        <div>
+                            <label>Shelf Life (days)</label>
+                            <input
+                                type="number"
+                                id="mealPrepShelfLife"
+                                name="shelf_life_days"
+                                min="0"
                             />
                         </div>
                         <div>
@@ -280,25 +280,33 @@
                     <input type="hidden" id="choreEditId" />
                     <label class="form-label">Task Name</label>
                     <input type="text" id="choreTaskName" required />
-                    <label class="form-label">Last Done Date</label>
-                    <input type="date" id="choreLastDoneDate" />
-                    <label class="form-label">Interval (days)</label>
-                    <input
-                        type="number"
-                        id="choreIntervalDays"
-                        min="1"
-                        value="7"
-                    />
-                    <label class="form-label">
-                        Next Due Date
-                        <span
-                            id="nextDueAutoLabel"
-                            class="field-auto-tag"
-                            style="display: none"
-                            >auto</span
-                        >
-                    </label>
-                    <input type="date" id="choreNextDueDate" />
+                    <div class="form-row-3">
+                        <div>
+                            <label class="form-label">Last Done Date</label>
+                            <input type="date" id="choreLastDoneDate" />
+                        </div>
+                        <div>
+                            <label class="form-label">Interval (days)</label>
+                            <input
+                                type="number"
+                                id="choreIntervalDays"
+                                min="1"
+                                value="7"
+                            />
+                        </div>
+                        <div>
+                            <label class="form-label">
+                                Next Due Date
+                                <span
+                                    id="nextDueAutoLabel"
+                                    class="field-auto-tag"
+                                    style="display: none"
+                                    >auto</span
+                                >
+                            </label>
+                            <input type="date" id="choreNextDueDate" />
+                        </div>
+                    </div>
                     <div class="modal-actions">
                         <button type="submit" class="btn-green">Save</button>
                         <button
@@ -334,25 +342,33 @@
                     <input type="hidden" id="billEditId" />
                     <label class="form-label">Bill Name</label>
                     <input type="text" id="billBillName" required />
-                    <label class="form-label">Last Bill Date</label>
-                    <input type="date" id="billLastBillDate" />
-                    <label class="form-label">Interval (months)</label>
-                    <input
-                        type="number"
-                        id="billIntervalMonths"
-                        min="1"
-                        value="1"
-                    />
-                    <label class="form-label">
-                        Next Bill Date
-                        <span
-                            id="nextBillAutoLabel"
-                            class="field-auto-tag"
-                            style="display: none"
-                            >auto</span
-                        >
-                    </label>
-                    <input type="date" id="billNextBillDate" />
+                    <div class="form-row-3">
+                        <div>
+                            <label class="form-label">Last Bill Date</label>
+                            <input type="date" id="billLastBillDate" />
+                        </div>
+                        <div>
+                            <label class="form-label">Interval (months)</label>
+                            <input
+                                type="number"
+                                id="billIntervalMonths"
+                                min="1"
+                                value="1"
+                            />
+                        </div>
+                        <div>
+                            <label class="form-label">
+                                Next Bill Date
+                                <span
+                                    id="nextBillAutoLabel"
+                                    class="field-auto-tag"
+                                    style="display: none"
+                                    >auto</span
+                                >
+                            </label>
+                            <input type="date" id="billNextBillDate" />
+                        </div>
+                    </div>
                     <div class="modal-actions">
                         <button type="submit" class="btn-green">Save</button>
                         <button
@@ -388,25 +404,33 @@
                     <input type="hidden" id="changeLogEditId" />
                     <label class="form-label">Item Name</label>
                     <input type="text" id="changeLogItemName" required />
-                    <label class="form-label">Last Changed</label>
-                    <input type="date" id="changeLogLastChanged" />
-                    <label class="form-label">Interval (months)</label>
-                    <input
-                        type="number"
-                        id="changeLogIntervalMonths"
-                        min="1"
-                        value="6"
-                    />
-                    <label class="form-label">
-                        Next Change Date
-                        <span
-                            id="nextChangeAutoLabel"
-                            class="field-auto-tag"
-                            style="display: none"
-                            >auto</span
-                        >
-                    </label>
-                    <input type="date" id="changeLogNextChangeDate" />
+                    <div class="form-row-3">
+                        <div>
+                            <label class="form-label">Last Changed</label>
+                            <input type="date" id="changeLogLastChanged" />
+                        </div>
+                        <div>
+                            <label class="form-label">Interval (months)</label>
+                            <input
+                                type="number"
+                                id="changeLogIntervalMonths"
+                                min="1"
+                                value="6"
+                            />
+                        </div>
+                        <div>
+                            <label class="form-label">
+                                Next Change Date
+                                <span
+                                    id="nextChangeAutoLabel"
+                                    class="field-auto-tag"
+                                    style="display: none"
+                                    >auto</span
+                                >
+                            </label>
+                            <input type="date" id="changeLogNextChangeDate" />
+                        </div>
+                    </div>
                     <div class="modal-actions">
                         <button type="submit" class="btn-green">Save</button>
                         <button
