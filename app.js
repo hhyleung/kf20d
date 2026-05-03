@@ -3635,30 +3635,32 @@ async function showDashboard() {
         let pressTimer = null;
         let longPressFired = false;
 
-        clockHeader.addEventListener("pointerdown", () => {
+        const onPressStart = () => {
             longPressFired = false;
             pressTimer = setTimeout(() => {
                 longPressFired = true;
                 toggleFullscreen();
             }, 600);
-        });
+        };
 
-        clockHeader.addEventListener("click", () =>
-            blanker.classList.add("active"),
-        );
-
-        clockHeader.addEventListener("pointerup", () => {
+        const onPressEnd = () => {
             clearTimeout(pressTimer);
-            if (!longPressFired) blanker.classList.add("active");
+            if (!longPressFired) {
+                blanker.classList.add("active");
+            }
             setTimeout(() => {
                 longPressFired = false;
             }, 100);
-        });
+        };
 
-        clockHeader.addEventListener("pointercancel", () => {
+        const onPressCancel = () => {
             clearTimeout(pressTimer);
-        });
+            longPressFired = false;
+        };
 
+        clockHeader.addEventListener("pointerdown", onPressStart);
+        clockHeader.addEventListener("pointerup", onPressEnd);
+        clockHeader.addEventListener("pointercancel", onPressCancel);
         clockHeader.addEventListener("contextmenu", (e) => e.preventDefault());
     }
 
