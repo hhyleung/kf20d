@@ -92,38 +92,54 @@ body {
         height: auto;
         min-height: 100dvh;
     }
+
     .grid {
-        display: flex;
-        flex-direction: column;
-        height: auto;
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        gap: 0.6rem;
     }
+
     .sub-col {
-        display: contents;
+        display: flex !important;
+        flex-direction: column;
+        gap: 0.6rem;
+        grid-column: unset !important;
+        grid-row: unset !important;
     }
+
+    .panel {
+        grid-column: unset !important;
+        grid-row: unset !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
+        flex: none !important;
+    }
+
     .panel .panel-content {
         display: none !important;
     }
+
     .panel-header {
-        border-bottom: none;
+        border-bottom: none !important;
     }
-    .panel[data-section="mealprep"],
-    .panel[data-section="notes"] {
-        grid-column: unset !important;
-        grid-row: unset !important;
-        height: auto !important;
-    }
+
     :root {
         --item-font: 1.2rem;
         --title-font: 1.4rem;
     }
+
     .modal {
         padding: 1rem;
     }
+
     .modal-wide,
     .modal-full {
         max-width: 100% !important;
         max-height: 92% !important;
     }
+    
     .spotify-vol-header {
         display: none;
     }

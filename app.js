@@ -3616,15 +3616,49 @@ function renderSpotify() {
     }
 }
 
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch((err) => {
+            console.warn("Fullscreen request failed:", err);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+}
+
 async function showDashboard() {
     const blanker = getElement("screenBlanker");
     const clockHeader = getElement("datetimeHeader");
     if (clockHeader && !clockHeader.dataset.bound) {
         clockHeader.dataset.bound = "1";
+
+        let pressTimer = null;
+        let longPressFired = false;
+
+        clockHeader.addEventListener("pointerdown", () => {
+            longPressFired = false;
+            pressTimer = setTimeout(() => {
+                longPressFired = true;
+                toggleFullscreen();
+            }, 600);
+        });
+
         clockHeader.addEventListener("click", () =>
             blanker.classList.add("active"),
         );
+
+        clockHeader.addEventListener("pointerup", () => {
+            clearTimeout(pressTimer);
+            if (!longPressFired) blanker.classList.add("active");
+        });
+
+        clockHeader.addEventListener("pointercancel", () => {
+            clearTimeout(pressTimer);
+        });
+
+        clockHeader.addEventListener("contextmenu", (e) => e.preventDefault());
     }
+
     if (blanker && !blanker.dataset.bound) {
         blanker.dataset.bound = "1";
         blanker.addEventListener("click", () => {
