@@ -3650,6 +3650,9 @@ async function showDashboard() {
         clockHeader.addEventListener("pointerup", () => {
             clearTimeout(pressTimer);
             if (!longPressFired) blanker.classList.add("active");
+            setTimeout(() => {
+                longPressFired = false;
+            }, 100);
         });
 
         clockHeader.addEventListener("pointercancel", () => {
