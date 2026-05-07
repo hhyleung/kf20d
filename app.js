@@ -58,7 +58,8 @@ const panelData = {
 };
 
 const panelState = {
-    pantry: { editingId: null, manualDate: false },
+    mealPrep: { editingId: null, manualDate: false },
+    fridgeStock: { editingId: null, manualDate: false },
     chores: { editingId: null, manualDate: false },
     bills: { editingId: null, manualDate: false },
     changeLog: { editingId: null, manualDate: false },
@@ -76,7 +77,7 @@ let spotifyPlaylists = [];
 let playlistSlots = [];
 let schedules = [];
 let activeSlot = null;
-let spotifyVolume = 75;
+let spotifyVolume = 50;
 let spotifyPlayer = null;
 let spotifyDeviceId = null;
 let isSpotifyReady = false;
@@ -176,9 +177,9 @@ const PANEL_CONFIGS = {
             autoLabelId: "expiryAutoLabel",
             unit: "days",
             get manualFlag() {
-                return panelState.pantry.manualDate;
+                return panelState.mealPrep.manualDate;
             },
-            setManual: (v) => (panelState.pantry.manualDate = v),
+            setManual: (v) => (panelState.mealPrep.manualDate = v),
             clearResult: () => setElementValue("mealPrepExpiryDate", ""),
         },
 
@@ -188,14 +189,14 @@ const PANEL_CONFIGS = {
                 const shelfLifeDays =
                     parseInt(getElement("mealPrepShelfLife").value, 10) || null;
                 const createdAt = getElement("mealPrepCreatedAt").value || null;
-                const expiryDate = panelState.pantry.manualDate
+                const expiryDate = panelState.mealPrep.manualDate
                     ? getElement("mealPrepExpiryDate").value || null
                     : createdAt && shelfLifeDays
                       ? addDays(createdAt, shelfLifeDays)
                       : null;
 
                 return {
-                    id: isUpdate ? panelState.pantry.editingId : null,
+                    id: isUpdate ? panelState.mealPrep.editingId : null,
                     food_name: getElement("mealPrepItemName").value.trim(),
                     category: getElement("mealPrepCategory").value,
                     portions:
@@ -2210,6 +2211,13 @@ function fetchNowPlaying() {
                     },
                 },
             });
+            if (data?.device?.volume_percent != null) {
+                const remoteVol = data.device.volume_percent;
+                if (remoteVol !== spotifyVolume) {
+                    spotifyVolume = remoteVol;
+                    setElementText("volDisplay", String(remoteVol));
+                }
+            }
         } catch (err) {
             console.error("fetchNowPlaying failed: ", err);
         }
@@ -2425,6 +2433,41 @@ async function getDeviceId() {
     }
 }
 
+async function playLikedSongs(token, deviceId) {
+    const meRes = await fetch("https://api.spotify.com/v1/me", {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    const { id: userId } = await meRes.json();
+
+    await fetch(
+        `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(deviceId)}`,
+        { method: "PUT", headers: { Authorization: `Bearer ${token}` } },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                context_uri: `spotify:user:${userId}:collection`,
+            }),
+        },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await fetch(
+        `https://api.spotify.com/v1/me/player/volume?volume_percent=50&device_id=${encodeURIComponent(spotifyDeviceId)}`,
+        { method: "PUT", headers: { Authorization: `Bearer ${token}` } },
+    );
+    spotifyVolume = 50;
+    setElementText("volDisplay", spotifyVolume);
+}
+
 async function playPlaylist(playlistId) {
     const token = await getValidSpotifyToken();
     const targetDeviceId = await getDeviceId();
@@ -2433,11 +2476,13 @@ async function playPlaylist(playlistId) {
         return;
     }
     spotifyDeviceId = targetDeviceId;
-    const body =
-        playlistId === "__liked_songs__"
-            ? { context_uri: "spotify:collection:tracks" }
-            : { context_uri: `spotify:playlist:${playlistId}` };
 
+    if (playlistId === "__liked_songs__") {
+        await playLikedSongs(token, spotifyDeviceId);
+        return;
+    }
+
+    const body = { context_uri: `spotify:playlist:${playlistId}` };
     if (!token || !spotifyDeviceId || !playlistId) return false;
     try {
         const res = await fetch(
@@ -2458,6 +2503,13 @@ async function playPlaylist(playlistId) {
             console.error("playPlaylist failed:", res.status, text);
             return false;
         }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await fetch(
+            `https://api.spotify.com/v1/me/player/volume?volume_percent=50&device_id=${encodeURIComponent(spotifyDeviceId)}`,
+            { method: "PUT", headers: { Authorization: `Bearer ${token}` } },
+        );
+        spotifyVolume = 50;
+        setElementText("volDisplay", spotifyVolume);
         await new Promise((resolve) => setTimeout(resolve, 400));
         await fetch("https://api.spotify.com/v1/me/player/shuffle?state=true", {
             method: "PUT",
@@ -3109,32 +3161,55 @@ function setupScheduleForm() {
     const deleteBtn = getElement("ssfDeleteBtn");
     if (deleteBtn && !deleteBtn.dataset.bound) {
         deleteBtn.dataset.bound = "1";
-        deleteBtn.addEventListener("click", async (e) => {
-            e.stopPropagation();
+        deleteBtn.addEventListener("click", async () => {
             if (!spotifySelectedScheduleId) return;
-            if (!confirm("Delete this schedule?")) return;
 
+            const sel = spotifySelectedSchedule;
+            const hasTemplate = !!sel?.template_ref;
+            const today = getTodayHKT();
+
+            let deleteMode = "single";
+            if (hasTemplate) {
+                if (!confirm("Delete this schedule?")) return;
+                const deleteAll = confirm(
+                    "This schedule is part of a recurring template.\n\nOK = Delete ALL future schedules in this template\nCancel = Delete only this one",
+                );
+                deleteMode = deleteAll ? "template" : "single";
+            } else {
+                if (!confirm("Delete this schedule?")) return;
+            }
             const { sb, user } = await getSupabaseContext();
-            const { error } = await sb
-                .from("spotify_schedules")
-                .delete()
-                .eq("id", spotifySelectedScheduleId)
-                .eq("user_id", user.id);
+            let error;
+
+            if (deleteMode === "template") {
+                ({ error } = await sb
+                    .from("spotify_schedules")
+                    .delete()
+                    .eq("template_ref", sel.template_ref)
+                    .eq("user_id", user.id)
+                    .eq("triggered", false)
+                    .gte("scheduled_date", today));
+            } else {
+                ({ error } = await sb
+                    .from("spotify_schedules")
+                    .delete()
+                    .eq("id", spotifySelectedScheduleId)
+                    .eq("user_id", user.id));
+            }
 
             if (error) {
-                console.error("Delete schedule failed:", error);
-                alert(`Delete schedule failed: ${error.message}`);
+                console.error("Delete schedule failed", error);
+                alert("Delete schedule failed: " + error.message);
                 return;
             }
 
-            closeModal("spotifyScheduleFormModal");
             spotifySelectedScheduleId = null;
             spotifySelectedSchedule = null;
             await loadSchedules();
             renderNextSchedule();
             renderCalendar();
             renderSchedule(spotifySelectedDate);
-            refreshScheduleActionState();
+            refreshScheduleActionState?.();
         });
     }
 }
@@ -3220,29 +3295,54 @@ function setupScheduleModal() {
         delBtn.dataset.bound = 1;
         delBtn.addEventListener("click", async () => {
             if (!spotifySelectedScheduleId) return;
-            if (!confirm("Delete this schedule?")) return;
+
+            const sel = spotifySelectedSchedule;
+            const hasTemplate = !!sel?.template_ref;
+            const today = getTodayHKT();
+
+            let deleteMode = "single";
+            if (hasTemplate) {
+                if (!confirm("Delete this schedule?")) return;
+                const deleteAll = confirm(
+                    "This schedule is part of a recurring template.\n\nOK = Delete ALL future schedules in this template\nCancel = Delete only this one",
+                );
+                deleteMode = deleteAll ? "template" : "single";
+            } else {
+                if (!confirm("Delete this schedule?")) return;
+            }
 
             const { sb, user } = await getSupabaseContext();
-            const { error } = await sb
-                .from("spotify_schedules")
-                .delete()
-                .eq("id", spotifySelectedScheduleId)
-                .eq("user_id", user.id);
+            let error;
+
+            if (deleteMode === "template") {
+                ({ error } = await sb
+                    .from("spotify_schedules")
+                    .delete()
+                    .eq("template_ref", sel.template_ref)
+                    .eq("user_id", user.id)
+                    .eq("triggered", false)
+                    .gte("scheduled_date", today));
+            } else {
+                ({ error } = await sb
+                    .from("spotify_schedules")
+                    .delete()
+                    .eq("id", spotifySelectedScheduleId)
+                    .eq("user_id", user.id));
+            }
 
             if (error) {
-                console.error("Delete schedule failed:", error);
-                alert(`Delete schedule failed: ${error.message}`);
+                console.error("Delete schedule failed", error);
+                alert("Delete schedule failed: " + error.message);
                 return;
             }
 
             spotifySelectedScheduleId = null;
             spotifySelectedSchedule = null;
-
             await loadSchedules();
             renderNextSchedule();
             renderCalendar();
             renderSchedule(spotifySelectedDate);
-            refreshScheduleActionState();
+            refreshScheduleActionState?.();
         });
     }
 
@@ -3331,8 +3431,7 @@ async function generateSchedules() {
     const startDateStr = getElement("spotifyTemplateStartDate").value;
     const endDateStr = getElement("spotifyTemplateEndDate").value;
     const overrideMode =
-        selectElement('input[name="spotifyOverrideMode"]:checked')?.value ||
-        "add";
+        selectElement('input[name="spotifyOverride"]:checked')?.value || "add";
 
     const playlistSelect = getElement("spotifyTemplatePlaylistSelect");
     const manualInput = getElement("spotifyTemplatePlaylistManual");
@@ -3379,7 +3478,7 @@ async function generateSchedules() {
 
     const templateRef = crypto.randomUUID();
 
-    if (overrideMode === "replace-range") {
+    if (overrideMode === "replace") {
         const { error } = await sb
             .from("spotify_schedules")
             .delete()
@@ -3630,37 +3729,20 @@ async function showDashboard() {
     const blanker = getElement("screenBlanker");
     const clockHeader = getElement("datetimeHeader");
     if (clockHeader && !clockHeader.dataset.bound) {
-        clockHeader.dataset.bound = "1";
+        let clickTimer = null;
 
-        let pressTimer = null;
-        let longPressFired = false;
-
-        const onPressStart = () => {
-            longPressFired = false;
-            pressTimer = setTimeout(() => {
-                longPressFired = true;
-                toggleFullscreen();
-            }, 600);
-        };
-
-        const onPressEnd = () => {
-            clearTimeout(pressTimer);
-            if (!longPressFired) {
+        clockHeader.addEventListener("click", () => {
+            clearTimeout(clickTimer);
+            clickTimer = setTimeout(() => {
                 blanker.classList.add("active");
-            }
-            setTimeout(() => {
-                longPressFired = false;
-            }, 100);
-        };
+            }, 250);
+        });
 
-        const onPressCancel = () => {
-            clearTimeout(pressTimer);
-            longPressFired = false;
-        };
+        clockHeader.addEventListener("dblclick", () => {
+            clearTimeout(clickTimer);
+            toggleFullscreen();
+        });
 
-        clockHeader.addEventListener("pointerdown", onPressStart);
-        clockHeader.addEventListener("pointerup", onPressEnd);
-        clockHeader.addEventListener("pointercancel", onPressCancel);
         clockHeader.addEventListener("contextmenu", (e) => e.preventDefault());
     }
 

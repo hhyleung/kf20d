@@ -139,7 +139,7 @@ body {
         max-width: 100% !important;
         max-height: 92% !important;
     }
-    
+
     .spotify-vol-header {
         display: none;
     }
@@ -297,6 +297,12 @@ button:disabled {
     cursor: pointer;
     user-select: none;
     transition: background 0.15s ease;
+}
+
+#datetimeHeader {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 #datetimeContent {
