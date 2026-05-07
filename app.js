@@ -63,6 +63,7 @@ const panelState = {
     chores: { editingId: null, manualDate: false },
     bills: { editingId: null, manualDate: false },
     changeLog: { editingId: null, manualDate: false },
+    notes: { editingId: null },
 };
 
 let activePanel = null;
@@ -600,6 +601,7 @@ const PANEL_CONFIGS = {
 
         functions: {
             addItem: () => openModal("noteAddModal"),
+            editItem: (id) => openNoteEditModal(id),
         },
     },
 };
@@ -1283,11 +1285,11 @@ function buildPlantsHTML(showArchived = false) {
 function buildNotesHTML() {
     let html = '<ul class="item-list">';
     panelData.notes.forEach((note) => {
-        html += `<li class="item-row">
+        html += `<li class="item-row" data-open-type="notes" data-id="${note.id}">
                     <span class="item-key">${note.note}</span>
                     <span class="item-value">
-                        <span class="item-meta">&nbsp;</span>
-                        <button class="action-btn btn-red" data-action="note-delete" data-id="${note.id}" title="Delete note">&times;</button>
+                    <span class="item-meta">&nbsp;</span>
+                    <button class="action-btn btn-red" data-action="note-delete" data-id="${note.id}" title="Delete note">×</button>
                     </span>
                 </li>`;
     });
@@ -1504,6 +1506,16 @@ function openPlantEventModal(plantId) {
     setElementValue("plantEventPotSize", plant.pot_size || "");
     setElementValue("plantEventNotes", "");
     openModal("plantEventModal");
+}
+
+function openNoteEditModal(id) {
+    const note = panelData.notes.find((n) => n.id === id);
+    if (!note) return;
+    panelState.notes.editingId = id;
+    const titleEl = getElement("addNoteModal-title");
+    if (titleEl) titleEl.textContent = "Edit Note";
+    setElementValue("addNoteContent", note.note);
+    openModal("noteAddModal");
 }
 // ============================================================
 // #endregion
@@ -1783,17 +1795,30 @@ function setupFormHandlers() {
             e.preventDefault();
             const noteContent = getElement("addNoteContent").value.trim();
             if (!noteContent) return;
-
-            await saveRecord(
-                "notes_db",
-                "notes",
-                {
-                    note: noteContent,
-                    creation_date: getTodayHKT(),
-                },
-                false,
-            );
+            const isUpdate = !!panelState.notes?.editingId;
+            if (isUpdate) {
+                await saveRecord(
+                    "notes_db",
+                    "notes",
+                    {
+                        id: panelState.notes.editingId,
+                        note: noteContent,
+                        creation_date: getTodayHKT(),
+                    },
+                    true,
+                );
+            } else {
+                await saveRecord(
+                    "notes_db",
+                    "notes",
+                    { note: noteContent, creation_date: getTodayHKT() },
+                    false,
+                );
+            }
+            panelState.notes.editingId = null;
             setElementValue("addNoteContent", "");
+            const titleEl = getElement("addNoteModal-title");
+            if (titleEl) titleEl.textContent = "Add New Note";
             closeModal("noteAddModal");
         });
     }
