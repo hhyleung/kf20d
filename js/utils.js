@@ -53,10 +53,12 @@ function addDays(dateStr, days) {
 }
 
 // Clamps to the end of the month (31 Jan + 1 month = 28/29 Feb).
-function addMonths(dateStr, months) {
+// `dayOfMonth` overrides the target day, e.g. to return to the 31st after a
+// date was clamped to 28 Feb.
+function addMonths(dateStr, months, dayOfMonth = null) {
     if (!dateStr || !months) return "";
     const d = new Date(dateStr + "T00:00:00Z");
-    const day = d.getUTCDate();
+    const day = dayOfMonth ?? d.getUTCDate();
     d.setUTCDate(1);
     d.setUTCMonth(d.getUTCMonth() + parseInt(months, 10));
     const lastDay = new Date(
@@ -66,10 +68,14 @@ function addMonths(dateStr, months) {
     return d.toISOString().slice(0, 10);
 }
 
-function addInterval(dateStr, amount, unit) {
+function addInterval(dateStr, amount, unit, dayOfMonth = null) {
     return unit === "months"
-        ? addMonths(dateStr, amount)
+        ? addMonths(dateStr, amount, dayOfMonth)
         : addDays(dateStr, amount);
+}
+
+function isLastDayOfMonth(dateStr) {
+    return addDays(dateStr, 1).slice(8, 10) === "01";
 }
 
 function daysBetween(fromStr, toStr) {

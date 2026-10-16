@@ -244,9 +244,21 @@ const PANEL_CONFIGS = {
         addTitle: "Add new bill",
         deleteMsg: "Delete this bill permanently?",
         doneTitle: "Mark paid",
-        // A bill is paid for its due date, so paying early or late keeps the
-        // billing cycle on the same day of the month.
+        // Bills fall on a fixed day of the month, not on the day they're paid:
+        // ✓ records the bill date itself (today only if none is set), so
+        // paying early or late never shifts the cycle. Chores and the change
+        // log use today instead.
         doneDate: (bill) => bill.next_bill_date || getToday(),
+        // Month-end clamping (31st -> 28 Feb) loses the billing day, so
+        // recover it from the bill dates: a date that isn't a month's last
+        // day shows the real day; if both are month-ends it's an
+        // end-of-month bill. Returns null to keep the bill date's own day.
+        dayOfMonth: (bill) => {
+            const next = bill.next_bill_date;
+            const prev = bill.last_bill_date;
+            if (!next || !prev || !isLastDayOfMonth(next)) return null;
+            return isLastDayOfMonth(prev) ? 31 : Number(prev.slice(8, 10));
+        },
     }),
 
     changeLog: recurringPanel({

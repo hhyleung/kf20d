@@ -739,18 +739,21 @@ const ACTION_HANDLERS = {
         });
     },
 
-    // ✓ on chores / bills / change log: set the last date and roll the next.
+    // ✓ on chores / bills / change log: set the last date (see each panel's
+    // doneDate) and roll the next date forward by the interval.
     "mark-done": async (btn) => {
         const cfg = PANEL_CONFIGS[btn.dataset.panel];
         const item = cfg?.itemModal.findItem(btn.dataset.id);
         if (!item) return;
-        const { cols, unit, doneDate } = cfg.recurring;
+        const { cols, unit, doneDate, dayOfMonth } = cfg.recurring;
         const last = doneDate(item);
         const interval = item[cols.interval];
         await saveRecord(cfg.data.table, {
             id: item.id,
             [cols.last]: last,
-            [cols.next]: interval ? addInterval(last, interval, unit) : null,
+            [cols.next]: interval
+                ? addInterval(last, interval, unit, dayOfMonth?.(item))
+                : null,
         });
     },
 
