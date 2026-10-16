@@ -1414,16 +1414,19 @@ form {
 
 /* #region MOBILE */
 @media (max-width: 768px) {
+    /* sizes follow typical phone UI: 16px body, 14px secondary, 12px captions */
     :root {
-        --item-font: 1.15rem;
-        --title-font: 1.3rem;
-        --btn-size: 40px;
-        --btn-font: 1.1rem;
+        --item-font: 1rem;
+        --title-font: 1.0625rem;
+        --btn-size: 36px;
+        --btn-font: 1rem;
+        --btn-radius: 8px;
     }
 
     body {
         height: auto;
         overflow-y: auto;
+        font-size: 16px;
     }
 
     /* JS sets display:flex inline; a plain block lets the column grow with its content */
@@ -1431,7 +1434,8 @@ form {
         display: block !important;
         height: auto;
         min-height: 100dvh;
-        padding: 0.8rem;
+        padding: 0.75rem;
+        padding-top: max(0.75rem, env(safe-area-inset-top));
     }
 
     .grid {
@@ -1439,16 +1443,12 @@ form {
         flex-direction: column;
         height: auto;
         padding: 0;
-        gap: 0.6rem;
+        gap: 0.5rem;
     }
 
+    /* flatten the columns so panels can be reordered individually */
     .sub-col {
-        display: flex;
-        flex-direction: column;
-        flex: none;
-        gap: 0.6rem;
-        grid-column: auto !important;
-        grid-row: auto !important;
+        display: contents;
     }
 
     .panel {
@@ -1456,7 +1456,23 @@ form {
         grid-row: auto !important;
         height: auto !important;
         flex: none !important;
-        border-radius: 14px;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    /* the tablet rule's 44px minimum also matches phones */
+    .action-btn,
+    .add-btn {
+        min-width: var(--btn-size);
+        min-height: var(--btn-size);
+    }
+
+    .panel[data-section="spotify"] {
+        order: -1;
+    }
+
+    .panel[data-section="datetime"] {
+        display: none;
     }
 
     .panel .panel-content {
@@ -1465,30 +1481,26 @@ form {
 
     .panel-header {
         border-bottom: none !important;
-        padding: 0.7rem 1rem;
-        min-height: 56px;
+        padding: 0.5rem 0.9rem;
+        min-height: 48px;
+    }
+
+    .panel-header h3 {
+        letter-spacing: 0.03em;
     }
 
     .panel.header-only .panel-header {
         height: auto;
     }
 
-    #datetimeHeader {
-        touch-action: manipulation;
-    }
-
-    #clockDisplay {
-        font-size: 1.15rem;
-    }
-
     /* Spotify playback only runs on the tablet; keep schedule management */
     .panel[data-section="spotify"] .panel-header {
-        border-bottom: 1.5px solid var(--border) !important;
+        border-bottom: 1px solid var(--border) !important;
     }
 
     .panel[data-section="spotify"] .panel-content {
         display: flex !important;
-        padding: 0.8rem 1rem;
+        padding: 0.6rem 0.9rem 0.75rem;
     }
 
     .spotify-nowplaying,
@@ -1497,10 +1509,26 @@ form {
         display: none !important;
     }
 
+    .spotify-schedule {
+        gap: 0.35rem;
+    }
+
+    .spotify-schedule-row {
+        gap: 0.5rem;
+        padding: 0.15rem 0;
+    }
+
     .spotify-schedule-date,
     .spotify-schedule-time,
     .spotify-schedule-playlist {
-        font-size: 1.1rem;
+        font-size: 0.9375rem;
+        min-width: 0;
+    }
+
+    .spotify-schedule-action {
+        height: 34px;
+        font-size: 0.8125rem;
+        border-radius: 8px;
     }
 
     /* modals fill the screen and scroll internally */
@@ -1517,36 +1545,91 @@ form {
         width: 100%;
         max-width: 100% !important;
         max-height: 100% !important;
-        border-radius: 16px;
+        border-radius: 14px;
     }
 
     .modal header {
-        padding: 0.9rem 1rem;
-        gap: 0.6rem;
+        padding: 0.7rem 0.9rem;
+        gap: 0.5rem;
+    }
+
+    .modal-header-actions {
+        gap: 0.4rem;
+    }
+
+    .list-last-updated {
+        font-size: 0.75rem;
+        margin-top: 0.1rem;
     }
 
     #fullListContent,
     form,
     .plant-detail-body {
-        padding: 1rem;
+        padding: 0.9rem;
     }
 
-    .modal-actions {
-        padding: 1rem 0 0;
+    .plant-detail-body {
+        gap: 1rem;
+    }
+
+    .form-label,
+    .form-group > label,
+    .plant-history-title {
+        font-size: 0.75rem;
         margin-top: 0.8rem;
-        gap: 0.6rem;
     }
 
-    .modal-actions button {
-        min-height: 46px !important;
-        padding: 0.7rem 0.8rem;
+    .field-auto-tag,
+    .plant-archived-tag {
+        font-size: 0.6875rem;
     }
 
+    /* 16px inputs stop iOS zooming in on focus */
     input,
     select,
     textarea {
-        padding: 0.8rem 1rem;
-        margin-bottom: 1rem;
+        font-size: 16px;
+        padding: 0.6rem 0.8rem;
+        margin-top: 0.3rem;
+        margin-bottom: 0.8rem;
+        border-radius: 10px;
+    }
+
+    textarea {
+        min-height: 6rem;
+    }
+
+    .form-check-label {
+        gap: 0.8rem;
+    }
+
+    .form-check-label input[type="checkbox"] {
+        width: 1.4rem;
+        height: 1.4rem;
+        margin: 0;
+    }
+
+    .spotify-override-option {
+        gap: 0.6rem;
+        padding: 0.25rem 0;
+    }
+
+    .spotify-override-option input[type="radio"] {
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+
+    .modal-actions {
+        padding: 0.8rem 0 0;
+        margin-top: 0.6rem;
+        gap: 0.5rem;
+    }
+
+    .modal-actions button {
+        min-height: 42px !important;
+        padding: 0.5rem 0.7rem;
+        font-size: 0.9375rem;
+        border-radius: 10px;
     }
 
     .form-row-2,
@@ -1561,6 +1644,10 @@ form {
         column-gap: 0;
     }
 
+    .meal-prep-group {
+        margin-bottom: 0.9rem;
+    }
+
     .meal-prep-group.col-full,
     .meal-prep-group.col-half {
         grid-column: auto;
@@ -1569,27 +1656,52 @@ form {
     .spotify-schedule-title,
     .meal-prep-group-title,
     .meal-prep-cat-total {
-        font-size: 0.95rem;
+        font-size: 0.75rem;
     }
 
     .item-row {
         margin-left: 0;
         gap: 0.4rem;
+        padding: 0.3rem 0;
     }
 
     .item-value {
-        gap: 0.4rem;
+        gap: 0.35rem;
         min-width: 0;
     }
 
+    .portion-number,
+    .portion-zero {
+        width: 1.5rem;
+    }
+
     .item-meta {
-        font-size: 1.05rem;
+        font-size: 0.875rem;
         min-width: 0;
         margin-right: 0.2rem;
     }
 
     .plant-meta-pot {
-        margin-right: 0.8rem;
+        margin-right: 0.6rem;
+    }
+
+    .plant-name-input {
+        font-size: 16px !important;
+        padding: 0.5rem 0.8rem !important;
+    }
+
+    .plant-info-label {
+        font-size: 0.75rem;
+        padding: 0.55rem 0.8rem;
+    }
+
+    .plant-info-value,
+    .plant-info-input {
+        font-size: 0.9375rem;
+    }
+
+    .plant-info-value {
+        padding: 0.55rem 0.8rem;
     }
 
     .plant-history-table-wrap {
@@ -1597,16 +1709,44 @@ form {
     }
 
     .plant-history-table {
-        min-width: 520px;
+        min-width: 480px;
+        font-size: 0.875rem;
+    }
+
+    .plant-history-table th {
+        font-size: 0.75rem;
+        padding: 0.55rem 0.7rem;
+    }
+
+    .plant-history-table td {
+        padding: 0.5rem 0.7rem;
     }
 
     .spotify-schedule-modal {
         grid-template-columns: 1fr;
-        padding: 1rem;
+        padding: 0.9rem;
+    }
+
+    .spotify-calendar-cell {
+        min-height: 36px;
+        font-size: 0.875rem;
+    }
+
+    .spotify-cal-month-label,
+    .spotify-selected-date-label {
+        font-size: 1rem;
+    }
+
+    .spotify-day-row-title {
+        font-size: 0.9375rem;
     }
 
     .spotify-day-schedules {
         max-height: none;
+    }
+
+    .spotify-slot-pick-btn {
+        height: 44px;
     }
 }
 /* #endregion */
