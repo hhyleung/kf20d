@@ -539,6 +539,29 @@ function setupPanelEvents() {
     });
 }
 
+// Wrap every <input type="date" data-today> with a "Today" quick-fill button.
+// Fires input + change so auto-date listeners recalculate as if typed.
+function setupTodayButtons() {
+    selectAllElements("input[type='date'][data-today]").forEach((input) => {
+        if (input.parentElement.classList.contains("date-field")) return;
+        const wrap = document.createElement("div");
+        wrap.className = "date-field";
+        input.replaceWith(wrap);
+        wrap.appendChild(input);
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "today-btn btn-blue";
+        btn.textContent = "Today";
+        btn.addEventListener("click", () => {
+            input.value = getTodayHKT();
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        wrap.appendChild(btn);
+    });
+}
+
 function setupAutoDateListeners(cfg) {
     const fromEl = getElement(cfg.fromId);
     const intervalEl = getElement(cfg.intervalId);

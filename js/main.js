@@ -173,6 +173,7 @@ async function showDashboard() {
 
     setupPanelEvents();
     setupFormHandlers();
+    setupTodayButtons();
     startClock();
 
     await loadSupabaseData();

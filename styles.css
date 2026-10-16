@@ -593,6 +593,31 @@ textarea:focus {
     border-color: #9ab8c8;
 }
 
+.date-field {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1.4rem;
+}
+
+.date-field input {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+}
+
+.today-btn {
+    flex-shrink: 0;
+    padding: 0 1.2rem;
+    border: none;
+    border-radius: 12px;
+    font-size: var(--item-font);
+    font-family: inherit;
+    font-weight: 500;
+    color: var(--blue);
+    cursor: pointer;
+}
+
 textarea {
     resize: vertical;
     min-height: 8rem;
@@ -1391,7 +1416,8 @@ form {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group .date-field {
     margin-top: 0;
     margin-bottom: 0;
 }
@@ -1601,6 +1627,18 @@ form {
 
     textarea {
         min-height: 6rem;
+    }
+
+    .date-field {
+        gap: 0.4rem;
+        margin-top: 0.3rem;
+        margin-bottom: 0.8rem;
+    }
+
+    .today-btn {
+        padding: 0 0.8rem;
+        border-radius: 10px;
+        font-size: 0.9375rem;
     }
 
     .form-check-label {

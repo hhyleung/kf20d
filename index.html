@@ -214,6 +214,7 @@
                             <input
                                 type="date"
                                 id="mealPrepCreatedAt"
+                                data-today
                                 name="created_at"
                                 required
                             />
@@ -286,7 +287,11 @@
                     <div class="form-row-3">
                         <div>
                             <label class="form-label">Last Done Date</label>
-                            <input type="date" id="choreLastDoneDate" />
+                            <input
+                                type="date"
+                                id="choreLastDoneDate"
+                                data-today
+                            />
                         </div>
                         <div>
                             <label class="form-label">Interval (days)</label>
@@ -348,7 +353,11 @@
                     <div class="form-row-3">
                         <div>
                             <label class="form-label">Last Bill Date</label>
-                            <input type="date" id="billLastBillDate" />
+                            <input
+                                type="date"
+                                id="billLastBillDate"
+                                data-today
+                            />
                         </div>
                         <div>
                             <label class="form-label">Interval (months)</label>
@@ -410,7 +419,11 @@
                     <div class="form-row-3">
                         <div>
                             <label class="form-label">Last Changed</label>
-                            <input type="date" id="changeLogLastChanged" />
+                            <input
+                                type="date"
+                                id="changeLogLastChanged"
+                                data-today
+                            />
                         </div>
                         <div>
                             <label class="form-label">Interval (months)</label>
@@ -469,7 +482,7 @@
                     <label class="form-label">Plant Name</label>
                     <input type="text" id="addPlantName" required />
                     <label class="form-label">Starting Date</label>
-                    <input type="date" id="addPlantStartingDate" />
+                    <input type="date" id="addPlantStartingDate" data-today />
                     <label class="form-label">Pot Size (cm)</label>
                     <input
                         type="number"
@@ -610,7 +623,12 @@
                 <form id="plantEventForm">
                     <input type="hidden" name="plantId" id="plantEventId" />
                     <label class="form-label">Event Date</label>
-                    <input type="date" name="eventdate" id="plantEventDate" />
+                    <input
+                        type="date"
+                        name="eventdate"
+                        id="plantEventDate"
+                        data-today
+                    />
                     <div class="form-check-row">
                         <label class="form-check-label">
                             <input
@@ -936,6 +954,7 @@
                                 <input
                                     type="date"
                                     id="spotifyTemplateStartDate"
+                                    data-today
                                 />
                             </div>
 
@@ -1168,7 +1187,7 @@
                 <form id="spotifyScheduleForm">
                     <div class="form-group">
                         <label>Date</label>
-                        <input type="date" id="ssfDate" required />
+                        <input type="date" id="ssfDate" data-today required />
                     </div>
                     <div class="form-group">
                         <label>Time</label>
