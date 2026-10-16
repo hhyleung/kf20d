@@ -89,6 +89,10 @@ function formatMetaTimestamp(iso) {
 // ============================================================
 // #region DOM HELPERS
 // ============================================================
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function escapeHTML(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")

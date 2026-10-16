@@ -187,20 +187,48 @@ async function initSpotify() {
 // ============================================================
 // #region SPOTIFY DATA
 // ============================================================
+const SPOTIFY_API = "https://api.spotify.com/v1";
+
+// Calls the Spotify Web API with a valid token, retrying once with a forced
+// refresh on 401. Returns parsed JSON (null for empty responses) and throws
+// on failure, so callers decide what to do with errors.
+async function spotifyApi(path, { method = "GET", body } = {}) {
+    const url = path.startsWith("https://") ? path : SPOTIFY_API + path;
+    for (let attempt = 0; ; attempt++) {
+        const token = await getValidSpotifyToken(attempt > 0);
+        if (!token) throw new Error("Spotify is not connected");
+        const headers = { Authorization: `Bearer ${token}` };
+        if (body) headers["Content-Type"] = "application/json";
+        const res = await fetch(url, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        if (res.status === 401 && attempt === 0) continue;
+        if (!res.ok) {
+            const detail = await res.text().catch(() => "");
+            const err = new Error(
+                `Spotify ${method} ${path} failed (${res.status}) ${detail}`,
+            );
+            err.status = res.status;
+            throw err;
+        }
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    }
+}
+
+function withDevice(path, deviceId) {
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}device_id=${encodeURIComponent(deviceId)}`;
+}
+
 function fetchNowPlaying() {
     if (nowPlayingInterval) return;
     nowPlayingInterval = setInterval(async () => {
-        const token = await getValidSpotifyToken();
-        if (!token) return;
+        if (!(await getValidSpotifyToken())) return;
         try {
-            const res = await fetch("https://api.spotify.com/v1/me/player", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.status === 204 || !res.ok) {
-                renderNowPlaying(null);
-                return;
-            }
-            const data = await res.json();
+            const data = await spotifyApi("/me/player");
             if (!data?.item) {
                 renderNowPlaying(null);
                 return;
@@ -224,6 +252,7 @@ function fetchNowPlaying() {
             }
         } catch (err) {
             console.error("fetchNowPlaying failed: ", err);
+            renderNowPlaying(null);
         }
     }, 5000);
 }
@@ -240,17 +269,9 @@ function parseSpotifyPlaylistInput(input) {
 }
 
 async function fetchPlaylistById(playlistId) {
-    const token = await getValidSpotifyToken();
-    if (!token || !playlistId) return null;
+    if (!playlistId) return null;
     try {
-        const res = await fetch(
-            `https://api.spotify.com/v1/playlists/${playlistId}`,
-            {
-                headers: { Authorization: `Bearer ${token}` },
-            },
-        );
-        if (!res.ok) return null;
-        return await res.json();
+        return await spotifyApi(`/playlists/${playlistId}`);
     } catch (err) {
         console.error("fetchPlaylistById failed:", err);
         return null;
@@ -280,33 +301,22 @@ async function resolveManualPlaylist(input) {
 }
 
 async function fetchPlaylists() {
-    const token = await getValidSpotifyToken();
-    if (!token) {
+    if (!(await getValidSpotifyToken())) {
         spotifyPlaylists = [];
         return [];
     }
     const all = [];
-    let url = "https://api.spotify.com/v1/me/playlists?limit=50";
+    let url = "/me/playlists?limit=50";
     try {
         while (url) {
-            const res = await fetch(url, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) break;
-            const data = await res.json();
-            all.push(...(data.items || []).filter(Boolean));
-            url = data.next;
+            const data = await spotifyApi(url);
+            all.push(...(data?.items || []).filter(Boolean));
+            url = data?.next;
         }
         let likedTotal = 0;
         try {
-            const likedRes = await fetch(
-                "https://api.spotify.com/v1/me/tracks?limit=1",
-                { headers: { Authorization: `Bearer ${token}` } },
-            );
-            if (likedRes.ok) {
-                const likedData = await likedRes.json();
-                likedTotal = likedData.total || 0;
-            }
+            const likedData = await spotifyApi("/me/tracks?limit=1");
+            likedTotal = likedData?.total || 0;
         } catch (_) {}
         spotifyPlaylists = [
             {
@@ -374,7 +384,7 @@ async function initSpotifyPlayer() {
     for (let i = 0; i < 10; i++) {
         token = await getValidSpotifyToken();
         if (token) break;
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await sleep(500);
     }
     if (!token) return;
 
@@ -415,21 +425,9 @@ async function initSpotifyPlayer() {
 }
 
 async function getDeviceId() {
-    const token = await getValidSpotifyToken();
-    if (!token) return null;
     try {
-        const res = await fetch(
-            "https://api.spotify.com/v1/me/player/devices",
-            {
-                headers: { Authorization: `Bearer ${token}` },
-            },
-        );
-        if (!res.ok) {
-            console.error("getDeviceId failed", res.status, await res.text());
-            return null;
-        }
-        const data = await res.json();
-        const device = (data.devices || []).find((d) => d.name === "kf20d");
+        const data = await spotifyApi("/me/player/devices");
+        const device = (data?.devices || []).find((d) => d.name === "kf20d");
         return device?.id || null;
     } catch (err) {
         console.error("getDeviceId failed: ", err);
@@ -437,98 +435,62 @@ async function getDeviceId() {
     }
 }
 
-async function playLikedSongs(token, deviceId) {
-    const meRes = await fetch("https://api.spotify.com/v1/me", {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-    const { id: userId } = await meRes.json();
+// Spotify applies player settings asynchronously; a short pause between
+// calls stops them racing the playback start.
+const SPOTIFY_STEP_DELAY_MS = 400;
 
-    await fetch(
-        `https://api.spotify.com/v1/me/player/shuffle?state=true&device_id=${encodeURIComponent(deviceId)}`,
-        { method: "PUT", headers: { Authorization: `Bearer ${token}` } },
+async function setPlaybackVolume(deviceId, percent) {
+    await spotifyApi(
+        withDevice(`/me/player/volume?volume_percent=${percent}`, deviceId),
+        { method: "PUT" },
     );
-
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    await fetch(
-        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
-        {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                context_uri: `spotify:user:${userId}:collection`,
-            }),
-        },
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    await fetch(
-        `https://api.spotify.com/v1/me/player/volume?volume_percent=50&device_id=${encodeURIComponent(spotifyDeviceId)}`,
-        { method: "PUT", headers: { Authorization: `Bearer ${token}` } },
-    );
-    spotifyVolume = 50;
+    spotifyVolume = percent;
     setElementText("volDisplay", spotifyVolume);
 }
 
+async function playLikedSongs(deviceId) {
+    const me = await spotifyApi("/me");
+    await spotifyApi(withDevice("/me/player/shuffle?state=true", deviceId), {
+        method: "PUT",
+    });
+    await sleep(SPOTIFY_STEP_DELAY_MS);
+    await spotifyApi(withDevice("/me/player/play", deviceId), {
+        method: "PUT",
+        body: { context_uri: `spotify:user:${me.id}:collection` },
+    });
+    await sleep(SPOTIFY_STEP_DELAY_MS);
+    await setPlaybackVolume(deviceId, 50);
+}
+
 async function playPlaylist(playlistId) {
-    const token = await getValidSpotifyToken();
-    if (!token || !playlistId) return false;
+    if (!playlistId || !(await getValidSpotifyToken())) return false;
     const targetDeviceId = await getDeviceId();
     if (!targetDeviceId) {
         console.error("Could not find Spotify device kf20d");
-        return;
+        showToast("Spotify player not found on this device", "error");
+        return false;
     }
     spotifyDeviceId = targetDeviceId;
 
-    if (playlistId === "__liked_songs__") {
-        await playLikedSongs(token, spotifyDeviceId);
-        return;
-    }
-
     try {
-        const res = await fetch(
-            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
-            {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    context_uri: `spotify:playlist:${playlistId}`,
-                }),
-            },
-        );
-        if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            console.error("playPlaylist failed:", res.status, text);
-            return false;
+        if (playlistId === "__liked_songs__") {
+            await playLikedSongs(spotifyDeviceId);
+            return true;
         }
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await fetch(
-            `https://api.spotify.com/v1/me/player/volume?volume_percent=50&device_id=${encodeURIComponent(spotifyDeviceId)}`,
-            { method: "PUT", headers: { Authorization: `Bearer ${token}` } },
-        );
-        spotifyVolume = 50;
-        setElementText("volDisplay", spotifyVolume);
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=true", {
+        await spotifyApi(withDevice("/me/player/play", spotifyDeviceId), {
             method: "PUT",
-            headers: { Authorization: `Bearer ${token}` },
+            body: { context_uri: `spotify:playlist:${playlistId}` },
         });
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await fetch(
-            "https://api.spotify.com/v1/me/player/repeat?state=context",
-            {
-                method: "PUT",
-                headers: { Authorization: `Bearer ${token}` },
-            },
-        );
+        await sleep(SPOTIFY_STEP_DELAY_MS);
+        await setPlaybackVolume(spotifyDeviceId, 50);
+        await sleep(SPOTIFY_STEP_DELAY_MS);
+        await spotifyApi("/me/player/shuffle?state=true", { method: "PUT" });
+        await sleep(SPOTIFY_STEP_DELAY_MS);
+        await spotifyApi("/me/player/repeat?state=context", { method: "PUT" });
         return true;
     } catch (err) {
         console.error("playPlaylist failed: ", err);
+        showToast("Couldn't start Spotify playback", "error");
         return false;
     }
 }

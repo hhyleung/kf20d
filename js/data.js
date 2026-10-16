@@ -26,8 +26,7 @@ async function initSupabase() {
 async function ensureSupabaseReady() {
     while (!supabaseClient) {
         await initSupabase();
-        if (!supabaseClient)
-            await new Promise((resolve) => setTimeout(resolve, 100));
+        if (!supabaseClient) await sleep(100);
     }
     return supabaseClient;
 }
