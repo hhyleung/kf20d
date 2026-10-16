@@ -177,9 +177,7 @@ async function showDashboard() {
     startClock();
 
     await loadSupabaseData();
-    ["mealPrep", "chores", "changeLog", "bills", "plants", "notes"].forEach(
-        renderPanel,
-    );
+    renderAllPanels();
 
     setupSpotifyAuth();
     await initSpotify();
@@ -235,7 +233,7 @@ async function dashboardLogin(email, password) {
         showDashboard();
     } catch (err) {
         console.error("dashboardLogin: ", err);
-        alert(`Login failed：${err.message}`);
+        showToast(`Login failed: ${err.message}`, "error");
     }
 }
 // ============================================================

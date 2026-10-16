@@ -278,6 +278,13 @@ function renderPanel(panel) {
 // #endregion
 // ============================================================
 
+function renderAllPanels() {
+    ["mealPrep", "chores", "changeLog", "bills", "plants", "notes"].forEach(
+        renderPanel,
+    );
+    refreshOpenPlantDetail();
+}
+
 // ============================================================
 // #region MODAL OPENERS
 // ============================================================
@@ -619,17 +626,20 @@ function setupFormHandlers() {
                 const isUpdate = !!(panel && panelState[panel]?.editingId);
                 const record = formCfg.buildRecord(isUpdate);
 
-                await saveRecord(
-                    panelCfg.data.table,
-                    renderKey,
-                    record,
-                    isUpdate,
-                    () => {
-                        if (panel && panelState[panel]) {
-                            panelState[panel].manualDate = false;
-                        }
-                    },
+                const ok = await withBusy(e.submitter, () =>
+                    saveRecord(
+                        panelCfg.data.table,
+                        renderKey,
+                        record,
+                        isUpdate,
+                        () => {
+                            if (panel && panelState[panel]) {
+                                panelState[panel].manualDate = false;
+                            }
+                        },
+                    ),
                 );
+                if (!ok) return;
 
                 closeModal(modalCfg.modalId);
 
@@ -653,12 +663,15 @@ function setupFormHandlers() {
                 const itemId = panel ? panelState[panel]?.editingId : null;
                 if (!itemId) return;
 
-                await deleteRecord(
-                    panelCfg.data.table,
-                    renderKey,
-                    itemId,
-                    panelCfg.deleteMsg,
+                const ok = await withBusy(btn, () =>
+                    deleteRecord(
+                        panelCfg.data.table,
+                        renderKey,
+                        itemId,
+                        panelCfg.deleteMsg,
+                    ),
                 );
+                if (!ok) return;
 
                 closeModal(modalCfg.modalId);
 
@@ -681,18 +694,20 @@ function setupFormHandlers() {
                 parseInt(getElement("addPlantPotSize").value, 10) || null;
             if (!name) return;
 
-            await saveRecord(
-                "plants_db",
-                "plants",
-                {
-                    plant_name: name,
-                    starting_date: startingDate,
-                    pot_size: potSize,
-                    archived: false,
-                },
-                false,
+            const ok = await withBusy(e.submitter, () =>
+                saveRecord(
+                    "plants_db",
+                    "plants",
+                    {
+                        plant_name: name,
+                        starting_date: startingDate,
+                        pot_size: potSize,
+                        archived: false,
+                    },
+                    false,
+                ),
             );
-            closeModal("plantAddModal");
+            if (ok) closeModal("plantAddModal");
         });
     }
 
@@ -729,18 +744,18 @@ function setupFormHandlers() {
             const notes = getElement("plantEventNotes")?.value.trim() || null;
 
             if (!plantId) {
-                alert("Missing plant id");
+                showToast("Missing plant id", "error");
                 return;
             }
 
             if (!eventDate) {
-                alert("Please choose an event date");
+                showToast("Please choose an event date", "error");
                 return;
             }
 
             const plant = panelData.plants.find((p) => p.id === plantId);
             if (!plant) {
-                alert("Plant not found");
+                showToast("Plant not found", "error");
                 return;
             }
 
@@ -749,14 +764,14 @@ function setupFormHandlers() {
             const potChanged =
                 potSize !== null && potSize !== (plant.pot_size ?? null);
             if (!watered && !fertilised && !potChanged && !notes) {
-                alert("Please log at least one event detail");
+                showToast("Please log at least one event detail", "error");
                 return;
             }
 
             // plant_history_db.pot_size is NOT NULL
             const historyPotSize = potSize ?? plant.pot_size ?? null;
             if (historyPotSize === null) {
-                alert("Please enter the pot size");
+                showToast("Please enter the pot size", "error");
                 return;
             }
 
@@ -786,17 +801,23 @@ function setupFormHandlers() {
                     plant.last_fertiliser_used || null;
             }
 
-            await saveRecord("plants_db", "plants", plantUpdates, true);
-
-            await savePlantHistory({
-                plant_id: plantId,
-                event_timestamp: eventDate,
-                watered,
-                fertilised,
-                fertiliser_used: fertiliserUsed,
-                pot_size: historyPotSize,
-                event_notes: notes,
+            const ok = await withBusy(e.submitter, async () => {
+                // History first: if it fails, the plant's "last" dates stay untouched.
+                const saved = await savePlantHistory({
+                    plant_id: plantId,
+                    event_timestamp: eventDate,
+                    watered,
+                    fertilised,
+                    fertiliser_used: fertiliserUsed,
+                    pot_size: historyPotSize,
+                    event_notes: notes,
+                });
+                return (
+                    saved &&
+                    saveRecord("plants_db", "plants", plantUpdates, true)
+                );
             });
+            if (!ok) return;
 
             closeModal("plantEventModal");
             renderPanel("plants");
@@ -811,26 +832,13 @@ function setupFormHandlers() {
             e.preventDefault();
             const noteContent = getElement("addNoteContent").value.trim();
             if (!noteContent) return;
-            const isUpdate = !!panelState.notes?.editingId;
-            if (isUpdate) {
-                await saveRecord(
-                    "notes_db",
-                    "notes",
-                    {
-                        id: panelState.notes.editingId,
-                        note: noteContent,
-                        creation_date: getTodayHKT(),
-                    },
-                    true,
-                );
-            } else {
-                await saveRecord(
-                    "notes_db",
-                    "notes",
-                    { note: noteContent, creation_date: getTodayHKT() },
-                    false,
-                );
-            }
+            const editingId = panelState.notes?.editingId;
+            const record = { note: noteContent, creation_date: getTodayHKT() };
+            if (editingId) record.id = editingId;
+            const ok = await withBusy(e.submitter, () =>
+                saveRecord("notes_db", "notes", record, !!editingId),
+            );
+            if (!ok) return;
             panelState.notes.editingId = null;
             setElementValue("addNoteContent", "");
             closeModal("noteAddModal");
@@ -846,6 +854,10 @@ const ACTION_HANDLERS = {
         const item = panelData.pantry.find((i) => i.id === id);
         if (!item) return;
         const newPortions = Math.max(0, (item.portions || 0) + delta);
+        if (newPortions === item.portions) return;
+        // Optimistic: update immediately; runMutation resyncs if the write fails.
+        item.portions = newPortions;
+        renderPanel("mealPrep");
         await saveRecord(
             "pantry_db",
             "mealPrep",
@@ -939,10 +951,10 @@ const ACTION_HANDLERS = {
         const newName = getElement("pdPlantNameInput").value.trim();
         const newStart = getElement("pdStartingDate").value || null;
         if (!newName) {
-            alert("Plant name cannot be empty");
+            showToast("Plant name cannot be empty", "error");
             return;
         }
-        await saveRecord(
+        const ok = await saveRecord(
             "plants_db",
             "plants",
             {
@@ -952,7 +964,10 @@ const ACTION_HANDLERS = {
             },
             true,
         );
-        openPlantDetail(id);
+        if (ok) {
+            openPlantDetail(id);
+            showToast("Saved", "success");
+        }
     },
 
     "plant-archive": async (btn) => {
@@ -961,10 +976,11 @@ const ACTION_HANDLERS = {
         const plant = panelData.plants.find((p) => p.id === id);
         if (!plant) return;
         const archiveNow = !plant.archived;
-        const ok = confirm(
+        const ok = await confirmDialog(
             archiveNow
                 ? `Archive "${plant.plant_name}"?`
                 : `Unarchive "${plant.plant_name}"?`,
+            { confirmText: archiveNow ? "Archive" : "Unarchive" },
         );
         if (!ok) return;
         await saveRecord(
@@ -979,8 +995,7 @@ const ACTION_HANDLERS = {
     "plant-delete": async (btn) => {
         const id = btn.dataset.id;
         if (!id) return;
-        await deletePlant(id);
-        closeModal("plantItemModal");
+        if (await deletePlant(id)) closeModal("plantItemModal");
     },
 
     "plant-history-delete": async (btn) => {
@@ -1009,10 +1024,10 @@ document.addEventListener("click", async (e) => {
         const handler = ACTION_HANDLERS[action];
         if (handler) {
             try {
-                await handler(btn);
+                await withBusy(btn, () => handler(btn));
             } catch (err) {
                 console.error(`Action "${action}" failed:`, err);
-                alert(err.message || "Action failed");
+                showToast(err.message || "Action failed", "error");
             }
             return;
         }

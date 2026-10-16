@@ -447,7 +447,7 @@ async function saveSlotFromModal() {
     if (manualInput?.value.trim()) {
         const resolved = await resolveManualPlaylist(manualInput.value);
         if (!resolved.ok) {
-            alert("Invalid Spotify playlist URL / ID.");
+            showToast("Invalid Spotify playlist URL / ID.", "error");
             return;
         }
         playlistId = resolved.playlistId;
@@ -457,7 +457,7 @@ async function saveSlotFromModal() {
         playlistName = select.options[select.selectedIndex]?.text || "Untitled";
     }
     if (!playlistId) {
-        alert("Select or enter playlist URL / ID");
+        showToast("Select or enter playlist URL / ID", "error");
         return;
     }
     const activeIcon = selectElement(".spotify-icon-option.active");
@@ -475,7 +475,7 @@ async function saveSlotFromModal() {
     );
     if (error) {
         console.error("saveSlotFromModal failed: ", error);
-        alert(`Save slot failed: ${error.message}`);
+        showToast(`Save slot failed: ${error.message}`, "error");
         return;
     }
     if (manualInput) manualInput.value = "";
@@ -490,16 +490,23 @@ async function deleteSelectedSchedule() {
     const hasTemplate = !!sel?.template_ref;
     const today = getTodayHKT();
 
-    let deleteMode = "single";
-    if (hasTemplate) {
-        if (!confirm("Delete this schedule?")) return;
-        const deleteAll = confirm(
-            "This schedule is part of a recurring template.\n\nOK = Delete ALL future schedules in this template\nCancel = Delete only this one",
-        );
-        deleteMode = deleteAll ? "template" : "single";
-    } else {
-        if (!confirm("Delete this schedule?")) return;
-    }
+    const deleteMode = hasTemplate
+        ? await chooseDialog(
+              "This schedule is part of a recurring template. Delete only this one, or all future schedules in the template?",
+              [
+                  { label: "This one", value: "single", className: "btn-red" },
+                  {
+                      label: "All future",
+                      value: "template",
+                      className: "btn-red",
+                  },
+              ],
+          )
+        : (await confirmDialog("Delete this schedule?", {
+              confirmText: "Delete",
+              danger: true,
+          })) && "single";
+    if (!deleteMode) return;
     const { sb, user } = await getSupabaseContext();
     let error;
 
@@ -521,7 +528,7 @@ async function deleteSelectedSchedule() {
 
     if (error) {
         console.error("Delete schedule failed", error);
-        alert("Delete schedule failed: " + error.message);
+        showToast("Delete schedule failed: " + error.message, "error");
         return;
     }
 
@@ -555,7 +562,7 @@ function setupScheduleForm() {
         if (manualInput?.value.trim()) {
             const resolved = await resolveManualPlaylist(manualInput.value);
             if (!resolved.ok) {
-                alert("Invalid Spotify playlist URL / ID.");
+                showToast("Invalid Spotify playlist URL / ID.", "error");
                 return;
             }
             playlistId = resolved.playlistId;
@@ -568,7 +575,7 @@ function setupScheduleForm() {
         }
 
         if (!date || !time || !playlistId) {
-            alert("Please set date, time, and playlist.");
+            showToast("Please set date, time, and playlist.", "error");
             return;
         }
 
@@ -602,7 +609,7 @@ function setupScheduleForm() {
 
         if (error) {
             console.error("Save schedule failed:", error);
-            alert(`Save schedule failed: ${error.message}`);
+            showToast(`Save schedule failed: ${error.message}`, "error");
             return;
         }
 
@@ -717,7 +724,11 @@ function setupScheduleButtons() {
             const next = getNextSchedule();
             if (!next) return;
 
-            if (!confirm("Skip and delete this schedule?")) return;
+            const ok = await confirmDialog("Skip and delete this schedule?", {
+                confirmText: "Skip",
+                danger: true,
+            });
+            if (!ok) return;
 
             const { sb, user } = await getSupabaseContext();
             const { error } = await sb
@@ -727,6 +738,7 @@ function setupScheduleButtons() {
 
             if (error) {
                 console.error("Skip schedule failed:", error);
+                showToast(`Skip schedule failed: ${error.message}`, "error");
                 return;
             }
 
@@ -786,7 +798,7 @@ async function generateSchedules() {
     if (manualInput?.value.trim()) {
         const resolved = await resolveManualPlaylist(manualInput.value);
         if (!resolved.ok) {
-            alert("Invalid Spotify playlist URL / ID.");
+            showToast("Invalid Spotify playlist URL / ID.", "error");
             return;
         }
         playlistId = resolved.playlistId;
@@ -799,7 +811,7 @@ async function generateSchedules() {
     }
 
     if (!startDateStr || !playlistId) {
-        alert("Please set a start date and playlist.");
+        showToast("Please set a start date and playlist.", "error");
         return;
     }
 
@@ -811,12 +823,12 @@ async function generateSchedules() {
         : new Date(startDateStr + "T00:00:00Z");
 
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-        alert("Invalid date range.");
+        showToast("Invalid date range.", "error");
         return;
     }
 
     if (endDate < startDate) {
-        alert("End date cannot be earlier than start date.");
+        showToast("End date cannot be earlier than start date.", "error");
         return;
     }
 
@@ -829,7 +841,10 @@ async function generateSchedules() {
         const time = getElement("spotifyWeeklyTime").value;
 
         if (!checkedDays.length || !time) {
-            alert("Please select at least one weekday and a time.");
+            showToast(
+                "Please select at least one weekday and a time.",
+                "error",
+            );
             return;
         }
 
@@ -901,7 +916,7 @@ async function generateSchedules() {
     }
 
     if (!rows.length) {
-        alert("No schedules generated. Check your settings.");
+        showToast("No schedules generated. Check your settings.", "error");
         return;
     }
 
@@ -915,7 +930,7 @@ async function generateSchedules() {
 
         if (error) {
             console.error("Replace-range delete failed:", error);
-            alert(`Replace-range failed: ${error.message}`);
+            showToast(`Replace-range failed: ${error.message}`, "error");
             return;
         }
     }
@@ -925,7 +940,7 @@ async function generateSchedules() {
         const { error } = await sb.from("spotify_schedules").insert(batch);
         if (error) {
             console.error("Insert schedules failed:", error);
-            alert(`Insert schedules failed: ${error.message}`);
+            showToast(`Insert schedules failed: ${error.message}`, "error");
             return;
         }
     }

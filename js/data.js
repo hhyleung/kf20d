@@ -134,15 +134,7 @@ async function setupRealtime() {
         watchedTables.forEach((tableName) => {
             subscribeToTable(sb, tableName, async () => {
                 await loadSupabaseData();
-                [
-                    "mealPrep",
-                    "chores",
-                    "changeLog",
-                    "bills",
-                    "plants",
-                    "notes",
-                ].forEach(renderPanel);
-                refreshOpenPlantDetail();
+                renderAllPanels();
             });
         });
     } catch (err) {
@@ -156,14 +148,25 @@ async function setupRealtime() {
 // ============================================================
 // #region DATA MUTATIONS
 // ============================================================
+// Runs a write and reports failures in one place. On failure the local data is
+// reloaded from Supabase so any optimistic UI change is reverted.
+// Returns true on success so callers can e.g. keep a modal open on failure.
 async function runMutation(label, fn) {
     try {
         const { sb, user } = await getSupabaseContext();
         await fn(sb, user.id);
+        return true;
     } catch (err) {
         console.error(`${label} failed:`, err);
-        alert(`${label} failed: ${err.message}`);
+        showToast(`${label} failed: ${err?.message || err}`, "error");
+        await resyncAllData();
+        return false;
     }
+}
+
+async function resyncAllData() {
+    await loadSupabaseData();
+    renderAllPanels();
 }
 
 async function updateListMetadata(panel) {
@@ -192,7 +195,7 @@ async function saveRecord(
     isUpdate = false,
     resetFn = null,
 ) {
-    await runMutation(`Save ${table}`, async (sb, userId) => {
+    return runMutation("Save", async (sb, userId) => {
         const data = { ...record, user_id: userId };
         let error;
         if (isUpdate) {
@@ -219,8 +222,14 @@ async function saveRecord(
 }
 
 async function deleteRecord(table, render, id, confirmMsg) {
-    if (!confirm(confirmMsg)) return;
-    await runMutation(`Delete ${table}`, async (sb, userId) => {
+    if (
+        !(await confirmDialog(confirmMsg, {
+            confirmText: "Delete",
+            danger: true,
+        }))
+    )
+        return false;
+    return runMutation("Delete", async (sb, userId) => {
         const { error } = await sb
             .from(table)
             .delete()
@@ -237,8 +246,12 @@ async function deleteRecord(table, render, id, confirmMsg) {
 }
 
 async function deletePlant(plantId) {
-    if (!confirm("Delete this plant and all its history permanently?")) return;
-    await runMutation("Delete plant", async (sb, userId) => {
+    const ok = await confirmDialog(
+        "Delete this plant and all its history permanently?",
+        { confirmText: "Delete", danger: true },
+    );
+    if (!ok) return false;
+    return runMutation("Delete plant", async (sb, userId) => {
         const { error: e1 } = await sb
             .from("plant_history_db")
             .delete()
@@ -258,7 +271,7 @@ async function deletePlant(plantId) {
 }
 
 async function savePlantHistory(historyItem) {
-    await runMutation("Save plant_history", async (sb) => {
+    return runMutation("Save plant event", async (sb) => {
         const { error } = await sb.from("plant_history_db").insert(historyItem);
         if (error) throw error;
         const plantCfg = PANEL_CONFIGS.plants.data;
@@ -269,8 +282,12 @@ async function savePlantHistory(historyItem) {
 }
 
 async function deletePlantHistory(id, plantId) {
-    if (!confirm("Delete this event permanently?")) return;
-    await runMutation("Delete plant history", async (sb) => {
+    const ok = await confirmDialog("Delete this event permanently?", {
+        confirmText: "Delete",
+        danger: true,
+    });
+    if (!ok) return false;
+    return runMutation("Delete plant event", async (sb) => {
         const { error } = await sb
             .from("plant_history_db")
             .delete()
