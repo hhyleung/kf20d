@@ -388,13 +388,34 @@ function openPlantAddModal() {
 function openPlantDetail(plantId) {
     const plant = panelData.plants.find((p) => p.id === plantId);
     if (!plant) return;
-    setElementText("plantItemTitle", plant.plant_name.toUpperCase());
     setElementValue("pdPlantNameInput", plant.plant_name);
-    getElement("pdSaveNameBtn").dataset.id = plantId;
     setElementValue(
         "pdStartingDate",
         plant.starting_date ? formatDateInput(plant.starting_date) : "",
     );
+    renderPlantDetail(plantId);
+    openModal("plantItemModal");
+}
+
+// Re-render the open plant detail modal from panelData (e.g. after a realtime
+// change), leaving the name/start-date inputs alone so in-progress edits aren't lost.
+function refreshOpenPlantDetail() {
+    const modal = getElement("plantItemModal");
+    const plantId = modal?.dataset.plantId;
+    if (!plantId || modal.style.display === "none") return;
+    if (!panelData.plants.some((p) => p.id === plantId)) {
+        closeModal("plantItemModal");
+        return;
+    }
+    renderPlantDetail(plantId);
+}
+
+function renderPlantDetail(plantId) {
+    const plant = panelData.plants.find((p) => p.id === plantId);
+    if (!plant) return;
+    getElement("plantItemModal").dataset.plantId = plantId;
+    setElementText("plantItemTitle", plant.plant_name.toUpperCase());
+    getElement("pdSaveNameBtn").dataset.id = plantId;
     setElementText("pdPotSize", plant.pot_size ? `${plant.pot_size}cm` : "");
     setElementText(
         "pdLastWatered",
@@ -445,7 +466,6 @@ function openPlantDetail(plantId) {
     setElementText("pdArchiveBtn", plant.archived ? "Unarchive" : "Archive");
     archiveBtn.classList.toggle("is-archived", !!plant.archived);
     getElement("pdDeleteBtn").dataset.id = plantId;
-    openModal("plantItemModal");
 }
 
 function openPlantEventModal(plantId) {
@@ -695,14 +715,25 @@ function setupFormHandlers() {
                 return;
             }
 
-            if (!watered && !fertilised && potSize === null && !notes) {
+            const plant = panelData.plants.find((p) => p.id === plantId);
+            if (!plant) {
+                alert("Plant not found");
+                return;
+            }
+
+            // The pot size field is prefilled, so it only counts as an event
+            // detail when it actually changed.
+            const potChanged =
+                potSize !== null && potSize !== (plant.pot_size ?? null);
+            if (!watered && !fertilised && !potChanged && !notes) {
                 alert("Please log at least one event detail");
                 return;
             }
 
-            const plant = panelData.plants.find((p) => p.id === plantId);
-            if (!plant) {
-                alert("Plant not found");
+            // plant_history_db.pot_size is NOT NULL
+            const historyPotSize = potSize ?? plant.pot_size ?? null;
+            if (historyPotSize === null) {
+                alert("Please enter the pot size");
                 return;
             }
 
@@ -714,14 +745,15 @@ function setupFormHandlers() {
                 pot_size: potSize !== null ? potSize : (plant.pot_size ?? null),
             };
 
-            if (watered) {
-                plantUpdates.last_watered_date = eventDate;
-            } else {
-                plantUpdates.last_watered_date =
-                    plant.last_watered_date || null;
-            }
+            // A backdated event must not overwrite a more recent "last" date.
+            const isNewer = (prev) => !prev || eventDate >= prev.slice(0, 10);
 
-            if (fertilised) {
+            plantUpdates.last_watered_date =
+                watered && isNewer(plant.last_watered_date)
+                    ? eventDate
+                    : plant.last_watered_date || null;
+
+            if (fertilised && isNewer(plant.last_fertilised_date)) {
                 plantUpdates.last_fertilised_date = eventDate;
                 plantUpdates.last_fertiliser_used = fertiliserUsed;
             } else {
@@ -739,7 +771,7 @@ function setupFormHandlers() {
                 watered,
                 fertilised,
                 fertiliser_used: fertiliserUsed,
-                pot_size: potSize,
+                pot_size: historyPotSize,
                 event_notes: notes,
             });
 

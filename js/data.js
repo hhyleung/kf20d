@@ -142,6 +142,7 @@ async function setupRealtime() {
                     "plants",
                     "notes",
                 ].forEach(renderPanel);
+                refreshOpenPlantDetail();
             });
         });
     } catch (err) {
@@ -279,7 +280,8 @@ async function deletePlantHistory(id, plantId) {
         const historyCfg = PANEL_CONFIGS.plant_history.data;
         await loadSupabaseData([plantCfg, historyCfg]);
         updateListMetadata("plants");
-        openPlantDetail(plantId);
+        renderPanel("plants");
+        refreshOpenPlantDetail();
     });
 }
 // ============================================================
