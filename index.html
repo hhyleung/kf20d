@@ -8,7 +8,7 @@
         />
         <meta name="robots" content="noindex, nofollow" />
         <title>kf20d</title>
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
         <link rel="stylesheet" href="styles.css" />
     </head>
     <body>
@@ -136,22 +136,25 @@
         <div class="modal" id="fullListModal">
             <div class="modal-content modal-full">
                 <header style="align-items: flex-start">
-                    <h2 id="listTitle">List Title</h2>
-                    <span id="listLastUpdated" class="list-last-updated"></span>
-                    <button
-                        id="fullListAddBtn"
-                        class="add-btn"
-                        title="Add item"
-                        style="flex-shrink: 0; margin-right: 0.6rem"
-                    >
-                        +
-                    </button>
-                    <button
-                        onclick="closeModal('fullListModal')"
-                        style="flex-shrink: 0; margin-top: 0.2rem"
-                    >
-                        &times;
-                    </button>
+                    <div class="modal-title-group">
+                        <h2 id="listTitle">List Title</h2>
+                        <span
+                            id="listLastUpdated"
+                            class="list-last-updated"
+                        ></span>
+                    </div>
+                    <div class="modal-header-actions">
+                        <button
+                            id="fullListAddBtn"
+                            class="add-btn"
+                            title="Add item"
+                        >
+                            +
+                        </button>
+                        <button onclick="closeModal('fullListModal')">
+                            &times;
+                        </button>
+                    </div>
                 </header>
                 <div id="fullListContent"></div>
             </div>
@@ -496,91 +499,102 @@
                         &times;
                     </button>
                 </header>
-                <input
-                    type="text"
-                    id="pdPlantNameInput"
-                    class="plant-name-input"
-                />
-                <div class="plant-info-grid">
-                    <span class="plant-info-label">Starting Date</span>
-                    <span class="plant-info-value"
-                        ><input
-                            type="date"
-                            id="pdStartingDate"
-                            class="plant-info-input"
-                    /></span>
-                    <span class="plant-info-label">Pot Size</span>
-                    <span class="plant-info-value" id="pdPotSize"></span>
-                    <span class="plant-info-label">Last Watered</span>
-                    <span class="plant-info-value" id="pdLastWatered"></span>
-                    <span class="plant-info-label">Last Fertilised</span>
-                    <span class="plant-info-value" id="pdLastFertilised"></span>
-                    <span class="plant-info-label">Fertiliser Used</span>
-                    <span class="plant-info-value" id="pdFertiliserUsed"></span>
-                </div>
-                <div class="plant-detail-history">
-                    <h4 class="plant-history-title">History</h4>
-                    <button
-                        type="button"
-                        data-action="plant-log"
-                        data-id=""
-                        id="pdLogEventBtn"
-                        class="action-btn btn-blue"
-                    >
-                        Log Event
-                    </button>
-                    <div class="plant-history-table-wrap">
-                        <table class="plant-history-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Pot</th>
-                                    <th>💧</th>
-                                    <th>🌿</th>
-                                    <th>Fertiliser</th>
-                                    <th>Notes</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="pdHistoryBody"></tbody>
-                        </table>
+                <div class="modal-body plant-detail-body">
+                    <input
+                        type="text"
+                        id="pdPlantNameInput"
+                        class="plant-name-input"
+                    />
+                    <div class="plant-info-grid">
+                        <span class="plant-info-label">Starting Date</span>
+                        <span class="plant-info-value"
+                            ><input
+                                type="date"
+                                id="pdStartingDate"
+                                class="plant-info-input"
+                        /></span>
+                        <span class="plant-info-label">Pot Size</span>
+                        <span class="plant-info-value" id="pdPotSize"></span>
+                        <span class="plant-info-label">Last Watered</span>
+                        <span
+                            class="plant-info-value"
+                            id="pdLastWatered"
+                        ></span>
+                        <span class="plant-info-label">Last Fertilised</span>
+                        <span
+                            class="plant-info-value"
+                            id="pdLastFertilised"
+                        ></span>
+                        <span class="plant-info-label">Fertiliser Used</span>
+                        <span
+                            class="plant-info-value"
+                            id="pdFertiliserUsed"
+                        ></span>
                     </div>
-                </div>
-                <div class="modal-actions">
-                    <button
-                        type="button"
-                        data-action="plant-save-name"
-                        data-id=""
-                        id="pdSaveNameBtn"
-                        class="save-btn"
-                    >
-                        Save
-                    </button>
-                    <button
-                        type="button"
-                        data-action="plant-archive"
-                        data-id=""
-                        id="pdArchiveBtn"
-                        class="btn-blue"
-                    >
-                        Archive
-                    </button>
-                    <button
-                        type="button"
-                        data-action="plant-delete"
-                        data-id=""
-                        id="pdDeleteBtn"
-                        class="btn-red"
-                    >
-                        Delete
-                    </button>
-                    <button
-                        type="button"
-                        onclick="closeModal('plantItemModal')"
-                        class="btn-grey"
-                    >
-                        Cancel
-                    </button>
+                    <div class="plant-detail-history">
+                        <h4 class="plant-history-title">History</h4>
+                        <button
+                            type="button"
+                            data-action="plant-log"
+                            data-id=""
+                            id="pdLogEventBtn"
+                            class="action-btn btn-blue"
+                        >
+                            Log Event
+                        </button>
+                        <div class="plant-history-table-wrap">
+                            <table class="plant-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Pot</th>
+                                        <th>💧</th>
+                                        <th>🌿</th>
+                                        <th>Fertiliser</th>
+                                        <th>Notes</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pdHistoryBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button
+                            type="button"
+                            data-action="plant-save-name"
+                            data-id=""
+                            id="pdSaveNameBtn"
+                            class="btn-green"
+                        >
+                            Save
+                        </button>
+                        <button
+                            type="button"
+                            data-action="plant-archive"
+                            data-id=""
+                            id="pdArchiveBtn"
+                            class="btn-blue"
+                        >
+                            Archive
+                        </button>
+                        <button
+                            type="button"
+                            data-action="plant-delete"
+                            data-id=""
+                            id="pdDeleteBtn"
+                            class="btn-red"
+                        >
+                            Delete
+                        </button>
+                        <button
+                            type="button"
+                            onclick="closeModal('plantItemModal')"
+                            class="btn-grey"
+                        >
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -657,7 +671,7 @@
         <div class="modal" id="noteAddModal">
             <div class="modal-content modal-narrow">
                 <header>
-                    <h2>Add New Note</h2>
+                    <h2 id="noteModalTitle">Add New Note</h2>
                     <button onclick="closeModal('noteAddModal')">
                         &times;
                     </button>
@@ -686,6 +700,7 @@
                     <h2>Connect Spotify</h2>
                 </header>
                 <div
+                    class="modal-body"
                     style="
                         padding: 2.2rem;
                         text-align: center;
@@ -732,7 +747,7 @@
                         &times;
                     </button>
                 </header>
-                <div style="padding: 1.5rem">
+                <div class="modal-body" style="padding: 1.5rem">
                     <div class="spotify-slot-picker" id="spotifySlotPicker">
                         <button
                             class="spotify-slot-pick-btn"
@@ -852,8 +867,11 @@
             <div class="modal-content modal-wide">
                 <header>
                     <h2>SCHEDULES</h2>
+                    <button onclick="closeModal('spotifyScheduleModal')">
+                        &times;
+                    </button>
                 </header>
-                <div class="spotify-schedule-modal">
+                <div class="modal-body spotify-schedule-modal">
                     <div class="spotify-schedule-left">
                         <div class="spotify-calendar-header">
                             <button
@@ -1198,7 +1216,14 @@
         <!-- SCREEN BLANKER -->
         <div id="screenBlanker"></div>
 
-        <script src="app.js"></script>
+        <script src="js/utils.js"></script>
+        <script src="js/config.js"></script>
+        <script src="js/data.js"></script>
+        <script src="js/panels.js"></script>
+        <script src="js/panel-configs.js"></script>
+        <script src="js/spotify.js"></script>
+        <script src="js/spotify-ui.js"></script>
+        <script src="js/main.js"></script>
         <script src="https://sdk.scdn.co/spotify-player.js"></script>
     </body>
 </html>
