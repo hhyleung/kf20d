@@ -1,9 +1,16 @@
 // ============================================================
 // #region DASHBOARD INIT
 // ============================================================
+// Login and dashboard are toggled with the `hidden` attribute (both start
+// hidden in index.html), which no CSS can override, so the dashboard is
+// never visible before login.
+function setLoggedInView(loggedIn) {
+    getElement("loginContainer").hidden = loggedIn;
+    selectElement(".dashboard").hidden = !loggedIn;
+}
+
 function showLogin() {
-    showElement("loginContainer");
-    selectElement(".dashboard").style.display = "none";
+    setLoggedInView(false);
     cleanupSubscriptions();
     isRealtimeSetup = false;
     if (scheduleTickInterval) {
@@ -81,8 +88,7 @@ async function showDashboard() {
         setupSpotifyModals();
     }
 
-    hideElement("loginContainer");
-    selectElement(".dashboard").style.display = "flex";
+    setLoggedInView(true);
     selectAllElements(".modal").forEach((m) => (m.style.display = "none"));
     activePanel = null;
     Object.values(panelState).forEach((state) => {
@@ -155,20 +161,17 @@ async function dashboardLogin(email, password) {
 // #region INITIALISATION
 // ============================================================
 document.addEventListener("DOMContentLoaded", async () => {
-    selectElement(".dashboard").style.display = "none";
-    showElement("loginContainer");
-
+    getElement("loginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        await withBusy(e.submitter, () =>
+            dashboardLogin(
+                getElement("loginEmail").value,
+                getElement("loginPassword").value,
+            ),
+        );
+    });
+    // Shows the login page or the dashboard once the session is known.
     await checkSession();
-
-    const loginForm = getElement("loginForm");
-    if (loginForm) {
-        loginForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const email = getElement("loginEmail").value;
-            const password = getElement("loginPassword").value;
-            await dashboardLogin(email, password);
-        });
-    }
 });
 
 // ============================================================
