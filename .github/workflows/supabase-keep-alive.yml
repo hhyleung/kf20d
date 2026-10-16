@@ -38,7 +38,7 @@ jobs:
 
           echo "INSERT failed, attempting GET ping..."
           GET_RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X GET "${SUPABASE_URL}/rest/v1/notes?select=id&limit=1" \
+            -X GET "${SUPABASE_URL}/rest/v1/keep_alive?select=id&limit=1" \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
 
