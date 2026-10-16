@@ -53,6 +53,7 @@ function formatShortDate(value) {
             month: "short",
             timeZone: "Asia/Hong_Kong",
         })
+        .slice(0, 3) // newer ICU gives "Sept"; keep columns aligned
         .toUpperCase();
     return `${day} ${month}`;
 }

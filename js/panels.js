@@ -10,7 +10,9 @@ function getUrgencyClass(dateStr, warningDays = 3) {
     return "";
 }
 
-function fridgeItemRow(item, showZero = false) {
+// `full` (full-list modal) also shows zero-portion items and the expiry date.
+function fridgeItemRow(item, full = false) {
+    const showZero = full;
     const expiryClass = getUrgencyClass(item.expiration_date, 7);
     const portionClass =
         item.portions === 0 && showZero ? "portion-zero" : "portion-number";
@@ -19,6 +21,7 @@ function fridgeItemRow(item, showZero = false) {
     return `<li class="item-row${zeroClass}" data-open-type="fridgeStock" data-id="${item.id}">
                 <span class="item-key ${expiryClass}">${escapeHTML(item.food_name)}</span>
                 <span class="item-value">
+                    ${full ? `<span class="item-meta expiry-meta ${expiryClass}" title="Expiry date">${item.expiration_date ? formatShortDate(item.expiration_date) : "—"}</span>` : ""}
                     <button class="action-btn btn-grey" data-action="meal-prep-portions" data-id="${item.id}" data-delta="1">+</button>
                     ${portionsDisplay}
                     <button class="action-btn btn-grey" data-action="meal-prep-portions" data-id="${item.id}" data-delta="-1">-</button>
@@ -105,124 +108,200 @@ function buildChoresPanel() {
     return html;
 }
 
+// ---- Full-list tables -------------------------------------------------
+// The full-list modal shows a table per panel: name, extra columns, and the
+// row's quick action. Columns marked `optional` are hidden on phones.
+function buildDetailTable(columns, rows) {
+    const colClass = (c) =>
+        [c.cls, c.optional ? "col-optional" : ""].filter(Boolean).join(" ");
+    const head = columns
+        .map((c) => `<th class="${colClass(c)}">${c.label}</th>`)
+        .join("");
+    const body = rows
+        .map(
+            (
+                r,
+            ) => `<tr class="detail-row" data-open-type="${r.openType}" data-id="${r.id}">
+                <td class="detail-name ${r.nameCls || ""}">${r.nameHTML}</td>
+                ${r.cells.map((cell, i) => `<td class="${colClass(columns[i + 1])}">${cell}</td>`).join("")}
+                <td class="detail-action">${r.action || ""}</td>
+            </tr>`,
+        )
+        .join("");
+    return `<table class="detail-table">
+                <thead><tr>${head}<th class="detail-action"></th></tr></thead>
+                <tbody>${body}</tbody>
+            </table>`;
+}
+
+// "today", "in 3d", "3d ago" / "3d overdue" relative to today (UTC+8).
+function formatRelativeDays(dateStr, pastLabel = "ago") {
+    if (!dateStr) return "";
+    const days = daysBetween(getTodayHKT(), dateStr.slice(0, 10));
+    if (Number.isNaN(days)) return "";
+    if (days === 0) return "today";
+    if (days === 1) return "tomorrow";
+    if (days > 0) return `in ${days}d`;
+    if (days === -1 && pastLabel === "ago") return "yesterday";
+    return `${-days}d ${pastLabel}`;
+}
+
+function detailDateCell(dateStr, pastLabel = "ago", emptyText = "—") {
+    if (!dateStr) return `<span class="detail-empty">${emptyText}</span>`;
+    return `<span class="detail-date">${formatShortDate(dateStr)}</span>
+            <span class="detail-rel">${formatRelativeDays(dateStr, pastLabel)}</span>`;
+}
+
+function formatInterval(value, unit) {
+    if (!value) return '<span class="detail-empty">—</span>';
+    if (unit === "days") return value % 7 === 0 ? `${value / 7}w` : `${value}d`;
+    return value % 12 === 0 ? `${value / 12}y` : `${value}mo`;
+}
+
+// Colours a panel header by the most urgent of its items' due dates.
+function applyHeaderUrgency(headerId, dates) {
+    const header = getElement(headerId);
+    if (!header) return;
+    header.classList.remove("danger", "warning");
+    const classes = dates.map((d) => getUrgencyClass(d));
+    if (classes.includes("danger")) header.classList.add("danger");
+    else if (classes.includes("warning")) header.classList.add("warning");
+}
+
 function buildChoresHTML() {
-    let html = `<ul class="item-list">
-                    <li class="item-row">
-                        <span class="item-key"></span>
-                        <span class="item-value">
-                            <span class="item-meta">LAST DONE</span>
-                            <span class="item-meta">NEXT DUE</span>
-                        </span>
-                    </li>`;
-    panelData.chores.forEach((chore) => {
-        const dueClass = getUrgencyClass(chore.next_due_date);
-        const lastDoneText = chore.last_done_date
-            ? formatShortDate(chore.last_done_date)
-            : "Never";
-        const nextDueText = chore.next_due_date
-            ? formatShortDate(chore.next_due_date)
-            : "N/A";
-        html += `<li class="item-row" data-open-type="chores" data-id="${chore.id}">
-                    <span class="item-key ${dueClass}">${escapeHTML(chore.task_name)}</span>
-                    <span class="item-value">
-                        <span class="item-meta">${lastDoneText}</span>
-                        <span class="item-meta">${nextDueText}</span>
-                        <button class="action-btn btn-green" data-action="done" data-id="${chore.id}">✓</button>
-                    </span>
-                </li>`;
-    });
-    html += "</ul>";
-    return html;
+    return buildDetailTable(
+        [
+            { label: "Task" },
+            { label: "Every", optional: true },
+            { label: "Last done", optional: true },
+            { label: "Next due" },
+        ],
+        panelData.chores.map((chore) => ({
+            openType: "chores",
+            id: chore.id,
+            nameHTML: escapeHTML(chore.task_name),
+            nameCls: getUrgencyClass(chore.next_due_date),
+            cells: [
+                formatInterval(chore.chore_interval_days, "days"),
+                detailDateCell(chore.last_done_date, "ago", "Never"),
+                detailDateCell(chore.next_due_date, "overdue"),
+            ],
+            action: `<button class="action-btn btn-green" data-action="done" data-id="${chore.id}" title="Mark done">✓</button>`,
+        })),
+    );
 }
 
 function buildBillsPanel() {
-    let headerClass = "";
-    const header = getElement("billsHeader");
-    header.classList.remove("danger", "warning");
-    panelData.bills.forEach((bill) => {
-        const dueClass = getUrgencyClass(bill.next_bill_date);
-        if (dueClass === "danger") headerClass = "danger";
-        else if (dueClass === "warning" && headerClass !== "danger") {
-            headerClass = "warning";
-        }
-    });
-    if (headerClass) header.classList.add(headerClass);
+    applyHeaderUrgency(
+        "billsHeader",
+        panelData.bills.map((b) => b.next_bill_date),
+    );
     return "";
 }
 
 function buildBillsHTML() {
-    let headerClass = "";
-    const header = getElement("billsHeader");
-    header.classList.remove("danger", "warning");
-    let html = '<ul class="item-list">';
-    panelData.bills.forEach((bill) => {
-        const dueClass = getUrgencyClass(bill.next_bill_date);
-        if (dueClass === "danger") headerClass = "danger";
-        else if (dueClass === "warning" && headerClass !== "danger") {
-            headerClass = "warning";
-        }
-        const nextDueText = bill.next_bill_date
-            ? formatShortDate(bill.next_bill_date)
-            : "";
-        html += `<li class="item-row" data-open-type="bills" data-id="${bill.id}">
-                    <span class="item-key ${dueClass}">${escapeHTML(bill.bill_name)}</span>
-                    <span class="item-value">
-                        <span class="item-meta">${nextDueText}</span>
-                        <button class="action-btn btn-green" data-action="paid" data-id="${bill.id}">✓</button>
-                    </span>
-                </li>`;
-    });
-    html += "</ul>";
-    if (headerClass) header.classList.add(headerClass);
-    return html;
+    buildBillsPanel();
+    return buildDetailTable(
+        [
+            { label: "Bill" },
+            { label: "Every", optional: true },
+            { label: "Last bill", optional: true },
+            { label: "Next bill" },
+        ],
+        panelData.bills.map((bill) => ({
+            openType: "bills",
+            id: bill.id,
+            nameHTML: escapeHTML(bill.bill_name),
+            nameCls: getUrgencyClass(bill.next_bill_date),
+            cells: [
+                formatInterval(bill.bill_interval_months, "months"),
+                detailDateCell(bill.last_bill_date),
+                detailDateCell(bill.next_bill_date, "overdue"),
+            ],
+            action: `<button class="action-btn btn-green" data-action="paid" data-id="${bill.id}" title="Mark paid">✓</button>`,
+        })),
+    );
 }
 
 function buildChangeLogPanel() {
-    let headerClass = "";
-    const header = getElement("changeLogHeader");
-    header.classList.remove("danger", "warning");
-    panelData.changeLog.forEach((cl) => {
-        const dueClass = getUrgencyClass(cl.next_change_date);
-        if (dueClass === "danger") headerClass = "danger";
-        else if (dueClass === "warning" && headerClass !== "danger") {
-            headerClass = "warning";
-        }
-    });
-    if (headerClass) header.classList.add(headerClass);
+    applyHeaderUrgency(
+        "changeLogHeader",
+        panelData.changeLog.map((c) => c.next_change_date),
+    );
     return "";
 }
 
 function buildChangeLogHTML() {
-    let headerClass = "";
-    const header = getElement("changeLogHeader");
-    header.classList.remove("danger", "warning");
-    let html = '<ul class="item-list">';
-    panelData.changeLog.forEach((cl) => {
-        const dueClass = getUrgencyClass(cl.next_change_date);
-        if (dueClass === "danger") headerClass = "danger";
-        else if (dueClass === "warning" && headerClass !== "danger") {
-            headerClass = "warning";
-        }
-        const lastChangedText = cl.last_changed_date
-            ? formatShortDate(cl.last_changed_date)
-            : "Never";
-        html += `<li class="item-row" data-open-type="changeLog" data-id="${cl.id}">
-                    <span class="item-key ${dueClass}">${escapeHTML(cl.item_name)}</span>
-                    <span class="item-value">
-                        <span class="item-meta">${lastChangedText}</span>
-                        <button class="action-btn btn-green" data-action="changed" data-id="${cl.id}">✓</button>
-                    </span>
-                </li>`;
-    });
-    html += "</ul>";
-    if (headerClass) header.classList.add(headerClass);
-    return html;
+    buildChangeLogPanel();
+    return buildDetailTable(
+        [
+            { label: "Item" },
+            { label: "Every", optional: true },
+            { label: "Last changed", optional: true },
+            { label: "Next change" },
+        ],
+        panelData.changeLog.map((cl) => ({
+            openType: "changeLog",
+            id: cl.id,
+            nameHTML: escapeHTML(cl.item_name),
+            nameCls: getUrgencyClass(cl.next_change_date),
+            cells: [
+                formatInterval(cl.change_interval_months, "months"),
+                detailDateCell(cl.last_changed_date, "ago", "Never"),
+                detailDateCell(cl.next_change_date, "overdue"),
+            ],
+            action: `<button class="action-btn btn-green" data-action="changed" data-id="${cl.id}" title="Mark changed">✓</button>`,
+        })),
+    );
 }
 
-function buildPlantsHTML(showArchived = false) {
-    const visible = showArchived
-        ? panelData.plants
-        : panelData.plants.filter((p) => !p.archived);
+function buildPlantsFullHTML() {
+    const plants = [...panelData.plants].sort(
+        (a, b) => !!a.archived - !!b.archived,
+    );
+    return buildDetailTable(
+        [
+            { label: "Plant" },
+            { label: "Pot", optional: true },
+            { label: "Watered" },
+            { label: "Fertilised", optional: true },
+        ],
+        plants.map((p) => ({
+            openType: "plants",
+            id: p.id,
+            nameHTML: `${escapeHTML(p.plant_name)}${p.archived ? ' <span class="plant-archived-tag">archived</span>' : ""}`,
+            nameCls: p.archived ? "detail-muted" : "",
+            cells: [
+                p.pot_size
+                    ? `${escapeHTML(p.pot_size)} cm`
+                    : '<span class="detail-empty">—</span>',
+                detailDateCell(p.last_watered_date, "ago", "Never"),
+                p.last_fertilised_date
+                    ? `<span class="detail-date">${formatShortDate(p.last_fertilised_date)}</span>
+                       <span class="detail-rel">${[formatRelativeDays(p.last_fertilised_date), escapeHTML(p.last_fertiliser_used)].filter(Boolean).join(" · ")}</span>`
+                    : '<span class="detail-empty">Never</span>',
+            ],
+            action: `<button class="action-btn btn-blue" data-action="plant-log" data-id="${p.id}" title="Log event">+</button>`,
+        })),
+    );
+}
+
+function buildNotesFullHTML() {
+    return buildDetailTable(
+        [{ label: "Note" }, { label: "Added", optional: true }],
+        panelData.notes.map((note) => ({
+            openType: "notes",
+            id: note.id,
+            nameHTML: escapeHTML(note.note),
+            nameCls: "detail-wrap",
+            cells: [detailDateCell(note.creation_date)],
+            action: `<button class="action-btn btn-red" data-action="note-delete" data-id="${note.id}" title="Delete note">×</button>`,
+        })),
+    );
+}
+
+function buildPlantsHTML() {
+    const visible = panelData.plants.filter((p) => !p.archived);
     if (!visible.length) return "";
     let html = '<ul class="item-list">';
     visible.forEach((p) => {

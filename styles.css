@@ -688,6 +688,92 @@ form {
 }
 /* #endregion */
 
+/* Full-list modal tables */
+.detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--item-font);
+}
+
+.detail-table th {
+    padding: 0 1rem 0.7rem;
+    font-size: 1.1rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-table td {
+    padding: 0.7rem 1rem;
+    vertical-align: middle;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.detail-row {
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.detail-row:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.detail-table th:first-child,
+.detail-table td.detail-name {
+    width: 100%;
+    padding-left: 0.4rem;
+}
+
+.detail-name {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.detail-name.detail-wrap {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+}
+
+.detail-muted {
+    color: var(--text-secondary);
+}
+
+.detail-action {
+    width: 1%;
+    padding-right: 0.4rem !important;
+    text-align: right;
+}
+
+.detail-date,
+.detail-rel {
+    display: block;
+}
+
+.detail-date {
+    font-family: var(--mono-font);
+}
+
+.detail-rel,
+.detail-empty {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+.expiry-meta {
+    min-width: 0;
+}
+
 /* #region FRIDGE STOCK */
 .two-col-list {
     display: grid;
@@ -1751,6 +1837,19 @@ button.is-busy {
     .dialog-actions button {
         min-height: 42px;
         font-size: 0.9375rem;
+    }
+
+    .detail-table th {
+        padding: 0 0.5rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .detail-table td {
+        padding: 0.5rem;
+    }
+
+    .detail-table .col-optional {
+        display: none;
     }
 
     .date-field {

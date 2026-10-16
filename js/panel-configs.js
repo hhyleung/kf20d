@@ -461,8 +461,8 @@ const PANEL_CONFIGS = {
 
         render: {
             contentId: "plantsContent",
-            panelHTML: () => buildPlantsHTML(false),
-            fullHTML: () => buildPlantsHTML(true),
+            panelHTML: buildPlantsHTML,
+            fullHTML: buildPlantsFullHTML,
         },
 
         functions: {
@@ -502,7 +502,7 @@ const PANEL_CONFIGS = {
         render: {
             contentId: "notesContent",
             panelHTML: buildNotesHTML,
-            fullHTML: buildNotesHTML,
+            fullHTML: buildNotesFullHTML,
         },
 
         functions: {
