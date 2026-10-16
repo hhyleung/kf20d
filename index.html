@@ -8,6 +8,14 @@
         />
         <meta name="robots" content="noindex, nofollow" />
         <title>kf20d</title>
+        <link rel="manifest" href="manifest.json" />
+        <link rel="icon" type="image/png" href="icons/icon-192.png" />
+        <link rel="apple-touch-icon" href="icons/icon-180.png" />
+        <meta name="theme-color" content="#f0f2f5" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="kf20d" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
         <link rel="stylesheet" href="styles.css" />
     </head>
@@ -18,9 +26,20 @@
                 <h2>Login</h2>
                 <form id="loginForm">
                     <label>Email</label>
-                    <input type="email" id="loginEmail" required />
+                    <input
+                        type="email"
+                        id="loginEmail"
+                        autocomplete="username"
+                        autocapitalize="off"
+                        required
+                    />
                     <label>Password</label>
-                    <input type="password" id="loginPassword" required />
+                    <input
+                        type="password"
+                        id="loginPassword"
+                        autocomplete="current-password"
+                        required
+                    />
                     <button type="submit" class="btn-green">Login</button>
                 </form>
             </div>
