@@ -1,10 +1,48 @@
 // ============================================================
 // #region DATE HELPERS
 // ============================================================
-function getTodayHKT() {
-    return new Date().toLocaleDateString("en-CA", {
-        timeZone: "Asia/Hong_Kong",
-    });
+// All dates are shown and compared in the household's time zone (UTC+8).
+const TIME_ZONE = "Asia/Hong_Kong";
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIME_ZONE,
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+});
+
+// { weekday, day, month, year, hour, minute, second } in TIME_ZONE, with
+// upper-case 3-letter weekday/month (ICU may return "Sept").
+function getDateParts(date = new Date()) {
+    const parts = Object.fromEntries(
+        dateTimeFormatter.formatToParts(date).map((p) => [p.type, p.value]),
+    );
+    parts.weekday = parts.weekday.slice(0, 3).toUpperCase();
+    parts.month = parts.month.slice(0, 3).toUpperCase();
+    return parts;
+}
+
+// Accepts "YYYY-MM-DD" (a calendar date) or a full ISO timestamp.
+function parseDateValue(value) {
+    return String(value).length > 10
+        ? new Date(value)
+        : new Date(value + "T00:00:00Z");
+}
+
+// Today as "YYYY-MM-DD".
+function getToday() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: TIME_ZONE });
+}
+
+// Current time as "HH:MM".
+function getNowTime() {
+    const { hour, minute } = getDateParts();
+    return `${hour}:${minute}`;
 }
 
 function addDays(dateStr, days) {
@@ -14,6 +52,7 @@ function addDays(dateStr, days) {
     return d.toISOString().slice(0, 10);
 }
 
+// Clamps to the end of the month (31 Jan + 1 month = 28/29 Feb).
 function addMonths(dateStr, months) {
     if (!dateStr || !months) return "";
     const d = new Date(dateStr + "T00:00:00Z");
@@ -27,61 +66,36 @@ function addMonths(dateStr, months) {
     return d.toISOString().slice(0, 10);
 }
 
+function addInterval(dateStr, amount, unit) {
+    return unit === "months"
+        ? addMonths(dateStr, amount)
+        : addDays(dateStr, amount);
+}
+
 function daysBetween(fromStr, toStr) {
     const from = Date.parse(fromStr + "T00:00:00Z");
     const to = Date.parse(toStr + "T00:00:00Z");
     return Math.round((to - from) / 86400000);
 }
 
+// Value for <input type="date">.
 function formatDateInput(value) {
-    if (!value) return "";
-    const date = new Date(value + "T00:00:00Z");
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toISOString().slice(0, 10);
+    return value ? String(value).slice(0, 10) : "";
 }
 
+// "16 OCT"
 function formatShortDate(value) {
     if (!value) return "";
-    const date =
-        value.length > 10 ? new Date(value) : new Date(value + "T00:00:00Z");
-    const day = date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        timeZone: "Asia/Hong_Kong",
-    });
-    const month = date
-        .toLocaleDateString("en-GB", {
-            month: "short",
-            timeZone: "Asia/Hong_Kong",
-        })
-        .slice(0, 3) // newer ICU gives "Sept"; keep columns aligned
-        .toUpperCase();
+    const { day, month } = getDateParts(parseDateValue(value));
     return `${day} ${month}`;
 }
 
 function formatMetaTimestamp(iso) {
     if (!iso) return "No recent activity";
-    const date = new Date(iso);
-    const d = date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        timeZone: "Asia/Hong_Kong",
-    });
-    const m = date
-        .toLocaleDateString("en-GB", {
-            month: "short",
-            timeZone: "Asia/Hong_Kong",
-        })
-        .toUpperCase();
-    const y = date.toLocaleDateString("en-GB", {
-        year: "numeric",
-        timeZone: "Asia/Hong_Kong",
-    });
-    const t = date.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        timeZone: "Asia/Hong_Kong",
-    });
-    return `Last updated ${d} ${m} ${y}, ${t}`;
+    const { day, month, year, hour, minute, second } = getDateParts(
+        new Date(iso),
+    );
+    return `Last updated ${day} ${month} ${year}, ${hour}:${minute}:${second}`;
 }
 // ============================================================
 // #endregion

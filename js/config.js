@@ -20,22 +20,17 @@ const SPOTIFY_SCOPES = [
     "user-library-read",
 ];
 
-const PANELS = [
-    "mealPrep",
-    "fridgeStock",
-    "chores",
-    "bills",
-    "changeLog",
-    "plants",
-    "notes",
-];
-
 const MEAL_PREP_CATS = ["Carbs", "Veggies", "Proteins", "Fruits", "Others"];
 const FRIDGE_STOCK_CATS = ["Fridge", "Freezer"];
+// Meal prep categories that span both columns of the panel.
 const FULL_WIDTH_CATS = ["Proteins"];
+
+// The scheduler still plays a schedule this many minutes late (e.g. after
+// the tablet wakes from sleep).
 
 const SCHEDULE_GRACE_MINUTES = 5;
 
+// Icons offered for the Spotify playlist shortcut buttons.
 const ICONS = ["♫", "☼", "☁", "❄", "☆", "♡", "⚐", "⚓", "☕\uFE0E"];
 // ============================================================
 // #endregion
@@ -45,7 +40,6 @@ const ICONS = ["♫", "☼", "☁", "❄", "☆", "♡", "⚐", "⚓", "☕\uFE0
 // #region STATES
 // ============================================================
 let supabaseClient = null;
-let isAuthenticated = false;
 let isRealtimeSetup = false;
 let subscriptions = [];
 
@@ -59,19 +53,20 @@ const panelData = {
     notes: [],
 };
 
+// Per-panel modal state: the row being edited, and whether its auto-calculated
+// date was overridden by hand.
 const panelState = {
     mealPrep: { editingId: null, manualDate: false },
-    fridgeStock: { editingId: null, manualDate: false },
     chores: { editingId: null, manualDate: false },
     bills: { editingId: null, manualDate: false },
     changeLog: { editingId: null, manualDate: false },
     notes: { editingId: null },
 };
 
-let activePanel = null;
-let panelMetadata = Object.fromEntries(PANELS.map((k) => [k, null]));
+let activePanel = null; // panel shown in the full-list modal
+let panelMetadata = {}; // panel key -> last updated timestamp
 
-let lastKnownDate = getTodayHKT();
+let lastKnownDate = getToday();
 let clockInterval = null;
 let scheduleTickInterval = null;
 
@@ -87,8 +82,7 @@ let isSpotifyReady = false;
 let spotifyToken = null;
 let spotifyTokenExpiry = 0;
 let spotifyCalendarMonth = new Date();
-let spotifySelectedDate = getTodayHKT();
-let spotifySelectedScheduleId = null;
+let spotifySelectedDate = getToday();
 let spotifySelectedSchedule = null;
 // ============================================================
 // #endregion

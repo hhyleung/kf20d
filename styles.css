@@ -1005,6 +1005,19 @@ form {
     padding: 0.4rem 0.8rem;
 }
 
+.plant-history-table .plant-history-empty {
+    padding: 1.4rem;
+    text-align: center;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.plant-history-delete {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+}
+
 .plant-archived-tag {
     font-size: 1rem;
     color: var(--text-secondary);
@@ -1053,7 +1066,7 @@ form {
     height: 140px;
     border-radius: 12px;
     overflow: hidden;
-    background: #d7d9de;
+    background: #d7d9de center / cover no-repeat;
     flex-shrink: 0;
 }
 
@@ -1174,10 +1187,6 @@ form {
     border-color: var(--green);
     background: #e8f9ee;
     color: #0f6b30;
-}
-
-.spotify-slot-settings {
-    margin-left: auto;
 }
 
 .spotify-schedule {

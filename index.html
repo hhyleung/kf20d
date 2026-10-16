@@ -107,7 +107,140 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="panel-content" id="spotifyContent"></div>
+                        <div class="panel-content" id="spotifyContent">
+                            <div class="spotify-panel">
+                                <div class="spotify-nowplaying">
+                                    <div class="spotify-art" id="spotifyArt">
+                                        <div class="spotify-art-placeholder">
+                                            ♪
+                                        </div>
+                                    </div>
+                                    <div class="spotify-track">
+                                        <div
+                                            class="spotify-track-title"
+                                            id="spotifyTitle"
+                                        >
+                                            —
+                                        </div>
+                                        <div
+                                            class="spotify-track-artist"
+                                            id="spotifyArtist"
+                                        >
+                                            —
+                                        </div>
+                                        <div class="spotify-playback-row">
+                                            <button
+                                                class="spotify-btn"
+                                                id="spotifyPrevBtn"
+                                                type="button"
+                                            >
+                                                ⏮
+                                            </button>
+                                            <button
+                                                class="spotify-btn spotify-btn-play"
+                                                id="spotifyPlayBtn"
+                                                type="button"
+                                            >
+                                                ▶
+                                            </button>
+                                            <button
+                                                class="spotify-btn"
+                                                id="spotifyNextBtn"
+                                                type="button"
+                                            >
+                                                ⏭
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="spotify-shortcuts">
+                                    <span id="spotifyPlaylistsLabel"
+                                        >Playlists</span
+                                    >
+                                    <button
+                                        class="spotify-slot-btn"
+                                        data-slot="1"
+                                        type="button"
+                                    >
+                                        ♫
+                                    </button>
+                                    <button
+                                        class="spotify-slot-btn"
+                                        data-slot="2"
+                                        type="button"
+                                    >
+                                        ♫
+                                    </button>
+                                    <button
+                                        class="spotify-slot-btn"
+                                        data-slot="3"
+                                        type="button"
+                                    >
+                                        ♫
+                                    </button>
+                                    <button
+                                        class="spotify-slot-btn"
+                                        data-slot="4"
+                                        type="button"
+                                    >
+                                        ♫
+                                    </button>
+                                    <button
+                                        class="spotify-slot-btn"
+                                        data-slot="5"
+                                        type="button"
+                                    >
+                                        ♫
+                                    </button>
+                                </div>
+                                <div class="spotify-schedule">
+                                    <div class="spotify-schedule-title">
+                                        NEXT SCHEDULE
+                                    </div>
+                                    <div
+                                        class="spotify-schedule-row"
+                                        id="spotifySchedRow"
+                                    >
+                                        <span
+                                            class="spotify-schedule-date"
+                                            id="spotifySchedDate"
+                                            >—</span
+                                        >
+                                        <span
+                                            class="spotify-schedule-time"
+                                            id="spotifySchedTime"
+                                        ></span>
+                                        <span
+                                            class="spotify-schedule-playlist"
+                                            id="spotifySchedPlaylist"
+                                        ></span>
+                                    </div>
+                                    <div class="spotify-schedule-actions">
+                                        <button
+                                            class="spotify-schedule-action btn-green"
+                                            type="button"
+                                            id="spotifySchedAddBtn"
+                                        >
+                                            Add
+                                        </button>
+                                        <button
+                                            class="spotify-schedule-action btn-red"
+                                            type="button"
+                                            id="spotifySchedSkipBtn"
+                                        >
+                                            Skip
+                                        </button>
+                                        <button
+                                            class="spotify-schedule-action btn-blue"
+                                            type="button"
+                                            id="spotifySchedAllBtn"
+                                        >
+                                            ALL
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div
                         class="panel header-only"
@@ -190,8 +323,6 @@
                 </header>
 
                 <form id="mealPrepForm">
-                    <input type="hidden" id="mealPrepEditId" name="id" />
-
                     <div>
                         <label>Item Name</label>
                         <input
@@ -300,7 +431,6 @@
                     </button>
                 </header>
                 <form id="choreForm">
-                    <input type="hidden" id="choreEditId" />
                     <label class="form-label">Task Name</label>
                     <input type="text" id="choreTaskName" required />
                     <div class="form-row-3">
@@ -366,7 +496,6 @@
                     </button>
                 </header>
                 <form id="billForm">
-                    <input type="hidden" id="billEditId" />
                     <label class="form-label">Bill Name</label>
                     <input type="text" id="billBillName" required />
                     <div class="form-row-3">
@@ -432,7 +561,6 @@
                     </button>
                 </header>
                 <form id="changeLogForm">
-                    <input type="hidden" id="changeLogEditId" />
                     <label class="form-label">Item Name</label>
                     <input type="text" id="changeLogItemName" required />
                     <div class="form-row-3">
@@ -1242,7 +1370,7 @@
                             type="button"
                             class="btn-red"
                             id="ssfDeleteBtn"
-                            style="display: none"
+                            hidden
                         >
                             Delete
                         </button>

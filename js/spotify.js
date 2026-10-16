@@ -502,47 +502,37 @@ async function playPlaylist(playlistId) {
 // #region SPOTIFY SCHEDULER
 // ============================================================
 function getNextSchedule() {
-    const todayStr = getTodayHKT();
-    const currentTime = new Date().toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Hong_Kong",
-    });
+    const today = getToday();
+    const now = getNowTime();
     return (
-        schedules.find((s) => {
-            if (!s || s.triggered) return false;
-            if (s.scheduled_date > todayStr) return true;
-            if (
-                s.scheduled_date === todayStr &&
-                s.scheduled_time?.slice(0, 5) > currentTime
-            )
-                return true;
-            return false;
-        }) ?? null
+        schedules.find(
+            (s) =>
+                !s.triggered &&
+                (s.scheduled_date > today ||
+                    (s.scheduled_date === today &&
+                        s.scheduled_time?.slice(0, 5) > now)),
+        ) ?? null
     );
 }
 
 async function checkAndTriggerSchedule() {
     if (!isSpotifyReady || !spotifyDeviceId) return;
-    const todayStr = getTodayHKT();
-    const nowHKT = new Date().toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Hong_Kong",
-    });
+    const today = getToday();
     const toMinutes = (hhmm) => {
         const [h, m] = hhmm.split(":").map(Number);
         return h * 60 + m;
     };
-    const nowMinutes = toMinutes(nowHKT);
+    const nowMinutes = toMinutes(getNowTime());
+    // Fire anything due within the grace window, so a missed tick (sleep,
+    // slow network) still plays.
     const due = schedules.filter((s) => {
-        if (s.triggered || s.scheduled_date !== todayStr) return false;
+        if (s.triggered || s.scheduled_date !== today) return false;
         if (!s.scheduled_time) return false;
         const lateBy = nowMinutes - toMinutes(s.scheduled_time.slice(0, 5));
         return lateBy >= 0 && lateBy <= SCHEDULE_GRACE_MINUTES;
     });
     if (!due.length) return;
-    const { sb, user } = await getSupabaseContext();
+    const { sb } = await getSupabaseContext();
     let lastPlaylistId = null;
     for (const entry of due) {
         const { error } = await sb

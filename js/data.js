@@ -67,12 +67,6 @@ async function loadSupabaseData(configs = getDataConfigs()) {
                         ascending: cfg.orderAscending ?? true,
                         ...(cfg.orderNulls ?? { nullsFirst: true }),
                     });
-                    if (cfg.extraOrder) {
-                        query = query.order(cfg.extraOrder.col, {
-                            ascending: cfg.extraOrder.ascending,
-                            nullsLast: cfg.extraOrder.nullsLast,
-                        });
-                    }
                     const { data, error } = await query;
                     if (error) throw error;
                     cfg.store(data || []);
@@ -125,14 +119,14 @@ function cleanupSubscriptions() {
     subscriptions = [];
 }
 
+// Changes from other devices: reload just the changed table and re-render.
 async function setupRealtime() {
     cleanupSubscriptions();
     try {
         const { sb } = await getSupabaseContext();
-        const watchedTables = getDataConfigs().map((cfg) => cfg.table);
-        watchedTables.forEach((tableName) => {
-            subscribeToTable(sb, tableName, async () => {
-                await loadSupabaseData();
+        getDataConfigs().forEach((cfg) => {
+            subscribeToTable(sb, cfg.table, async () => {
+                await loadSupabaseData([cfg]);
                 renderAllPanels();
             });
         });
@@ -187,60 +181,54 @@ async function updateListMetadata(panel) {
     }
 }
 
-async function saveRecord(
-    table,
-    render,
-    record,
-    isUpdate = false,
-    resetFn = null,
-) {
+function configForTable(table) {
+    return Object.values(PANEL_CONFIGS).find((c) => c.data?.table === table);
+}
+
+// Reload a table after a write, re-render its panel and bump its
+// "last updated" stamp. Plants and their history are reloaded together.
+async function refreshTable(table) {
+    const cfg = configForTable(table);
+    const isPlants = cfg.key === "plants";
+    await loadSupabaseData(
+        isPlants
+            ? [PANEL_CONFIGS.plants.data, PANEL_CONFIGS.plantHistory.data]
+            : [cfg.data],
+    );
+    renderPanel(cfg.key);
+    if (isPlants) refreshOpenPlantDetail();
+    updateListMetadata(cfg.key);
+}
+
+// Inserts `record`, or updates the row when it has an id.
+async function saveRecord(table, record) {
+    const userScoped = !configForTable(table).data.noUserFilter;
     return runMutation("Save", async (sb, userId) => {
-        const data = { ...record, user_id: userId };
-        let error;
-        if (isUpdate) {
-            if (!record.id || record.id === "undefined" || record.id === "")
-                throw new Error("Invalid item ID for update Supabase");
-            ({ error } = await sb
-                .from(table)
-                .update(data)
-                .eq("id", record.id)
-                .eq("user_id", userId));
-        } else {
-            delete data.id;
-            ({ error } = await sb.from(table).insert(data));
-        }
+        const { id, ...fields } = record;
+        if (userScoped) fields.user_id = userId;
+        let query = id
+            ? sb.from(table).update(fields).eq("id", id)
+            : sb.from(table).insert(fields);
+        if (id && userScoped) query = query.eq("user_id", userId);
+        const { error } = await query;
         if (error) throw error;
-        if (resetFn) resetFn();
-        const cfg = Object.values(PANEL_CONFIGS).find(
-            (c) => c.data?.table === table,
-        );
-        if (cfg?.data) await loadSupabaseData([cfg.data]);
-        renderPanel(render);
-        updateListMetadata(cfg.key);
+        await refreshTable(table);
     });
 }
 
-async function deleteRecord(table, render, id, confirmMsg) {
-    if (
-        !(await confirmDialog(confirmMsg, {
-            confirmText: "Delete",
-            danger: true,
-        }))
-    )
-        return false;
+async function deleteRecord(table, id, confirmMsg) {
+    const ok = await confirmDialog(confirmMsg, {
+        confirmText: "Delete",
+        danger: true,
+    });
+    if (!ok) return false;
+    const userScoped = !configForTable(table).data.noUserFilter;
     return runMutation("Delete", async (sb, userId) => {
-        const { error } = await sb
-            .from(table)
-            .delete()
-            .eq("id", id)
-            .eq("user_id", userId);
+        let query = sb.from(table).delete().eq("id", id);
+        if (userScoped) query = query.eq("user_id", userId);
+        const { error } = await query;
         if (error) throw error;
-        const cfg = Object.values(PANEL_CONFIGS).find(
-            (c) => c.data?.table === table,
-        );
-        if (cfg?.data) await loadSupabaseData([cfg.data]);
-        renderPanel(render);
-        updateListMetadata(cfg.key);
+        await refreshTable(table);
     });
 }
 
@@ -251,53 +239,18 @@ async function deletePlant(plantId) {
     );
     if (!ok) return false;
     return runMutation("Delete plant", async (sb, userId) => {
-        const { error: e1 } = await sb
+        const { error: historyError } = await sb
             .from("plant_history_db")
             .delete()
             .eq("plant_id", plantId);
-        const { error: e2 } = await sb
+        if (historyError) throw historyError;
+        const { error } = await sb
             .from("plants_db")
             .delete()
             .eq("id", plantId)
             .eq("user_id", userId);
-        if (e1 || e2) throw e1 || e2;
-        const plantCfg = PANEL_CONFIGS.plants.data;
-        const historyCfg = PANEL_CONFIGS.plant_history.data;
-        await loadSupabaseData([plantCfg, historyCfg]);
-        renderPanel("plants");
-        updateListMetadata("plants");
-    });
-}
-
-async function savePlantHistory(historyItem) {
-    return runMutation("Save plant event", async (sb) => {
-        const { error } = await sb.from("plant_history_db").insert(historyItem);
         if (error) throw error;
-        const plantCfg = PANEL_CONFIGS.plants.data;
-        const historyCfg = PANEL_CONFIGS.plant_history.data;
-        await loadSupabaseData([plantCfg, historyCfg]);
-        updateListMetadata("plants");
-    });
-}
-
-async function deletePlantHistory(id, plantId) {
-    const ok = await confirmDialog("Delete this event permanently?", {
-        confirmText: "Delete",
-        danger: true,
-    });
-    if (!ok) return false;
-    return runMutation("Delete plant event", async (sb) => {
-        const { error } = await sb
-            .from("plant_history_db")
-            .delete()
-            .eq("id", id);
-        if (error) throw error;
-        const plantCfg = PANEL_CONFIGS.plants.data;
-        const historyCfg = PANEL_CONFIGS.plant_history.data;
-        await loadSupabaseData([plantCfg, historyCfg]);
-        updateListMetadata("plants");
-        renderPanel("plants");
-        refreshOpenPlantDetail();
+        await refreshTable("plants_db");
     });
 }
 // ============================================================
