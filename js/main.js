@@ -31,7 +31,7 @@ function tickClock() {
     const get = (type) => hkt.find((p) => p.type === type)?.value ?? "";
     const weekday = get("weekday").toUpperCase();
     const day = get("day");
-    const month = get("month").toUpperCase();
+    const month = get("month").slice(0, 3).toUpperCase();
     const year = get("year");
     const hour = get("hour");
     const minute = get("minute");
@@ -40,11 +40,28 @@ function tickClock() {
         `${weekday}\u00A0\u00A0${day} ${month} ${year}\u00A0\u00A0${hour}:${minute}`,
     );
 
+    updateNightDim(`${hour}:${minute}`);
+
     const todayHKT = getTodayHKT();
     if (todayHKT !== lastKnownDate) {
         lastKnownDate = todayHKT;
         PANELS.forEach(renderPanel);
     }
+}
+
+// True when hh:mm falls in [from, to), handling ranges that cross midnight.
+function isTimeInRange(hhmm, from, to) {
+    return from <= to ? hhmm >= from && hhmm < to : hhmm >= from || hhmm < to;
+}
+
+function updateNightDim(hhmm) {
+    const dimmer = getElement("screenDimmer");
+    if (!dimmer) return;
+    const active =
+        !!NIGHT_DIM &&
+        !window.matchMedia("(max-width: 768px)").matches &&
+        isTimeInRange(hhmm, NIGHT_DIM.from, NIGHT_DIM.to);
+    dimmer.style.opacity = active ? String(NIGHT_DIM.opacity) : "0";
 }
 
 function startClock() {

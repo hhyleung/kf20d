@@ -36,6 +36,11 @@ const FULL_WIDTH_CATS = ["Proteins"];
 
 const SCHEDULE_GRACE_MINUTES = 5;
 
+// Night dimming for the wall display (UTC+8 times). Browsers can't change the
+// backlight, so this lays a black overlay over the page; it stays usable.
+// Not applied on phones. Set to null to disable.
+const NIGHT_DIM = { from: "22:00", to: "07:00", opacity: 0.6 };
+
 const ICONS = ["♫", "☼", "☁", "❄", "☆", "♡", "⚐", "⚓", "☕\uFE0E"];
 // ============================================================
 // #endregion
