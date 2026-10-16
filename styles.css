@@ -229,17 +229,6 @@ button:disabled {
 #screenBlanker.active {
     display: block;
 }
-
-/* Night dimming overlay; never blocks taps */
-#screenDimmer {
-    position: fixed;
-    inset: 0;
-    background: #000000;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 9998;
-    transition: opacity 2s ease;
-}
 /* #endregion */
 
 /* DATETIME PANEL */
